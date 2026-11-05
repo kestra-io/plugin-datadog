@@ -39,32 +39,72 @@
 
 ## Why
 
-- What user problem does this solve? Teams need a concrete starting point for building and validating new Kestra plugins without recreating the same project scaffolding from scratch.
-- Why would a team adopt this plugin in a workflow? It gives plugin authors a ready-made reference repo they can adapt alongside their own build, test, and publishing workflow.
-- What operational/business outcome does it enable? It shortens plugin delivery time, reduces setup mistakes, and makes internal or partner plugin development more repeatable.
+- What user problem does this solve? Teams that report to Datadog from pipelines or read it from them, do it with ad-hoc `curl` calls and scripts that carry keys, endpoints and error handling of their own.
+- Why would a team adopt this plugin in a workflow? It keeps the Datadog steps in the same Kestra flow as the rest of the pipeline, with Kestra secrets, expressions and execution history and with errors that name the HTTP status and what Datadog said.
+- What operational/business outcome does it enable? Pipelines can mark deployments and runs on the dashboards, publish business and pipeline metrics, check a metric or the logs before they continue, mute monitors during maintenance and react when a monitor goes into alert.
 
 ## What
 
 - Provides plugin components under `io.kestra.plugin.datadog`.
-- Includes classes such as `Example`, `Trigger`.
+- Tasks:
+  - `events.Create` posts an event to the event stream.
+  - `metrics.Submit` sends custom gauge, count and rate points.
+  - `metrics.Query` queries timeseries.
+  - `monitors.List` lists monitors.
+  - `downtimes.Create` and `downtimes.Cancel` mute monitors for a limited time and unmute them.
+  - `logs.Send` sends log entries.
+  - `logs.Search` searches the logs.
+- Trigger:
+  - `monitors.StateChange` polls the monitors and starts a flow when monitors go into alert.
+- The tasks use Kestra's HTTP client against the public Datadog API (v1 and v2), so the plugin has no dependency besides Kestra.
 
-## Running Kestra locally with this plugin
+## Authentication
 
-1. Build the shadow JAR: `./gradlew shadowJar`. The output lands in `build/libs/`.
-2. Run `docker compose up`. `docker-compose.yml` builds `kestra/kestra:latest` and mounts `build/libs/` to `/app/plugins/`, so Kestra picks up the jar on startup.
-3. Kestra UI is available at [localhost:8080](http://localhost:8080).
+Provide the keys through Kestra secrets, for example `{{ secret('DATADOG_API_KEY') }}`.
 
-### Plugins folder gotcha
+- `apiKey` is needed by every task.
+- `appKey` is needed by the calls that read data or manage monitors and downtimes: `metrics.Query`, `monitors.List`, `monitors.StateChange`, `downtimes.Create`, `downtimes.Cancel` and `logs.Search`.
+- `site` selects the Datadog site of the organization (`datadoghq.com` by default, `datadoghq.eu`, `us3.datadoghq.com` and so on). A key only works on the site that created it.
 
-Mounting a host folder onto `/app/plugins/` replaces the container's plugins directory rather than adding to it. Core plugins (the ones logged as `Registered N core plugins`) are compiled into Kestra itself and aren't affected, but any additional plugin normally bundled in the base image under `/app/plugins/` (e.g. the Python script plugin) gets hidden once the mount is in place. If a flow you're testing depends on another plugin, copy its jar into `build/libs/` too before starting the container.
+See [the plugin documentation](src/main/resources/doc/io.kestra.plugin.datadog.md) for the scopes each call needs and for the behavior of each task and of the trigger.
 
-### JFR startup error
+## Example
 
-On some hosts, `command: server local` fails with:
+```yaml
+id: datadog_deploy_window
+namespace: company.observability
+
+tasks:
+  - id: mute
+    type: io.kestra.plugin.datadog.downtimes.Create
+    apiKey: "{{ secret('DATADOG_API_KEY') }}"
+    appKey: "{{ secret('DATADOG_APP_KEY') }}"
+    scope: "env:prod AND service:orders"
+    monitorTags: ["service:orders"]
+    duration: PT30M
+
+  - id: deploy
+    type: io.kestra.plugin.core.log.Log
+    message: Deploying the orders service
+
+  - id: mark
+    type: io.kestra.plugin.datadog.events.Create
+    apiKey: "{{ secret('DATADOG_API_KEY') }}"
+    title: "Orders deployed"
+    text: "Execution {{ execution.id }}"
+    alertType: SUCCESS
+    tags: ["env:prod", "source:kestra"]
+
+  - id: unmute
+    type: io.kestra.plugin.datadog.downtimes.Cancel
+    apiKey: "{{ secret('DATADOG_API_KEY') }}"
+    appKey: "{{ secret('DATADOG_APP_KEY') }}"
+    downtimeId: "{{ outputs.mute.downtimeId }}"
 ```
-Unable to create JFR repository directory using base location (/tmp)
-```
-`docker-compose.yml` works around this by mounting `/tmp` as `tmpfs`. If you build your own compose file or run Kestra via `docker run`, add the same workaround, e.g. `-v /tmp:/tmp` or `--tmpfs /tmp`. Tracked upstream in [kestra-io/kestra#17405](https://github.com/kestra-io/kestra/issues/17405).
+
+## Tests
+
+`./gradlew test` runs the unit tests against a local mock of the Datadog API. They have not been run against a live Datadog organization.
 
 ## Documentation
 * Full documentation can be found under: [kestra.io/docs](https://kestra.io/docs)
@@ -78,5 +118,3 @@ Apache 2.0 © [Kestra Technologies](https://kestra.io)
 ## Stay up to date
 
 We release new versions every month. Give the [main repository](https://github.com/kestra-io/kestra) a star to stay up to date with the latest releases and get notified about future updates.
-
-![Star the repo](https://kestra.io/star.gif)
