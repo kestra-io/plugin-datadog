@@ -1,0 +1,20 @@
+id: datadog_e2e_metrics
+namespace: hq.datadog.e2e
+tasks:
+  - id: submit
+    type: io.kestra.plugin.datadog.metrics.Submit
+    apiKey: mock-api-key
+    apiUrl: __MOCK_URL__
+    metric: e2e.value
+    value: 1.0
+  - id: query
+    type: io.kestra.plugin.datadog.metrics.Query
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+    query: avg:e2e.value{*}
+  - id: verify
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.submit.series == 1 }}"
+      - "{{ outputs.query.pointCount == 1 }}"

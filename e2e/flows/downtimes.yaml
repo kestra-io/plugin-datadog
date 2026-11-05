@@ -1,0 +1,21 @@
+id: datadog_e2e_downtimes
+namespace: hq.datadog.e2e
+tasks:
+  - id: create
+    type: io.kestra.plugin.datadog.downtimes.Create
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+    monitorId: 12345
+    scope: env:e2e
+    duration: PT5M
+  - id: cancel
+    type: io.kestra.plugin.datadog.downtimes.Cancel
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+    downtimeId: "{{ outputs.create.downtimeId }}"
+  - id: verify
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.cancel.cancelled }}"
