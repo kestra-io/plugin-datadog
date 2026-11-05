@@ -15,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class QueryTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v1:QueryMetrics");
+    }
+
     private Query.QueryBuilder<?, ?> task() {
         return Query.builder()
             .id("query")
@@ -54,6 +59,7 @@ class QueryTest extends AbstractDatadogTest {
 
     @Test
     void lookbackSetsTheWindowFromTheEnd() throws Exception {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:QueryMetrics").assertResponse(200, "{\"status\":\"ok\",\"series\":[]}");
         server.reply("GET", "/api/v1/query", 200, "{\"status\":\"ok\",\"series\":[]}");
 
         Query.Output output = task()

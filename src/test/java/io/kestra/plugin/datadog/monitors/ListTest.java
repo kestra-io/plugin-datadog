@@ -15,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ListTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v1:ListMonitors");
+    }
+
     private List.ListBuilder<?, ?> task() {
         return List.builder()
             .id("monitors")
@@ -25,9 +30,11 @@ class ListTest extends AbstractDatadogTest {
     }
 
     private static String monitors(int from, int count) {
-        return IntStream.range(from, from + count)
-            .mapToObj(i -> "{\"id\":" + i + ",\"name\":\"m" + i + "\",\"overall_state\":\"Alert\"}")
+        String response = IntStream.range(from, from + count)
+            .mapToObj(i -> "{\"id\":" + i + ",\"name\":\"m" + i + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"Alert\"}")
             .collect(Collectors.joining(",", "[", "]"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:ListMonitors").assertResponse(200, response);
+        return response;
     }
 
     @Test

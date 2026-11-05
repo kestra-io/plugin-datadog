@@ -16,7 +16,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DowntimeTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:CreateDowntime", "v2:CancelDowntime");
+    }
+
     private Create.CreateBuilder<?, ?> create() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CreateDowntime").assertResponse(200,
+            "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         server.reply("POST", "/api/v2/downtime", 200, "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         return Create.builder()
             .id("mute")
@@ -117,6 +124,7 @@ class DowntimeTest extends AbstractDatadogTest {
 
     @Test
     void cancelsADowntime() throws Exception {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CancelDowntime").assertResponse(204, "");
         server.reply("DELETE", "/api/v2/downtime/dt-1", 204, "");
 
         Cancel.Output output = Cancel.builder().id("unmute").type(Cancel.class.getName())
