@@ -139,7 +139,7 @@ Every task needs `apiKey`. Tasks that read data or manage things also need `appK
 python3 e2e/run.py --jar build/libs/plugin-datadog-1.0.0-SNAPSHOT.jar --artifact-commit "$(git rev-parse HEAD)" --evidence /tmp/evidence --include-api
 ```
 
-The last full run: 3,776 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API and 156 example flows validated.
+The last full run: 3,896 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API and 156 example flows validated.
 
 ## What has not been verified
 
