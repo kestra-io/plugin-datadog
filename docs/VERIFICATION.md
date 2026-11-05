@@ -13,7 +13,7 @@
 
 The current source contains 110 typed runnable tasks, four polling triggers and two generic helpers. The 31 flow files cover every component: 27 area flows and four trigger flows. The runner includes generic helpers by default and fails before container startup if a component lacks a flow.
 
-The mock-backed Kestra 2.0.6 run completed 31 successful executions and 157 flow validations without `--allow-partial`. Each trigger fired once and stayed at one execution across three follow-up polls. The final artifact commit, jar SHA-256, per-flow execution JSON, logs and request trace are saved by the runner outside the repository.
+The mock-backed Kestra 2.0.6 run completed 31 successful executions and 156 flow validations without `--allow-partial`. Each trigger fired once and stayed at one execution across three follow-up polls. The final artifact commit, jar SHA-256, per-flow execution JSON, logs and request trace are saved by the runner outside the repository.
 
 ## Test layers
 
