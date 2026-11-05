@@ -63,6 +63,23 @@ class DatadogClientTest {
     }
 
     @Test
+    void aNetworkFailureIsATransientErrorWithStatusMinusOne() throws Exception {
+        try (DatadogClient client = client(null, "http://127.0.0.1:1", null, false)) {
+            DatadogClient.DatadogException error = assertThrows(DatadogClient.DatadogException.class, () -> client.post("/api/v1/events", Map.of()));
+            assertEquals(-1, error.getStatus());
+            assertTrue(error.isTransient());
+        }
+    }
+
+    @Test
+    void theStatusSaysWhetherACallMayWorkLater() {
+        assertTrue(new DatadogClient.DatadogException(429, "x").isTransient());
+        assertTrue(new DatadogClient.DatadogException(503, "x").isTransient());
+        assertFalse(new DatadogClient.DatadogException(403, "x").isTransient());
+        assertFalse(new DatadogClient.DatadogException(404, "x").isTransient());
+    }
+
+    @Test
     void errorsOfDatadogAreShown() {
         assertEquals("Forbidden; other", DatadogClient.errors("{\"errors\":[\"Forbidden\",\"other\"]}"));
         assertEquals("plain text", DatadogClient.errors("plain text"));

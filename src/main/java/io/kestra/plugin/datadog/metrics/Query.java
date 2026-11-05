@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.metrics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -66,51 +67,58 @@ import java.util.Map;
 public class Query extends AbstractDatadogTask implements RunnableTask<Query.Output> {
     @Schema(title = "Metrics query", description = "A Datadog metrics query, such as `avg:system.cpu.user{env:prod} by {host}`.")
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> query;
 
     @Schema(title = "Start of the window", description = "An ISO-8601 instant. When not set, the window starts `lookback` before `to`.")
+    @PluginProperty(group = "processing")
     private Property<Instant> from;
 
     @Schema(title = "End of the window", description = "An ISO-8601 instant. The time the task runs when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<Instant> to;
 
     @Schema(title = "Look-back", description = "The length of the window when `from` is not set. One hour when it is not set.", defaultValue = "PT1H")
+    @PluginProperty(group = "processing")
     private Property<Duration> lookback;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        String renderedQuery = runContext.render(this.query).as(String.class).orElse("").trim();
-        if (renderedQuery.isEmpty()) {
+        var rQuery = runContext.render(this.query).as(String.class).orElse("").trim();
+        if (rQuery.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `query` must not be blank");
         }
 
-        Instant end = runContext.render(this.to).as(Instant.class).orElseGet(Instant::now);
-        Duration window = runContext.render(this.lookback).as(Duration.class).orElse(Duration.ofHours(1));
-        Instant start = runContext.render(this.from).as(Instant.class).orElseGet(() -> end.minus(window));
+        var end = runContext.render(this.to).as(Instant.class).orElseGet(Instant::now);
+        var window = runContext.render(this.lookback).as(Duration.class).orElse(Duration.ofHours(1));
+        var start = runContext.render(this.from).as(Instant.class).orElseGet(() -> end.minus(window));
         if (!start.isBefore(end)) {
             throw new IllegalArgumentException("The start of the window (" + start + ") must be before its end (" + end + ")");
         }
 
-        Map<String, Object> params = DatadogClient.query();
+        var params = DatadogClient.query();
         params.put("from", start.getEpochSecond());
         params.put("to", end.getEpochSecond());
-        params.put("query", renderedQuery);
+        params.put("query", rQuery);
 
-        Map<String, Object> answer = client(runContext, true).get("/api/v1/query", params).map();
-
-        // a query Datadog cannot run is answered with a 200 and `status: error`
-        String status = answer.get("status") == null ? null : String.valueOf(answer.get("status"));
-        if ("error".equalsIgnoreCase(status)) {
-            throw new IllegalStateException("Datadog could not run the query '" + renderedQuery + "': " + answer.getOrDefault("error", answer.get("message")));
+        Map<String, Object> answer;
+        try (DatadogClient client = client(runContext, true)) {
+            answer = client.get("/api/v1/query", params).map();
         }
 
-        List<Map<String, Object>> series = new ArrayList<>();
-        int pointCount = 0;
+        // a query Datadog cannot run is answered with a 200 and `status: error`
+        var status = answer.get("status") == null ? null : String.valueOf(answer.get("status"));
+        if ("error".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("Datadog could not run the query '" + rQuery + "': " + answer.getOrDefault("error", answer.get("message")));
+        }
+
+        var series = new ArrayList<Map<String, Object>>();
+        var pointCount = 0;
         if (answer.get("series") instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry instanceof Map<?, ?> raw) {
                     @SuppressWarnings("unchecked")
-                    Map<String, Object> item = (Map<String, Object>) raw;
+                    var item = (Map<String, Object>) raw;
                     series.add(item);
                     if (item.get("pointlist") instanceof List<?> points) {
                         pointCount += points.size();
@@ -119,7 +127,7 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
             }
         }
 
-        runContext.logger().info("Datadog returned {} series and {} points for '{}'", series.size(), pointCount, renderedQuery);
+        runContext.logger().info("Datadog returned {} series and {} points for '{}'", series.size(), pointCount, rQuery);
         return Output.builder().status(status).series(series).seriesCount(series.size()).pointCount(pointCount).build();
     }
 

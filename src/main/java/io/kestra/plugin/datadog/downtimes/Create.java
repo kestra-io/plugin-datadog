@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -77,77 +78,89 @@ import java.util.Map;
 public class Create extends AbstractDatadogTask implements RunnableTask<Create.Output> {
     @Schema(title = "Scope", description = "The monitor groups to mute, in the Datadog query syntax, such as `env:prod AND service:orders`. `*` mutes all the groups of the selected monitors.")
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> scope;
 
     @Schema(title = "Monitor id", description = "The id of the one monitor to mute. Use instead of `monitorTags`.")
+    @PluginProperty(group = "main")
     private Property<Long> monitorId;
 
     @Schema(title = "Monitor tags", description = "Mutes every monitor that carries all these monitor tags. Use instead of `monitorId`.")
+    @PluginProperty(group = "main")
     private Property<List<String>> monitorTags;
 
     @Schema(title = "Message", description = "A note shown with the downtime.")
+    @PluginProperty(group = "processing")
     private Property<String> message;
 
     @Schema(title = "Start", description = "When the downtime starts, an ISO-8601 instant. It starts now when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<Instant> start;
 
     @Schema(title = "End", description = "When the downtime ends, an ISO-8601 instant. Use instead of `duration`.")
+    @PluginProperty(group = "processing")
     private Property<Instant> end;
 
     @Schema(title = "Duration", description = "How long the downtime lasts from its start (from now when `start` is not set), such as `PT30M`. Use instead of `end`.")
+    @PluginProperty(group = "processing")
     private Property<Duration> duration;
 
     @Schema(title = "Display time zone", description = "The time zone Datadog uses to show the downtime, such as `Europe/Paris`. `UTC` when it is not set.")
+    @PluginProperty(group = "advanced")
     private Property<String> displayTimezone;
 
     @Schema(title = "Mute the first recovery notification", description = "Also mutes the first recovery notification of a monitor that recovers during the downtime.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> muteFirstRecoveryNotification;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        String renderedScope = runContext.render(this.scope).as(String.class).orElse("").trim();
-        if (renderedScope.isEmpty()) {
+        var rScope = runContext.render(this.scope).as(String.class).orElse("").trim();
+        if (rScope.isEmpty()) {
             throw new IllegalArgumentException("The Datadog downtime `scope` must not be blank");
         }
 
-        Long renderedMonitorId = runContext.render(this.monitorId).as(Long.class).orElse(null);
-        List<String> renderedTags = runContext.render(this.monitorTags).asList(String.class).stream().filter(tag -> tag != null && !tag.isBlank()).toList();
-        if ((renderedMonitorId == null) == renderedTags.isEmpty()) {
+        var rMonitorId = runContext.render(this.monitorId).as(Long.class).orElse(null);
+        var rTags = runContext.render(this.monitorTags).asList(String.class).stream().filter(tag -> tag != null && !tag.isBlank()).toList();
+        if ((rMonitorId == null) == rTags.isEmpty()) {
             throw new IllegalArgumentException("Give either `monitorId` or `monitorTags` to choose the monitors to mute, but not both and not neither");
         }
 
-        Instant renderedStart = runContext.render(this.start).as(Instant.class).orElse(null);
-        Instant renderedEnd = runContext.render(this.end).as(Instant.class).orElse(null);
-        Duration renderedDuration = runContext.render(this.duration).as(Duration.class).orElse(null);
-        if ((renderedEnd == null) == (renderedDuration == null)) {
+        var rStart = runContext.render(this.start).as(Instant.class).orElse(null);
+        var rEnd = runContext.render(this.end).as(Instant.class).orElse(null);
+        var rDuration = runContext.render(this.duration).as(Duration.class).orElse(null);
+        if ((rEnd == null) == (rDuration == null)) {
             throw new IllegalArgumentException("Give either `end` or `duration` so that the downtime stops, but not both and not neither");
         }
-        if (renderedDuration != null) {
-            if (renderedDuration.isZero() || renderedDuration.isNegative()) {
-                throw new IllegalArgumentException("The downtime `duration` must be positive but was " + renderedDuration);
+        if (rDuration != null) {
+            if (rDuration.isZero() || rDuration.isNegative()) {
+                throw new IllegalArgumentException("The downtime `duration` must be positive but was " + rDuration);
             }
-            renderedEnd = (renderedStart == null ? Instant.now() : renderedStart).plus(renderedDuration);
+            rEnd = (rStart == null ? Instant.now() : rStart).plus(rDuration);
         }
-        if (renderedStart != null && !renderedEnd.isAfter(renderedStart)) {
-            throw new IllegalArgumentException("The end of the downtime (" + renderedEnd + ") must be after its start (" + renderedStart + ")");
+        if (rStart != null && !rEnd.isAfter(rStart)) {
+            throw new IllegalArgumentException("The end of the downtime (" + rEnd + ") must be after its start (" + rStart + ")");
         }
 
-        Map<String, Object> schedule = new LinkedHashMap<>();
-        if (renderedStart != null) {
-            schedule.put("start", renderedStart.toString());
+        var schedule = new LinkedHashMap<String, Object>();
+        if (rStart != null) {
+            schedule.put("start", rStart.toString());
         }
-        schedule.put("end", renderedEnd.toString());
+        schedule.put("end", rEnd.toString());
 
-        Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("scope", renderedScope);
-        attributes.put("monitor_identifier", renderedMonitorId != null ? Map.of("monitor_id", renderedMonitorId) : Map.of("monitor_tags", renderedTags));
+        var attributes = new LinkedHashMap<String, Object>();
+        attributes.put("scope", rScope);
+        attributes.put("monitor_identifier", rMonitorId != null ? Map.of("monitor_id", rMonitorId) : Map.of("monitor_tags", rTags));
         attributes.put("schedule", schedule);
         runContext.render(this.message).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> attributes.put("message", value));
         runContext.render(this.displayTimezone).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> attributes.put("display_timezone", value));
         runContext.render(this.muteFirstRecoveryNotification).as(Boolean.class).ifPresent(value -> attributes.put("mute_first_recovery_notification", value));
 
-        Map<String, Object> body = Map.of("data", Map.of("type", "downtime", "attributes", attributes));
-        Map<String, Object> answer = client(runContext, true).post("/api/v2/downtime", body).map();
+        var body = Map.of("data", Map.of("type", "downtime", "attributes", attributes));
+        Map<String, Object> answer;
+        try (DatadogClient client = client(runContext, true)) {
+            answer = client.post("/api/v2/downtime", body).map();
+        }
 
         String id = null;
         String status = null;
@@ -161,8 +174,8 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
             throw new IllegalStateException("Datadog accepted the downtime but returned no id, so it could not be cancelled by this flow: check the downtimes in Datadog");
         }
 
-        runContext.logger().info("Datadog downtime {} created for '{}' until {}", id, renderedScope, renderedEnd);
-        return Output.builder().downtimeId(id).status(status).end(renderedEnd).build();
+        runContext.logger().info("Datadog downtime {} created for '{}' until {}", id, rScope, rEnd);
+        return Output.builder().downtimeId(id).status(status).end(rEnd).build();
     }
 
     @Builder

@@ -5,6 +5,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.MockDatadogServer;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -25,7 +26,7 @@ class CreateTest extends AbstractDatadogTest {
 
     private Create.CreateBuilder<?, ?> task() {
         return Create.builder()
-            .id("event")
+            .id(IdUtils.create())
             .type(Create.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .apiUrl(Property.ofValue(server.url()))

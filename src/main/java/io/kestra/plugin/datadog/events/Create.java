@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.events;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -68,59 +69,68 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
 
     @Schema(title = "Event title", description = "The title of the event. At most 500 characters.")
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> title;
 
     @Schema(title = "Event text", description = "The body of the event. At most 4000 characters. Markdown is supported when the text starts with `%%% ` and ends with ` %%%`.")
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> text;
 
     @Schema(title = "Alert type", description = "How the event is shown. Datadog uses `INFO` when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<AlertType> alertType;
 
     @Schema(title = "Priority", description = "`NORMAL` or `LOW`. Datadog uses `NORMAL` when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<Priority> priority;
 
     @Schema(title = "Tags", description = "Tags to attach, such as `env:prod`.")
+    @PluginProperty(group = "processing")
     private Property<List<String>> tags;
 
     @Schema(title = "Host", description = "The host the event is about.")
+    @PluginProperty(group = "processing")
     private Property<String> host;
 
     @Schema(title = "Aggregation key", description = "Groups events with the same key in the event stream. At most 100 characters.")
+    @PluginProperty(group = "processing")
     private Property<String> aggregationKey;
 
     @Schema(title = "Source type name", description = "The source of the event, such as `kestra`, to pick its icon.")
+    @PluginProperty(group = "processing")
     private Property<String> sourceTypeName;
 
     @Schema(title = "Time of the event", description = "When the event happened, an ISO-8601 instant such as `2026-01-01T00:00:00Z`. Datadog uses the time it receives the event when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<Instant> dateHappened;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        String renderedTitle = runContext.render(this.title).as(String.class).orElse("").trim();
-        if (renderedTitle.isEmpty()) {
+        var rTitle = runContext.render(this.title).as(String.class).orElse("").trim();
+        if (rTitle.isEmpty()) {
             throw new IllegalArgumentException("The Datadog event `title` must not be blank");
         }
-        if (renderedTitle.length() > MAX_TITLE) {
-            throw new IllegalArgumentException("The Datadog event `title` has " + renderedTitle.length() + " characters, the limit is " + MAX_TITLE);
+        if (rTitle.length() > MAX_TITLE) {
+            throw new IllegalArgumentException("The Datadog event `title` has " + rTitle.length() + " characters, the limit is " + MAX_TITLE);
         }
 
-        String renderedText = runContext.render(this.text).as(String.class).orElse("");
-        if (renderedText.isBlank()) {
+        var rText = runContext.render(this.text).as(String.class).orElse("");
+        if (rText.isBlank()) {
             throw new IllegalArgumentException("The Datadog event `text` must not be blank");
         }
-        if (renderedText.length() > MAX_TEXT) {
-            throw new IllegalArgumentException("The Datadog event `text` has " + renderedText.length() + " characters, the limit is " + MAX_TEXT);
+        if (rText.length() > MAX_TEXT) {
+            throw new IllegalArgumentException("The Datadog event `text` has " + rText.length() + " characters, the limit is " + MAX_TEXT);
         }
 
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("title", renderedTitle);
-        body.put("text", renderedText);
+        var body = new LinkedHashMap<String, Object>();
+        body.put("title", rTitle);
+        body.put("text", rText);
         runContext.render(this.alertType).as(AlertType.class).ifPresent(value -> body.put("alert_type", value.api()));
         runContext.render(this.priority).as(Priority.class).ifPresent(value -> body.put("priority", value.api()));
-        List<String> renderedTags = runContext.render(this.tags).asList(String.class);
-        if (!renderedTags.isEmpty()) {
-            body.put("tags", renderedTags);
+        var rTags = runContext.render(this.tags).asList(String.class);
+        if (!rTags.isEmpty()) {
+            body.put("tags", rTags);
         }
         runContext.render(this.host).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> body.put("host", value));
         runContext.render(this.aggregationKey).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> {
@@ -132,10 +142,13 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
         runContext.render(this.sourceTypeName).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> body.put("source_type_name", value));
         runContext.render(this.dateHappened).as(Instant.class).ifPresent(value -> body.put("date_happened", value.getEpochSecond()));
 
-        DatadogClient.Response response = client(runContext, false).post("/api/v1/events", body);
+        DatadogClient.Response response;
+        try (DatadogClient client = client(runContext, false)) {
+            response = client.post("/api/v1/events", body);
+        }
 
-        Map<String, Object> answer = response.map();
-        Object event = answer.get("event");
+        var answer = response.map();
+        var event = answer.get("event");
         String id = null;
         String url = null;
         if (event instanceof Map<?, ?> map) {
@@ -143,7 +156,7 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
             url = map.get("url") == null ? null : String.valueOf(map.get("url"));
         }
 
-        runContext.logger().info("Datadog accepted the event '{}'{}", renderedTitle, id == null ? "" : " (id " + id + ")");
+        runContext.logger().info("Datadog accepted the event '{}'{}", rTitle, id == null ? "" : " (id " + id + ")");
         return Output.builder().eventId(id).url(url).status(answer.get("status") == null ? null : String.valueOf(answer.get("status"))).build();
     }
 

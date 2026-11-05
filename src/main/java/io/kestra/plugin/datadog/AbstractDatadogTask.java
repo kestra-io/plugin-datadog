@@ -20,7 +20,7 @@ import lombok.experimental.SuperBuilder;
 public abstract class AbstractDatadogTask extends Task {
     @Schema(
         title = "Datadog API key",
-        description = "The organization API key. Use a Kestra secret, e.g. `{{ secret('DATADOG_API_KEY') }}`."
+        description = ConnectionDocs.API_KEY
     )
     @NotNull
     @PluginProperty(secret = true, group = "connection")
@@ -29,8 +29,7 @@ public abstract class AbstractDatadogTask extends Task {
 
     @Schema(
         title = "Datadog application key",
-        description = "An application key. Datadog asks for it on every call that reads data or manages monitors and downtimes, so the tasks that only send data (`events.Create`, `metrics.Submit`, `logs.Send`) work without it. " +
-            "Create it with the scopes the task needs. Use a Kestra secret, e.g. `{{ secret('DATADOG_APP_KEY') }}`."
+        description = ConnectionDocs.APP_KEY
     )
     @PluginProperty(secret = true, group = "connection")
     @ToString.Exclude
@@ -38,15 +37,14 @@ public abstract class AbstractDatadogTask extends Task {
 
     @Schema(
         title = "Datadog site",
-        description = "The Datadog site of the organization, the domain you see in the Datadog URL: `datadoghq.com` (US1, the default), `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com` or `ddog-gov.com`. " +
-            "A key only works on the site of the organization that created it."
+        description = ConnectionDocs.SITE
     )
     @PluginProperty(group = "connection")
     private Property<String> site;
 
     @Schema(
         title = "API base URL",
-        description = "Replaces `https://api.<site>` when set, for a proxy, a private link or a test server. Leave it empty for the public API."
+        description = ConnectionDocs.API_URL
     )
     @PluginProperty(group = "advanced")
     private Property<String> apiUrl;

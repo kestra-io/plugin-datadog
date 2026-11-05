@@ -7,6 +7,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -33,7 +34,7 @@ class StateChangeTest extends AbstractDatadogTest {
 
     private StateChange.StateChangeBuilder<?, ?> trigger() {
         return StateChange.builder()
-            .id("on_alert_" + java.util.UUID.randomUUID())
+            .id(IdUtils.create())
             .type(StateChange.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY))
@@ -56,22 +57,59 @@ class StateChangeTest extends AbstractDatadogTest {
         return new Poll(trigger, entry.getKey(), entry.getValue());
     }
 
+    private void firstPoll(Poll poll) throws Exception {
+        server.reply("GET", "/api/v1/monitor", 200, "[]");
+        assertTrue(poll.run().isEmpty(), "the first poll starts nothing");
+    }
+
     @Test
-    void theFirstPollOnlyRecordsTheTime() throws Exception {
+    void theFirstPollOnlyRecordsTheDatadogTimeAndReplaysNothing() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", Instant.now()) + "]");
         Poll poll = poll(trigger().build());
 
         assertTrue(poll.run().isEmpty(), "monitors that already alert are not replayed");
+        assertEquals(1, server.requests.size());
 
-        assertTrue(server.requests.isEmpty(), "the first poll does not call Datadog");
         String key = io.kestra.core.models.triggers.StatefulTriggerService.defaultKey(poll.triggerContext().getNamespace(), poll.triggerContext().getFlowId(), poll.triggerContext().getTriggerId());
         assertTrue(poll.kv().getValue(key).isPresent(), "the cursor is stored");
+        // the same alert is not returned by the next poll either
+        assertTrue(poll.run().isEmpty());
+    }
+
+    @Test
+    void twoMonitorsChangedInTheSameSecondAreBothReturnedEvenWhenTheSecondOneComesLater() throws Exception {
+        Poll poll = poll(trigger().build());
+        firstPoll(poll);
+        Instant second = Instant.now().plusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", second) + "]");
+
+        assertEquals(java.util.List.of(1), ids(poll.run().orElseThrow()));
+
+        // monitor 2 changed in the same second but is only listed now
+        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", second) + "," + monitor(2, "Alert", second) + "]");
+        assertEquals(java.util.List.of(2), ids(poll.run().orElseThrow()), "only the monitor that was not returned yet");
+
+        assertTrue(poll.run().isEmpty(), "and nothing is returned twice");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.List<Integer> ids(Execution execution) {
+        return ((java.util.List<Map<String, Object>>) execution.getTrigger().getVariables().get("monitors")).stream().map(m -> ((Number) m.get("id")).intValue()).toList();
+    }
+
+    @Test
+    void aNetworkFailureSkipsThePoll() throws Exception {
+        Poll poll = poll(trigger().build());
+        firstPoll(poll);
+        server.stop();
+
+        assertTrue(poll.run().isEmpty(), "a connection that is refused does not fail the trigger");
     }
 
     @Test
     void returnsOnlyTheMonitorsThatChangedAfterTheCursorAndAreInAWatchedState() throws Exception {
         Poll poll = poll(trigger().build());
-        poll.run();
+        firstPoll(poll);
         Instant now = Instant.now();
         server.reply("GET", "/api/v1/monitor", 200, "[" +
             monitor(1, "Alert", now.plusSeconds(10)) + "," +      // new alert
@@ -95,7 +133,7 @@ class StateChangeTest extends AbstractDatadogTest {
     @Test
     void aMonitorIsReturnedOnce() throws Exception {
         Poll poll = poll(trigger().build());
-        poll.run();
+        firstPoll(poll);
         Instant changed = Instant.now().plusSeconds(10);
         server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", changed) + "]");
 
@@ -106,7 +144,7 @@ class StateChangeTest extends AbstractDatadogTest {
     @Test
     void watchedStatesCanBeChosen() throws Exception {
         Poll poll = poll(trigger().states(Property.ofValue(java.util.List.of(StateChange.State.WARN, StateChange.State.NO_DATA))).build());
-        poll.run();
+        firstPoll(poll);
         Instant now = Instant.now();
         server.reply("GET", "/api/v1/monitor", 200, "[" +
             monitor(1, "Alert", now.plusSeconds(10)) + "," +
@@ -131,7 +169,7 @@ class StateChangeTest extends AbstractDatadogTest {
 
     private void assertSkippedThenRecovers(int status, String body) throws Exception {
         Poll poll = poll(trigger().build());
-        poll.run();
+        firstPoll(poll);
         Instant changed = Instant.now().plusSeconds(10);
         server.reply("GET", "/api/v1/monitor", status, body);
 
@@ -145,7 +183,7 @@ class StateChangeTest extends AbstractDatadogTest {
     @Test
     void anAuthenticationErrorFailsTheTrigger() throws Exception {
         Poll poll = poll(trigger().build());
-        poll.run();
+        firstPoll(poll);
         server.reply("GET", "/api/v1/monitor", 403, "{\"errors\":[\"Forbidden\"]}");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, poll::run);
@@ -157,7 +195,7 @@ class StateChangeTest extends AbstractDatadogTest {
     @Test
     void anExecutionIsNotStartedWhenNothingChanged() throws Exception {
         Poll poll = poll(trigger().build());
-        poll.run();
+        firstPoll(poll);
         server.reply("GET", "/api/v1/monitor", 200, "[]");
 
         assertTrue(poll.run().isEmpty());

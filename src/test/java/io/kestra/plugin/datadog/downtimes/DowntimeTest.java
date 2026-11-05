@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -26,7 +27,7 @@ class DowntimeTest extends AbstractDatadogTest {
             "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         server.reply("POST", "/api/v2/downtime", 200, "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         return Create.builder()
-            .id("mute")
+            .id(IdUtils.create())
             .type(Create.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY))
@@ -102,7 +103,7 @@ class DowntimeTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).build().run(runContext()));
         // both
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).end(end).duration(Property.ofValue(Duration.ofMinutes(1))).build().run(runContext()));
-        // no monitor, or both monitor selectors
+        // no monitor or both monitor selectors
         assertThrows(IllegalArgumentException.class, () -> create().end(end).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).monitorTags(Property.ofValue(List.of("a:b"))).end(end).build().run(runContext()));
         // an end before the start, a zero duration, a blank scope
@@ -115,7 +116,7 @@ class DowntimeTest extends AbstractDatadogTest {
     @Test
     void failsWhenDatadogReturnsNoIdSoThatNoDowntimeIsLeftBehindUnnoticed() {
         server.reply("POST", "/api/v2/downtime", 200, "{\"data\":{}}");
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> Create.builder().id("m").type(Create.class.getName())
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> Create.builder().id(IdUtils.create()).type(Create.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .scope(Property.ofValue("*")).monitorId(Property.ofValue(1L)).duration(Property.ofValue(Duration.ofMinutes(5)))
             .build().run(runContext()));
@@ -127,7 +128,7 @@ class DowntimeTest extends AbstractDatadogTest {
         io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CancelDowntime").assertResponse(204, "");
         server.reply("DELETE", "/api/v2/downtime/dt-1", 204, "");
 
-        Cancel.Output output = Cancel.builder().id("unmute").type(Cancel.class.getName())
+        Cancel.Output output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("dt-1")).build().run(runContext());
 
@@ -142,14 +143,14 @@ class DowntimeTest extends AbstractDatadogTest {
     @Test
     void aMissingDowntimeFailsUnlessIgnored() throws Exception {
         server.reply("DELETE", "/api/v2/downtime/gone", 404, "{\"errors\":[\"Downtime not found\"]}");
-        var strict = Cancel.builder().id("unmute").type(Cancel.class.getName())
+        var strict = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("gone")).build();
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> strict.run(runContext()));
         assertTrue(error.getMessage().contains("404"), error.getMessage());
 
-        Cancel.Output output = Cancel.builder().id("unmute").type(Cancel.class.getName())
+        Cancel.Output output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("gone")).ignoreNotFound(Property.ofValue(true)).build().run(runContext());
         assertFalse(output.getCancelled());
@@ -158,7 +159,7 @@ class DowntimeTest extends AbstractDatadogTest {
     @Test
     void otherErrorsAreNotIgnored() {
         server.reply("DELETE", "/api/v2/downtime/x", 403, "{\"errors\":[\"Forbidden\"]}");
-        assertThrows(IllegalStateException.class, () -> Cancel.builder().id("unmute").type(Cancel.class.getName())
+        assertThrows(IllegalStateException.class, () -> Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("x")).ignoreNotFound(Property.ofValue(true)).build().run(runContext()));
     }
@@ -166,7 +167,7 @@ class DowntimeTest extends AbstractDatadogTest {
     @Test
     void theIdCannotChangeThePath() throws Exception {
         server.reply("DELETE", "/api/v2/downtime/a%2Fb%3Fx", 204, "");
-        Cancel.builder().id("unmute").type(Cancel.class.getName())
+        Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("a/b?x")).build().run(runContext());
         assertEquals(1, server.requests.size());

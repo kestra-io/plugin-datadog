@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -16,7 +17,9 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-/** Datadog v2 operationId: CancelDowntime. */
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -50,22 +53,24 @@ import lombok.experimental.SuperBuilder;
 public class Cancel extends AbstractDatadogTask implements RunnableTask<Cancel.Output> {
     @Schema(title = "Downtime id", description = "The id of the downtime, as returned by `downtimes.Create`.")
     @NotNull
+    @PluginProperty(group = "main")
     private Property<String> downtimeId;
 
     @Builder.Default
     @Schema(title = "Ignore a missing downtime", description = "Succeeds when Datadog does not find the downtime, for example because it ended and was removed.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> ignoreNotFound = Property.ofValue(false);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        String id = runContext.render(this.downtimeId).as(String.class).orElse("").trim();
+        var id = runContext.render(this.downtimeId).as(String.class).orElse("").trim();
         if (id.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `downtimeId` must not be blank");
         }
 
-        boolean ignore = runContext.render(this.ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            client(runContext, true).delete(DowntimeSupport.path(id));
+        var ignore = runContext.render(this.ignoreNotFound).as(Boolean.class).orElse(false);
+        try (DatadogClient client = client(runContext, true)) {
+            client.delete("/api/v2/downtime/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
         } catch (DatadogClient.DatadogException e) {
             if (e.getStatus() == 404 && ignore) {
                 runContext.logger().info("Datadog downtime {} was not found, nothing to cancel", id);
