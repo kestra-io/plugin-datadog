@@ -13,8 +13,6 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,12 +23,10 @@ import java.util.stream.Collectors;
 @Getter
 @NoArgsConstructor
 public abstract class AbstractHourlyTask extends AbstractDatadogTask {
-    private static final DateTimeFormatter HOUR = DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH").withZone(ZoneOffset.UTC);
-
     @NotNull
-    @Schema(title = "Start hour", description = "Inclusive ISO-8601 instant at an exact UTC hour.")
+    @Schema(title = "Start hour", description = "Inclusive ISO-8601 instant at an exact UTC hour. Sent as a full date-time with seconds and UTC timezone.")
     private Property<Instant> from;
-    @Schema(title = "End hour", description = "Exclusive ISO-8601 instant at an exact UTC hour. Must follow from.")
+    @Schema(title = "End hour", description = "Exclusive ISO-8601 instant at an exact UTC hour. Must follow from. Sent as a full date-time with seconds and UTC timezone.")
     private Property<Instant> to;
     @NotNull
     @Schema(title = "Product families", description = "Non-empty list of Datadog product families, such as INFRA_HOSTS or LOGS.")
@@ -62,9 +58,9 @@ public abstract class AbstractHourlyTask extends AbstractDatadogTask {
             throw new IllegalArgumentException("`pageSize` must be 1..500 and `maxResults` must be 1..100000");
         }
         var params = DatadogClient.query();
-        params.put("filter[timestamp][start]", HOUR.format(start));
+        params.put("filter[timestamp][start]", start.toString());
         if (end != null) {
-            params.put("filter[timestamp][end]", HOUR.format(end));
+            params.put("filter[timestamp][end]", end.toString());
         }
         params.put("filter[product_families]", families.stream().map(ProductFamily::apiValue).distinct().collect(Collectors.joining(",")));
         params.put("filter[include_descendants]", context.render(includeDescendants).as(Boolean.class).orElse(false));

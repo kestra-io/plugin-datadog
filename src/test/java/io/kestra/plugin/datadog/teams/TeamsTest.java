@@ -69,14 +69,14 @@ class TeamsTest extends OrganizationTestSupport {
     }
 
     @Test
-    void dryRunReportsThePlanWithoutWrites() throws Exception {
+    void planReportsChangesWithoutWrites() throws Exception {
         users();
         server.reply("GET", PATH, 200, members(java.util.List.of(member("admin", true), member("old", false))));
         var output = connection(SyncMembers.builder()).teamId(Property.ofValue("team-id")).handles(Property.ofValue(java.util.List.of("admin@example.com", "new@example.com")))
-            .dryRun(Property.ofValue(true)).build().run(runContext());
+            .plan(Property.ofValue(true)).build().run(runContext());
         assertEquals(java.util.List.of("new@example.com"), output.getAdded());
         assertEquals(java.util.List.of("old@example.com"), output.getRemoved());
-        assertTrue(output.getDryRun());
+        assertTrue(output.getPlan());
         assertTrue(server.requests.stream().allMatch(request -> request.method().equals("GET")));
     }
 
@@ -87,7 +87,7 @@ class TeamsTest extends OrganizationTestSupport {
         var builder = connection(SyncMembers.builder()).teamId(Property.ofValue("team-id")).handles(Property.ofValue(java.util.List.of("new@example.com")));
         assertThrows(IllegalArgumentException.class, () -> builder.build().run(runContext()));
         assertTrue(server.requests.stream().allMatch(request -> request.method().equals("GET")));
-        var output = builder.allowRemoveLastAdmin(Property.ofValue(true)).dryRun(Property.ofValue(true)).build().run(runContext());
+        var output = builder.allowRemoveLastAdmin(Property.ofValue(true)).plan(Property.ofValue(true)).build().run(runContext());
         assertEquals(java.util.List.of("admin@example.com"), output.getRemoved());
         assertThrows(IllegalArgumentException.class, () -> connection(RemoveMember.builder()).teamId(Property.ofValue("team-id"))
             .userId(Property.ofValue("admin")).build().run(runContext()));

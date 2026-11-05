@@ -58,6 +58,8 @@ def build():
             props["store"] = False
         if "dryRun" in inventory[name]["properties"]:
             props["dryRun"] = False
+        if "plan" in inventory[name]["properties"]:
+            props["plan"] = False
         def literal(value):
             if isinstance(value, dict):
                 return {k: literal(v) for k, v in value.items()}
@@ -68,7 +70,8 @@ def build():
             return value
         props = literal(props)
         scenarios[name] = {"task": name, "properties": props, "replies": replies, "expected": expected,
-                           "dryRun": "dryRun" in inventory[name]["properties"]}
+                           "dryRun": "dryRun" in inventory[name]["properties"],
+                           "plan": "plan" in inventory[name]["properties"]}
 
     # Incident response and case-management JSON:API resources.
     incident = data("incidents", {"title": "e2e incident", "customer_impacted": True})
@@ -125,7 +128,7 @@ def build():
     add("monitors.Export", [reply("v1:ListMonitors", [monitor])], {"uri": "$defined"})
     add("monitors.Delete", [reply("v1:DeleteMonitor", monitor, monitor_id=12345)], {"deleted": True}, monitorId=12345)
     add("monitors.Validate", [reply("v1:ValidateMonitor", {})], {"valid": True})
-    add("monitors.CanDelete", [reply("v1:CheckCanDeleteMonitor", {"data": {"ok": [3000000000]}})], {"result.data.ok.0": 3000000000}, monitorIds=[3000000000])
+    add("monitors.CanDelete", [reply("v1:CheckCanDeleteMonitor", {"data": {"ok": [12345, 3000000000]}})], {"result.data.ok.0": 12345, "result.data.ok.1": 3000000000}, monitorIds=[12345, 3000000000])
     add("monitors.Search", [reply("v1:SearchMonitors", {"monitors": [monitor], "metadata": {"total_count": 1, "page_count": 1, "page": 0, "per_page": 100}, "counts": {}})], {"size": 1})
     add("monitors.Configuration", [reply("v2:GetMonitorNotificationRules", {"data": []})], {"size": 0})
     add("monitors.Apply", [reply("v1:ListMonitors", []), reply("v1:ValidateMonitor", {}), reply("v1:CreateMonitor", monitor)], {"results.0.action": "CREATED"})
@@ -229,8 +232,8 @@ def build():
     # Generic helpers are also executed. Catalog enumeration has no network fixture.
     add("api.Call", [reply("v1:GetMonitor", monitor, monitor_id=12345)], {"statusCode": 200})
     add("api.Operations", [], {"count": "$defined"})
-    # Exercise 64-bit identifiers. Small literal array IDs have a separate regression finding.
-    scenarios["slos.Update"]["properties"]["monitorIds"] = [3000000000]
+    # Exercise small and 64-bit literal identifiers in the same flow property.
+    scenarios["slos.Update"]["properties"]["monitorIds"] = [12345, 3000000000]
     missing = set(inventory) - set(scenarios) - {name for name, row in inventory.items() if row["trigger"]}
     if missing:
         raise ValueError("Tasks missing scenarios: " + ", ".join(sorted(missing)))

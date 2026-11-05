@@ -27,21 +27,21 @@ tasks:
   handles:
   - admin@example.com
   - engineer@example.com
-  dryRun: true
-  id: syncmembers_dry
+  plan: true
+  id: syncmembers_plan
   type: io.kestra.plugin.datadog.teams.SyncMembers
   apiKey: e2e-api-key
   appKey: e2e-app-key
-  apiUrl: __MOCK_URL__/scenarios/teams.SyncMembers-dry
-- id: syncmembers_dry_assert
+  apiUrl: __MOCK_URL__/scenarios/teams.SyncMembers-plan
+- id: syncmembers_plan_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.syncmembers_dry.dryRun == true }}'
+  - '{{ outputs.syncmembers_plan.plan == true }}'
 - teamId: 00000000-0000-0000-0000-000000000001
   handles:
   - admin@example.com
   - engineer@example.com
-  dryRun: false
+  plan: false
   id: syncmembers
   type: io.kestra.plugin.datadog.teams.SyncMembers
   apiKey: e2e-api-key

@@ -36,6 +36,7 @@ import java.util.Map;
         service: checkout
         env: production
         identifier: pre-deploy
+        evaluationDryRun: false
     """))
 public class CreateGate extends AbstractDatadogTask implements RunnableTask<CreateGate.Output> {
     @NotNull
@@ -46,8 +47,8 @@ public class CreateGate extends AbstractDatadogTask implements RunnableTask<Crea
     private Property<String> env;
     @Schema(title = "Gate identifier", defaultValue = "default")
     private Property<String> identifier;
-    @Schema(title = "Datadog dry-run mode", description = "Persists a gate whose evaluations always pass while recording rule results. This still creates a gate.", defaultValue = "false")
-    private Property<Boolean> dryRun;
+    @Schema(title = "Evaluation dry-run mode", description = "Persists Datadog's dry_run flag on the new gate. Its evaluations always pass while recording rule results. Both values create a gate with a POST request.", defaultValue = "false")
+    private Property<Boolean> evaluationDryRun;
 
     @Override
     public Output run(RunContext context) throws Exception {
@@ -55,7 +56,7 @@ public class CreateGate extends AbstractDatadogTask implements RunnableTask<Crea
         attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
         attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
         attributes.put("identifier", Deployments.required(context.render(identifier).as(String.class).orElse("default"), "identifier"));
-        attributes.put("dry_run", context.render(dryRun).as(Boolean.class).orElse(false));
+        attributes.put("dry_run", context.render(evaluationDryRun).as(Boolean.class).orElse(false));
         var answer = client(context, true).post("/api/v2/deployment_gates", Deployments.body("deployment_gate", attributes)).map();
         var data = Deployments.object(answer.get("data"), "gate data");
         return Output.builder().gateId(Deployments.required((String) data.get("id"), "gate id returned by Datadog")).build();

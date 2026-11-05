@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.file.Files;
 import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,9 +34,9 @@ import java.util.Map;
 @NoArgsConstructor
 public abstract class AbstractCostTask extends AbstractDatadogTask {
     @NotNull
-    @Schema(title = "Start month", description = "Month in YYYY-MM format, as required by the Datadog operation description.")
+    @Schema(title = "Start month", description = "Month in YYYY-MM format. Sent as midnight UTC on the first day to satisfy the API date-time schema.")
     private Property<String> startMonth;
-    @Schema(title = "End month", description = "Optional month in YYYY-MM format. Must not precede startMonth.")
+    @Schema(title = "End month", description = "Optional month in YYYY-MM format. Must not precede startMonth. Sent as midnight UTC on the first day.")
     private Property<String> endMonth;
     @Schema(title = "Cost view", description = "SUMMARY for parent organization costs or SUB_ORG for child organization costs. Defaults to SUMMARY.")
     private Property<View> view;
@@ -52,9 +53,9 @@ public abstract class AbstractCostTask extends AbstractDatadogTask {
             throw new IllegalArgumentException("`endMonth` must not precede `startMonth`");
         }
         var params = DatadogClient.query();
-        params.put("start_month", start.toString());
+        params.put("start_month", start.atDay(1).atStartOfDay().toInstant(ZoneOffset.UTC).toString());
         if (end != null) {
-            params.put("end_month", end.toString());
+            params.put("end_month", end.atDay(1).atStartOfDay().toInstant(ZoneOffset.UTC).toString());
         }
         params.put("view", context.render(view).as(View.class).orElse(View.SUMMARY).apiValue);
         params.put("include_connected_accounts", context.render(includeConnectedAccounts).as(Boolean.class).orElse(false));

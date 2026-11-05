@@ -55,7 +55,7 @@ class MockDatadog:
                 self.send_response(status)
                 media = "application/json"
                 if path.startswith("/scenarios/"):
-                    name = path.split("/")[2].removesuffix("-dry")
+                    name = path.split("/")[2].removesuffix("-dry").removesuffix("-plan")
                     endpoint = "/" + "/".join(path.split("/")[3:])
                     matches = [row for row in owner.scenarios.get(name, {}).get("replies", []) if row["method"] == self.command and row["path"] == endpoint]
                     if matches:
@@ -80,7 +80,9 @@ class MockDatadog:
     def answer(self, method, path, body):
         if path.startswith("/scenarios/"):
             _, _, name, *parts = path.split("/")
-            task = name.removesuffix("-dry")
+            task = name.removesuffix("-dry").removesuffix("-plan")
+            if name.endswith("-dry") or name.endswith("-plan") and method != "GET":
+                return 400, {"errors": ["Preview request violated the safety contract"]}
             endpoint = "/" + "/".join(parts)
             fixtures = [row for row in self.scenarios.get(task, {}).get("replies", []) if row["method"] == method and row["path"] == endpoint]
             if fixtures:

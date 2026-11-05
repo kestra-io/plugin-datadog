@@ -58,13 +58,14 @@ class UsageTest extends AbstractDatadogTest {
         assertEquals(9007199254740993L, count);
         String first = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
         String second = URLDecoder.decode(server.requests.get(1).query(), StandardCharsets.UTF_8);
-        assertTrue(first.contains("filter[timestamp][start]=2026-01-01T00"));
-        assertTrue(first.contains("filter[timestamp][end]=2026-01-01T02"));
+        assertTrue(first.contains("filter[timestamp][start]=2026-01-01T00:00:00Z&"));
+        assertTrue(first.contains("filter[timestamp][end]=2026-01-01T02:00:00Z&"));
         assertTrue(first.contains("filter[product_families]=infra_hosts"));
         assertTrue(first.contains("filter[include_descendants]=false"));
         assertTrue(second.contains("page[next_record_id]=next +/=&"));
         assertEquals(API_KEY, server.requests.getFirst().header("DD-API-KEY"));
         assertEquals(APP_KEY, server.requests.getFirst().header("DD-APPLICATION-KEY"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:GetHourlyUsage");
     }
 
     @Test

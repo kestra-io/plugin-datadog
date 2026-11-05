@@ -52,4 +52,4 @@ The high-risk adopters include monitor Apply, dashboard Import, service-definiti
 
 `SafetyInvariantsTest` discovers plugin classes by reflection. It checks reserved property names, destructive selectors, dry-run requests and named credential output fields. Its named-field redaction check does not prove that arbitrary map payloads are safe. Existing area tests cover nested payload redaction.
 
-Known findings are executable assertions of current behavior. Set `DD_STRICT_SAFETY=1` in the test process to turn them into failures. This lets the integrated gate detect new regressions while retaining reproductions of behavior this test-only change cannot repair. See `docs/INTEGRATION-FINDINGS.md`.
+Safety and date-time contracts are strict in the default test suite. There is no environment switch or known-failure bypass. The safety inventory asserts zero HTTP requests for every `dryRun` input and GET-only behavior for read-only `plan` modes. See `docs/INTEGRATION-FINDINGS.md` for the repaired findings and migration notes.

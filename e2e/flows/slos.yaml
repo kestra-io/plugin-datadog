@@ -80,6 +80,7 @@ tasks:
   name: Orders availability
   sloType: MONITOR
   monitorIds:
+  - 12345
   - 3000000000
   thresholds:
   - timeframe: THIRTY_DAYS

@@ -33,7 +33,7 @@ import java.util.Map;
         type: io.kestra.plugin.datadog.monitors.Apply
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
-        dryRun: true
+        plan: true
         definitions: |
           - name: CPU usage
             type: query alert
@@ -52,9 +52,9 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     private Property<String> definitions;
     @Schema(title = "Definitions file", description = "A kestra:// internal storage URI containing YAML or JSON. File contents are not rendered as expressions. Give this or definitions.")
     private Property<String> from;
-    @Schema(title = "Preview changes", description = "False by default. Reads and validates definitions but never creates or updates monitors. Actions describe the proposed writes.")
-    private Property<Boolean> dryRun;
-    @Schema(title = "Validate before writing", description = "True by default. Validates every planned definition with Datadog before the first write.")
+    @Schema(title = "Plan changes", description = "False by default. Uses GET requests to compute a diff without writing. Validates definitions locally and skips remote validation. Actions describe the proposed writes.")
+    private Property<Boolean> plan;
+    @Schema(title = "Validate before writing", description = "True by default. Validates every definition with Datadog before the first write. Ignored when plan is true.")
     private Property<Boolean> validateFirst;
     @Schema(title = "Store results", description = "Writes result rows to an ION file instead of returning them inline.")
     private Property<Boolean> store;
@@ -62,7 +62,7 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     @Override
     public Output run(RunContext context) throws Exception {
         var desired = read(context);
-        boolean preview = context.render(dryRun).as(Boolean.class).orElse(false);
+        boolean preview = context.render(plan).as(Boolean.class).orElse(false);
         boolean validate = context.render(validateFirst).as(Boolean.class).orElse(true);
         boolean include = includeSecrets(context);
         boolean storage = context.render(store).as(Boolean.class).orElse(false);
@@ -93,7 +93,7 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
             var changes = MonitorDefinitions.diff(current, definition);
             Action action = id == null ? Action.CREATED : changes.isEmpty() ? Action.UNCHANGED : Action.UPDATED;
             Map<String, Object> body = MonitorDefinitions.merge(MonitorDefinitions.writable(current), definition);
-            if (validate) {
+            if (validate && !preview) {
                 client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
             }
             plans.add(new Plan(key, id, action, body, changes));
@@ -114,7 +114,7 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
             results.add(Result.builder().key(plan.key()).monitorId(id).action(plan.action()).diff(filtered).build());
         }
         URI uri = storage ? MonitorIO.store(context, results, false) : null;
-        return Output.builder().results(storage ? null : results).uri(uri).size(results.size()).dryRun(preview).build();
+        return Output.builder().results(storage ? null : results).uri(uri).size(results.size()).plan(preview).build();
     }
 
     private java.util.List<Map<String, Object>> read(RunContext context) throws Exception {
@@ -177,7 +177,7 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     public static class Result {
         @Schema(title = "Management tag")
         private final String key;
-        @Schema(title = "Monitor id", description = "Null for a proposed creation in dry-run mode.")
+        @Schema(title = "Monitor id", description = "Null for a proposed creation in plan mode.")
         private final Long monitorId;
         @Schema(title = "Action")
         private final Action action;
@@ -194,7 +194,7 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
         private final URI uri;
         @Schema(title = "Number of definitions")
         private final Integer size;
-        @Schema(title = "Preview mode")
-        private final Boolean dryRun;
+        @Schema(title = "Plan mode")
+        private final Boolean plan;
     }
 }

@@ -173,7 +173,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         }
         server.reply("GET", "/api/v1/monitor/123", 200, JacksonMapper.ofJson().writeValueAsString(response));
         var applied = Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
-            .apiUrl(Property.ofValue(server.url())).from(Property.ofValue(output.getUri().toString())).dryRun(Property.ofValue(true)).build().run(context);
+            .apiUrl(Property.ofValue(server.url())).from(Property.ofValue(output.getUri().toString())).plan(Property.ofValue(true)).build().run(context);
         assertEquals(Apply.Action.UNCHANGED, applied.getResults().getFirst().getAction());
     }
 

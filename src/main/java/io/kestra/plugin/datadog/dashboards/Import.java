@@ -26,7 +26,7 @@ import java.util.Map;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Schema(title = "Apply a Datadog dashboard definition", description = "Matches one dashboard by id or exact title plus managingTag. Creates or updates it only when needed and reports a field-level diff. Needs dashboards_read and dashboards_write for writes. dryRun performs reads only. Serialize imports for the same identity.")
+@Schema(title = "Apply a Datadog dashboard definition", description = "Matches one dashboard by id or exact title plus managingTag. Creates or updates it only when needed and reports a field-level diff. Needs dashboards_read and dashboards_write for writes. plan performs reads only. Serialize imports for the same identity.")
 @Plugin(examples = @Example(title = "Apply a team-owned dashboard", full = true, code = """
     id: datadog_dashboard_import
     namespace: company.observability
@@ -36,7 +36,7 @@ import java.util.Map;
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         managingTag: team:platform
-        dryRun: true
+        plan: true
         definition:
           title: Orders
           layout_type: ordered
@@ -54,8 +54,8 @@ public class Import extends AbstractDashboardTask implements RunnableTask<Import
     @ToString.Exclude
     @Schema(title = "Desired dashboard definition", description = "Requires title, layout_type and widgets. Omitted top-level fields are preserved on update. Provided nested objects and arrays are replaced.")
     private Map<String, Object> definition;
-    @Schema(title = "Dry run", description = "Report the intended action and diff without writing. False by default.")
-    private Property<Boolean> dryRun;
+    @Schema(title = "Plan changes", description = "Use GET requests to report the intended action and diff without writing. False by default.")
+    private Property<Boolean> plan;
     @Schema(title = "Maximum discovery results", description = "Between 1 and 10000, default 1000. Fail before writing when title/tag discovery exceeds this bound.")
     private Property<Integer> maxResults;
 
@@ -92,7 +92,7 @@ public class Import extends AbstractDashboardTask implements RunnableTask<Import
             throw new IllegalArgumentException("`managingTag` must be a team:<name> tag present in definition.tags");
         }
         int limit = Dashboards.limit(context.render(maxResults).as(Integer.class).orElse(1000));
-        boolean dry = context.render(dryRun).as(Boolean.class).orElse(false);
+        boolean preview = context.render(plan).as(Boolean.class).orElse(false);
         boolean include = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
         DatadogClient client = client(context, true);
         Map<String, Object> current = null;
@@ -123,7 +123,7 @@ public class Import extends AbstractDashboardTask implements RunnableTask<Import
         after.putAll(desired);
         var diff = Dashboards.diff(before, after, include);
         Action action = current == null ? Action.CREATED : diff.isEmpty() ? Action.UNCHANGED : Action.UPDATED;
-        if (!dry && action != Action.UNCHANGED) {
+        if (!preview && action != Action.UNCHANGED) {
             var response = action == Action.CREATED ? client.post(Dashboards.PATH, after).map() : client.put(Dashboards.path(id), after).map();
             if (action == Action.CREATED) {
                 if (!(response.get("id") instanceof String createdId) || createdId.isBlank()) {
@@ -132,7 +132,7 @@ public class Import extends AbstractDashboardTask implements RunnableTask<Import
                 id = createdId;
             }
         }
-        return Output.builder().dashboardId(id).action(action).dryRun(dry).diff(diff).build();
+        return Output.builder().dashboardId(id).action(action).plan(preview).diff(diff).build();
     }
 
     public enum Action { CREATED, UPDATED, UNCHANGED }
@@ -140,12 +140,12 @@ public class Import extends AbstractDashboardTask implements RunnableTask<Import
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Dashboard identifier", description = "Absent for a dry-run create.")
+        @Schema(title = "Dashboard identifier", description = "Absent when planning a create.")
         private final String dashboardId;
-        @Schema(title = "Apply action", description = "CREATED, UPDATED or UNCHANGED. In a dry run this is the planned action.")
+        @Schema(title = "Apply action", description = "CREATED, UPDATED or UNCHANGED. In plan mode this is the planned action.")
         private final Action action;
-        @Schema(title = "Was a dry run")
-        private final Boolean dryRun;
+        @Schema(title = "Plan mode")
+        private final Boolean plan;
         @Schema(title = "Field-level changes", description = "JSON pointer paths with before and after values. Known credentials are redacted by default.")
         private final java.util.List<Dashboards.Change> diff;
     }

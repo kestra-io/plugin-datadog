@@ -4,6 +4,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
+import io.kestra.plugin.datadog.NumericIds;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -85,7 +86,7 @@ public abstract class AbstractSloDefinitionTask extends AbstractDatadogTask {
         body.put("thresholds", renderedThresholds);
         String numerator = context.render(this.numerator).as(String.class).orElse(null);
         String denominator = context.render(this.denominator).as(String.class).orElse(null);
-        var monitors = context.render(monitorIds).asList(Long.class);
+        var monitors = NumericIds.render(context, monitorIds, "monitorIds");
         var groups = context.render(this.groups).asList(String.class);
         if (kind == SloType.METRIC) {
             if (numerator == null || numerator.isBlank() || denominator == null || denominator.isBlank()) {
