@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.serializers.JacksonMapper;
@@ -150,7 +151,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     void searchCanStoreRowsAndRejectsUnexpectedAnswers() throws Exception {
         var context = runContext();
         server.reply("GET", "/api/v1/monitor/search", 200, "{\"monitors\":[{\"id\":123}]}");
-        var output = search().store(Property.ofValue(true)).build().run(context);
+        var output = search().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
             assertEquals(123, JacksonMapper.ofIon().readValue(input, Map.class).get("id"));

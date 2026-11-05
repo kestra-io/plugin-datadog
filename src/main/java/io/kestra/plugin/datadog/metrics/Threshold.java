@@ -119,7 +119,7 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
         }
         Instant now = Instant.now();
         var body = FormulaQueries.body(Map.of("a", expression), List.of(), now.minus(window), now, DataSource.METRICS, aggregation, null);
-        DatadogClient client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true);
+        try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
         String signature = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
             JacksonMapper.ofJson().writeValueAsBytes(List.of(expression, limit.stripTrailingZeros().toPlainString(), predicate, aggregation, window.toString(), client.apiBase()))));
         KVStore kv = runContext.namespaceKv(context.getNamespace());
@@ -130,7 +130,7 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
         try {
             value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
         } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 429 || e.getStatus() >= 500) {
+            if (e.isTransient()) {
                 runContext.logger().warn("Datadog threshold poll skipped after HTTP {}", e.getStatus());
                 return Optional.empty();
             }
@@ -139,15 +139,21 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
         if (value == null) {
             return Optional.empty();
         }
-        boolean breached = predicate.breached(value, limit);
-        if (previous.isEmpty() || !breached || previous.get()) {
-            writeState(kv, key, signature, breached);
+        var sampledAt = client.serverTime().orElse(null);
+        if (sampledAt == null) {
+            runContext.logger().warn("Datadog threshold poll skipped because the Date header is missing");
             return Optional.empty();
         }
-        Output output = Output.builder().value(value).threshold(limit).breached(true).observedAt(now).build();
+        boolean breached = predicate.breached(value, limit);
+        if (previous.isEmpty() || !breached || previous.get()) {
+            writeState(kv, key, signature, breached, sampledAt);
+            return Optional.empty();
+        }
+        Output output = Output.builder().value(value).threshold(limit).breached(true).observedAt(sampledAt).build();
         Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
-        writeState(kv, key, signature, true);
+        writeState(kv, key, signature, true, sampledAt);
         return Optional.of(execution);
+        }
     }
 
     private static Optional<Boolean> readState(KVStore kv, String key, String signature) throws Exception {
@@ -170,8 +176,8 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
         return Optional.of(breached);
     }
 
-    private static void writeState(KVStore kv, String key, String signature, boolean breached) throws Exception {
-        byte[] value = JacksonMapper.ofJson().writeValueAsString(Map.of("signature", signature, "breached", breached)).getBytes(StandardCharsets.UTF_8);
+    private static void writeState(KVStore kv, String key, String signature, boolean breached, Instant sampledAt) throws Exception {
+        byte[] value = JacksonMapper.ofJson().writeValueAsString(Map.of("signature", signature, "breached", breached, "sampledAt", sampledAt.toString())).getBytes(StandardCharsets.UTF_8);
         kv.put(key, new KVValueAndMetadata(new KVMetadata("Datadog threshold state", (Duration) null), value));
     }
 

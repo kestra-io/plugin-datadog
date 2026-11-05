@@ -45,20 +45,22 @@ public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            var response = client(context, true).post("/api/v1/synthetics/tests/delete", Map.of("public_ids", java.util.List.of(id), "force_delete_dependencies", false)).map();
-            boolean deleted = Synthetics.rows(response.get("deleted_tests"), "deleted_tests").stream().anyMatch(row -> id.equals(row.get("public_id")));
-            if (!deleted && !ignore) {
-                throw new IllegalStateException("Datadog did not report deletion of test " + id);
+        try (var client = client(context, true)) {
+            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                var response = client.post("/api/v1/synthetics/tests/delete", Map.of("public_ids", java.util.List.of(id), "force_delete_dependencies", false)).map();
+                boolean deleted = Synthetics.rows(response.get("deleted_tests"), "deleted_tests").stream().anyMatch(row -> id.equals(row.get("public_id")));
+                if (!deleted && !ignore) {
+                    throw new IllegalStateException("Datadog did not report deletion of test " + id);
+                }
+                return Output.builder().publicId(id).deleted(deleted).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() != 404 || !ignore) {
+                    throw e;
+                }
+                return Output.builder().publicId(id).deleted(false).build();
             }
-            return Output.builder().publicId(id).deleted(deleted).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() != 404 || !ignore) {
-                throw e;
-            }
-            return Output.builder().publicId(id).deleted(false).build();
         }
     }
 

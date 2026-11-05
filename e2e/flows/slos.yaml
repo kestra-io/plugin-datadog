@@ -55,7 +55,7 @@ tasks:
 - sloId: 0123456789abcdef0123456789abcdef
   from: 100
   to: 200
-  store: false
+  fetchType: FETCH
   id: history
   type: io.kestra.plugin.datadog.slos.History
   apiKey: e2e-api-key
@@ -66,7 +66,7 @@ tasks:
   conditions:
   - '{{ outputs.history.history.overall.sli_value == 99.95 }}'
 - tagsQuery: env:prod
-  store: false
+  fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.slos.List
   apiKey: e2e-api-key

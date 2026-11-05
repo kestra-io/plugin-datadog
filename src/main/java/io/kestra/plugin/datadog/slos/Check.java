@@ -46,22 +46,24 @@ public class Check extends AbstractWindowTask implements RunnableTask<Check.Outp
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = context.render(getSloId()).as(String.class).orElse(null);
-        Slos.path(id);
-        Long from = context.render(getFrom()).as(Long.class).orElse(null);
-        Long to = context.render(getTo()).as(Long.class).orElse(null);
-        Slos.window(from, to);
-        double target = Slos.target(context.render(this.target).as(Double.class).orElse(null));
-        double minimum = Slos.minimum(context.render(minRemainingBudget).as(Double.class).orElse(20.0));
-        boolean corrections = context.render(getApplyCorrections()).as(Boolean.class).orElse(true);
-        boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
-        var budget = Slos.budget(Slos.history(client(context, true), id, from, to, target, corrections), target);
-        boolean passed = budget.remaining() >= minimum;
-        if (!passed && fail) {
-            throw new IllegalStateException("SLO " + id + " has " + budget.remaining() + "% error budget remaining, below " + minimum + "%");
+        try (var client = client(context, true)) {
+            String id = context.render(getSloId()).as(String.class).orElse(null);
+            Slos.path(id);
+            Long from = context.render(getFrom()).as(Long.class).orElse(null);
+            Long to = context.render(getTo()).as(Long.class).orElse(null);
+            Slos.window(from, to);
+            double target = Slos.target(context.render(this.target).as(Double.class).orElse(null));
+            double minimum = Slos.minimum(context.render(minRemainingBudget).as(Double.class).orElse(20.0));
+            boolean corrections = context.render(getApplyCorrections()).as(Boolean.class).orElse(true);
+            boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
+            var budget = Slos.budget(Slos.history(client, id, from, to, target, corrections), target);
+            boolean passed = budget.remaining() >= minimum;
+            if (!passed && fail) {
+                throw new IllegalStateException("SLO " + id + " has " + budget.remaining() + "% error budget remaining, below " + minimum + "%");
+            }
+            return Output.builder().sloId(id).from(from).to(to).sli(budget.sli()).target(target).remainingBudget(budget.remaining())
+                .minRemainingBudget(minimum).passed(passed).correctionsApplied(corrections).build();
         }
-        return Output.builder().sloId(id).from(from).to(to).sli(budget.sli()).target(target).remainingBudget(budget.remaining())
-            .minRemainingBudget(minimum).passed(passed).correctionsApplied(corrections).build();
     }
 
     @Builder

@@ -3,6 +3,7 @@ package io.kestra.plugin.datadog.usage;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.metrics.Comparison;
@@ -72,7 +73,7 @@ public class Check extends AbstractHourlyTask implements RunnableTask<Check.Outp
         OnNoData policy = context.render(onNoData).as(OnNoData.class).orElse(OnNoData.FAIL);
         boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
         String organization = context.render(orgId).as(String.class).filter(s -> !s.isBlank()).orElse(null);
-        var result = collect(context, null, false);
+        var result = collect(context, null, FetchType.FETCH);
         if (result.nextRecordId() != null) {
             throw new IllegalStateException("Usage check is incomplete: increase maxResults or narrow the window");
         }

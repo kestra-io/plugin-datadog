@@ -46,11 +46,13 @@ public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output>
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-        var kind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
-        boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
-        var test = client(context, true).get("/api/v1/synthetics/tests/" + kind.apiValue + "/" + id, Map.of()).map();
-        return Output.builder().test(Synthetics.summary(test, reveal)).build();
+        try (var client = client(context, true)) {
+            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var kind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
+            boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var test = client.get("/api/v1/synthetics/tests/" + kind.apiValue + "/" + id, Map.of()).map();
+            return Output.builder().test(Synthetics.summary(test, reveal)).build();
+        }
     }
 
     public enum TestKind {

@@ -17,7 +17,7 @@ tasks:
   - '{{ outputs.aggregate.size == 1 }}'
 - query: '@type:error'
   from: now-15m
-  store: false
+  fetchType: FETCH
   id: search
   type: io.kestra.plugin.datadog.rum.Search
   apiKey: e2e-api-key

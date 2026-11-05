@@ -34,13 +34,15 @@ public class Validate extends AbstractDefinitionTask implements RunnableTask<Val
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Long id = context.render(monitorId).as(Long.class).orElse(null);
-        if (id != null) {
-            MonitorIO.positiveId(id);
+        try (var client = client(context, true)) {
+            Long id = context.render(monitorId).as(Long.class).orElse(null);
+            if (id != null) {
+                MonitorIO.positiveId(id);
+            }
+            var body = definition(context, true);
+            client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
+            return Output.builder().valid(true).build();
         }
-        var body = definition(context, true);
-        client(context, true).post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
-        return Output.builder().valid(true).build();
     }
 
     @Builder

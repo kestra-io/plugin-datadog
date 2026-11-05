@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.dashboards;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
@@ -199,7 +200,7 @@ class DashboardsTest extends AbstractDatadogTest {
     @Test
     void storesInventoryAsIonWithoutInlineRows() throws Exception {
         server.reply("GET", "/api/v1/dashboard", 200, summaries(2));
-        var task = lister().store(Property.ofValue(true)).build();
+        var task = lister().fetchType(Property.ofValue(FetchType.STORE)).build();
         RunContext context = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
         var output = task.run(context);
         assertNull(output.getDashboards());

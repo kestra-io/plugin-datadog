@@ -28,7 +28,7 @@ tasks:
   - '{{ outputs.count.breached == false }}'
 - query: service:orders
   from: now-15m
-  store: false
+  fetchType: FETCH
   id: search
   type: io.kestra.plugin.datadog.spans.Search
   apiKey: e2e-api-key

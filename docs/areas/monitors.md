@@ -60,9 +60,9 @@ Run Apply serially for a given management key. Datadog has no atomic create-by-t
 
 `Configuration.resource` selects `NOTIFICATION_RULES`, `POLICIES` or `TEMPLATES`. Set `resourceId` to read one object. Notification rule lists use `page` and `per_page`. Policy and template list operations expose no pagination parameters. Template endpoints are marked Preview in the official description. Configuration fails rather than truncating an audit at `maxResults`.
 
-`List`, `Search`, `Configuration`, `Apply` and `downtimes.List` support `store: true`. They return a Kestra ION file URI instead of inline rows. Lists remain bounded in worker memory. Ordinary list and search tasks stop at their configured limit. Limits default to 1000 and allow 1 to 10000.
+`List`, `Search`, `Configuration`, `Apply` and `downtimes.List` support `fetchType: STORE`. They return a Kestra ION file URI instead of inline rows. Lists remain bounded in worker memory. Ordinary list and search tasks stop at their configured limit. Limits default to 1000 and allow 1 to 10000.
 
-`Export` always writes a file. `format: YAML` is the default and produces definitions accepted by Apply. `format: ION` produces one monitor per row for downstream processing. Export fails if `maxMonitors` would truncate the result. Add management tags before applying an export of unmanaged monitors.
+`Export` defaults to `fetchType: STORE`. `format: YAML` produces definitions accepted by Apply. `format: ION` produces one monitor per row for downstream processing. `FETCH` returns `definitions`, `FETCH_ONE` returns `row` and `NONE` returns only `size`. Supply `format` only with `STORE`. Export fails if `maxMonitors` would truncate the result. Add management tags before applying an export of unmanaged monitors.
 
 The new read tasks and Apply filter values under credential-like keys and HTTP URLs by default. `includeSecrets: true` preserves them in outputs and storage files. URL filtering is conservative and also removes ordinary HTTP links. Redaction is not a parser for arbitrary secrets embedded in prose. Restore filtered placeholders before applying an export. The task never logs definition bodies. Keep credentials in Kestra secrets rather than in monitor text.
 

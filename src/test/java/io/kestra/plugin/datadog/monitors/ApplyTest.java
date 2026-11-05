@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -121,7 +122,7 @@ class ApplyTest extends AbstractDatadogTest {
     @Test
     void plansCreationWithoutAnIdAndSkipsRemoteValidation() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var result = task().plan(Property.ofValue(true)).validateFirst(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
+        var result = task().plan(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.CREATED, result.getAction());
         assertNull(result.getMonitorId());
         assertEquals("GET", server.only().method());
@@ -208,7 +209,7 @@ class ApplyTest extends AbstractDatadogTest {
         JacksonMapper.ofYaml().writeValue(file.toFile(), java.util.List.of(definition()));
         var uri = context.storage().putFile(file.toFile());
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var output = task().definitions(null).from(Property.ofValue(uri.toString())).plan(Property.ofValue(true)).store(Property.ofValue(true)).build().run(context);
+        var output = task().definitions(null).from(Property.ofValue(uri.toString())).plan(Property.ofValue(true)).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getResults());
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {

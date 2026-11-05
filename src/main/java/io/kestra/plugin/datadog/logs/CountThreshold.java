@@ -29,6 +29,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,7 +122,7 @@ public class CountThreshold extends AbstractTrigger implements PollingTriggerInt
         if (!renderedIndexes.isEmpty()) {
             filter.put("indexes", renderedIndexes);
         }
-        var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true);
+        try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
         KVStore store = runContext.namespaceKv(context.getNamespace());
         String key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
         Optional<Boolean> previous = readArmed(store, key);
@@ -129,18 +130,23 @@ public class CountThreshold extends AbstractTrigger implements PollingTriggerInt
         try {
             count = Counts.query(client, filter, false);
         } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 429 || e.getStatus() >= 500) {
+            if (e.isTransient()) {
                 runContext.logger().warn("Datadog count poll skipped after HTTP {}", e.getStatus());
                 return Optional.empty();
             }
             throw e;
         }
+        var sampledAt = client.serverTime().orElse(null);
+        if (sampledAt == null) {
+            runContext.logger().warn("Datadog count poll skipped because the Date header is missing");
+            return Optional.empty();
+        }
         if (previous.isEmpty()) {
-            writeArmed(store, key, !Counts.breached(count, boundary));
+            writeArmed(store, key, !Counts.breached(count, boundary), sampledAt);
             return Optional.empty();
         }
         if (count < boundary) {
-            writeArmed(store, key, true);
+            writeArmed(store, key, true, sampledAt);
             return Optional.empty();
         }
         if (!previous.get() || !Counts.breached(count, boundary)) {
@@ -148,8 +154,9 @@ public class CountThreshold extends AbstractTrigger implements PollingTriggerInt
         }
         Output output = Output.builder().count(count).threshold(boundary).build();
         Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
-        writeArmed(store, key, false);
+        writeArmed(store, key, false, sampledAt);
         return Optional.of(execution);
+        }
     }
 
     private static Optional<Boolean> readArmed(KVStore store, String key) throws Exception {
@@ -169,8 +176,8 @@ public class CountThreshold extends AbstractTrigger implements PollingTriggerInt
         return Optional.of(armed);
     }
 
-    private static void writeArmed(KVStore store, String key, boolean armed) throws Exception {
-        byte[] bytes = JacksonMapper.ofJson().writeValueAsBytes(Map.of("armed", armed));
+    private static void writeArmed(KVStore store, String key, boolean armed, Instant sampledAt) throws Exception {
+        byte[] bytes = JacksonMapper.ofJson().writeValueAsBytes(Map.of("armed", armed, "sampledAt", sampledAt.toString()));
         store.put(key, new KVValueAndMetadata(new KVMetadata("Datadog log count threshold state", (Duration) null), bytes));
     }
 

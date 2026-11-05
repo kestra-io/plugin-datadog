@@ -42,14 +42,19 @@ public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output>
     @Schema(title = "Include configured alert identifiers")
     private Property<Boolean> withConfiguredAlertIds;
 
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in the SLO definition. False by default.")
+    private Property<Boolean> includeSecrets;
+
     @Override
     public Output run(RunContext context) throws Exception {
-        String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
-        Map<String, Object> query = DatadogClient.query();
-        context.render(withConfiguredAlertIds).as(Boolean.class).ifPresent(value -> query.put("with_configured_alert_ids", value));
-        var response = client(context, true).get(path, query).map();
-        Slos.noErrors(response);
-        return Output.builder().slo(Slos.object(response.get("data"), "data")).build();
+        try (var client = client(context, true)) {
+            String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
+            Map<String, Object> query = DatadogClient.query();
+            context.render(withConfiguredAlertIds).as(Boolean.class).ifPresent(value -> query.put("with_configured_alert_ids", value));
+            var response = client.get(path, query).map();
+            Slos.noErrors(response);
+            return Output.builder().slo(io.kestra.plugin.datadog.monitors.MonitorIO.redactMap(Slos.object(response.get("data"), "data"), context.render(includeSecrets).as(Boolean.class).orElse(false))).build();
+        }
     }
 
     @Builder

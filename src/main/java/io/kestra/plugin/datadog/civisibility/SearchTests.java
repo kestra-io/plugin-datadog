@@ -28,7 +28,7 @@ import lombok.experimental.SuperBuilder;
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         query: "@test.status:fail"
-        store: true
+        fetchType: STORE
     """))
 public class SearchTests extends AbstractSearch implements RunnableTask<AbstractSearch.Output> {
     @Override

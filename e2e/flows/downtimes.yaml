@@ -37,7 +37,7 @@ tasks:
   conditions:
   - '{{ outputs.get.downtime.data.id == "00000000-0000-0000-0000-000000000001" }}'
 - currentOnly: true
-  store: false
+  fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.downtimes.List
   apiKey: e2e-api-key

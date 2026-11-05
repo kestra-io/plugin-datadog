@@ -4,7 +4,7 @@ tasks:
 - from: '2026-01-01T00:00:00Z'
   to: '2026-01-02T00:00:00Z'
   query: status:high
-  store: false
+  fetchType: FETCH
   id: signalssearch
   type: io.kestra.plugin.datadog.security.SignalsSearch
   apiKey: e2e-api-key

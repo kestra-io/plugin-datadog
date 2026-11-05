@@ -56,23 +56,25 @@ public class Check extends AbstractFormulaTask implements RunnableTask<Check.Out
 
     @Override
     public Output run(RunContext context) throws Exception {
-        BigDecimal limit = context.render(threshold).as(BigDecimal.class).orElseThrow(() -> new IllegalArgumentException("`threshold` is required"));
-        Comparison predicate = context.render(comparison).as(Comparison.class).orElse(Comparison.GT);
-        OnNoData policy = context.render(onNoData).as(OnNoData.class).orElse(OnNoData.FAIL);
-        boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
-        var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
-        BigDecimal value = FormulaQueries.scalar(FormulaQueries.attributes(client(context, true).post("/api/v2/query/scalar", body)));
-        if (value == null) {
-            if (policy == OnNoData.FAIL) {
-                throw new IllegalStateException("Datadog metric check returned no data");
+        try (var client = client(context, true)) {
+            BigDecimal limit = context.render(threshold).as(BigDecimal.class).orElseThrow(() -> new IllegalArgumentException("`threshold` is required"));
+            Comparison predicate = context.render(comparison).as(Comparison.class).orElse(Comparison.GT);
+            OnNoData policy = context.render(onNoData).as(OnNoData.class).orElse(OnNoData.FAIL);
+            boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
+            var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
+            BigDecimal value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
+            if (value == null) {
+                if (policy == OnNoData.FAIL) {
+                    throw new IllegalStateException("Datadog metric check returned no data");
+                }
+                return Output.builder().noData(true).breached(policy == OnNoData.PASS ? false : null).build();
             }
-            return Output.builder().noData(true).breached(policy == OnNoData.PASS ? false : null).build();
+            boolean breached = predicate.breached(value, limit);
+            if (breached && fail) {
+                throw new IllegalStateException("Datadog metric threshold breached: " + value + " " + predicate + " " + limit);
+            }
+            return Output.builder().value(value).breached(breached).noData(false).build();
         }
-        boolean breached = predicate.breached(value, limit);
-        if (breached && fail) {
-            throw new IllegalStateException("Datadog metric threshold breached: " + value + " " + predicate + " " + limit);
-        }
-        return Output.builder().value(value).breached(breached).noData(false).build();
     }
 
     public enum OnNoData { FAIL, PASS, NO_DATA }

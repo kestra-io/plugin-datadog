@@ -48,23 +48,25 @@ public class SetStatus extends AbstractDatadogTask implements RunnableTask<SetSt
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-        Status value = context.render(status).as(Status.class).orElseThrow(() -> new IllegalArgumentException("`status` is required"));
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            Object response = client(context, true).put("/api/v1/synthetics/tests/" + id + "/status", Map.of("new_status", value.apiValue)).json();
-            if (!(response instanceof Boolean accepted)) {
-                throw new IllegalStateException("Datadog returned no boolean for the pause status");
+        try (var client = client(context, true)) {
+            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            Status value = context.render(status).as(Status.class).orElseThrow(() -> new IllegalArgumentException("`status` is required"));
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                Object response = client.put("/api/v1/synthetics/tests/" + id + "/status", Map.of("new_status", value.apiValue)).json();
+                if (!(response instanceof Boolean accepted)) {
+                    throw new IllegalStateException("Datadog returned no boolean for the pause status");
+                }
+                if (!accepted) {
+                    throw new IllegalStateException("Datadog did not accept the schedule status for test " + id);
+                }
+                return Output.builder().accepted(true).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() != 404 || !ignore) {
+                    throw e;
+                }
+                return Output.builder().accepted(false).build();
             }
-            if (!accepted) {
-                throw new IllegalStateException("Datadog did not accept the schedule status for test " + id);
-            }
-            return Output.builder().accepted(true).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() != 404 || !ignore) {
-                throw e;
-            }
-            return Output.builder().accepted(false).build();
         }
     }
 

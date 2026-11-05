@@ -50,10 +50,12 @@ import java.util.Map;
 public class Create extends AbstractWriteTest implements RunnableTask<Create.Output> {
     @Override
     public Output run(RunContext context) throws Exception {
-        var body = definition(context);
-        boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
-        var test = client(context, true).post("/api/v1/synthetics/tests/" + body.get("type"), body).map();
-        return Output.builder().test(Synthetics.summary(test, reveal)).build();
+        try (var client = client(context, true)) {
+            var body = definition(context);
+            boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
+            var test = client.post("/api/v1/synthetics/tests/" + body.get("type"), body).map();
+            return Output.builder().test(Synthetics.summary(test, reveal)).build();
+        }
     }
 
     @Builder

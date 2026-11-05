@@ -3,7 +3,7 @@ namespace: hq.datadog.e2e
 tasks:
 - from: now-1h
   maxResults: 10000
-  store: false
+  fetchType: FETCH
   id: search
   type: io.kestra.plugin.datadog.audit.Search
   apiKey: e2e-api-key

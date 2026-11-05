@@ -52,18 +52,20 @@ public class Update extends AbstractWriteTest implements RunnableTask<Update.Out
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-        var body = definition(context);
-        boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            var test = client(context, true).put("/api/v1/synthetics/tests/" + body.get("type") + "/" + id, body).map();
-            return Output.builder().updated(true).test(Synthetics.summary(test, reveal)).build();
-        } catch (io.kestra.plugin.datadog.DatadogClient.DatadogException e) {
-            if (e.getStatus() != 404 || !ignore) {
-                throw e;
+        try (var client = client(context, true)) {
+            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var body = definition(context);
+            boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                var test = client.put("/api/v1/synthetics/tests/" + body.get("type") + "/" + id, body).map();
+                return Output.builder().updated(true).test(Synthetics.summary(test, reveal)).build();
+            } catch (io.kestra.plugin.datadog.DatadogClient.DatadogException e) {
+                if (e.getStatus() != 404 || !ignore) {
+                    throw e;
+                }
+                return Output.builder().updated(false).test(Map.of()).build();
             }
-            return Output.builder().updated(false).test(Map.of()).build();
         }
     }
 

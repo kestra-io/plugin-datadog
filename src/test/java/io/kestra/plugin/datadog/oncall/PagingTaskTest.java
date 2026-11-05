@@ -29,6 +29,7 @@ class PagingTaskTest extends AbstractDatadogTest {
         var task = Page.builder().id(IdUtils.create()).type(Page.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
             .site(Property.ofValue("datadoghq.eu")).title(Property.ofValue("Orders"))
+            .includeSecrets(Property.ofValue(true))
             .targetType(Property.ofValue(Page.TargetType.USER_ID)).target(Property.ofValue("user"))
             .urgency(Property.ofValue(Page.Urgency.LOW)).build();
         assertEquals("https://beige.oncall.datadoghq.eu/api/v2/on-call/pages", task.run(runContext()).getRequest().get("url"));

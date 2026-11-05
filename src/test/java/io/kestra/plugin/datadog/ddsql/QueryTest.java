@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.ddsql;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -70,7 +71,7 @@ class QueryTest extends AbstractDatadogTest {
     void synchronousResultCanBeStoredAsIon() throws Exception {
         server.reply("POST", EXECUTE, 200, completed());
         var context = runContext();
-        var output = task().store(Property.ofValue(true)).build().run(context);
+        var output = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertEquals(0, output.getFetchCount());
         assertNull(output.getColumns());
         assertEquals(1, server.requests.size());
@@ -87,7 +88,7 @@ class QueryTest extends AbstractDatadogTest {
         assertNull(safe.getColumns().getFirst().getValues().get(1));
         assertEquals("fixture-only-credential", task().includeSecrets(Property.ofValue(true)).build().run(runContext()).getColumns().getFirst().getValues().getFirst());
         var context = runContext();
-        var stored = task().store(Property.ofValue(true)).build().run(context);
+        var stored = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         try (var input = context.storage().getFile(stored.getUri())) {
             assertFalse(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).contains("fixture-only-credential"));
         }

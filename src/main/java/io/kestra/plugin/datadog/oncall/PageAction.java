@@ -27,18 +27,19 @@ public abstract class PageAction extends PagingTask {
     private Property<Boolean> ignoreNotFound;
 
     protected ResponseOutput act(RunContext context, String action) throws Exception {
-        String id = uuid(context, pageId, "pageId");
-        boolean preview = dryRun(context, dryRun);
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        DatadogClient client = client(context, true);
-        try {
-            return send(context, client, pagingBase(context, client), "POST", "/api/v2/on-call/pages/" + id + "/" + action,
-                Map.of(), null, preview).toBuilder().id(id).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 404 && ignore) {
-                return ResponseOutput.builder().id(id).statusCode(404).body(Map.of()).build();
+        try (var client = client(context, true)) {
+            String id = uuid(context, pageId, "pageId");
+            boolean preview = dryRun(context, dryRun);
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                return send(context, client, pagingBase(context, client), "POST", "/api/v2/on-call/pages/" + id + "/" + action,
+                    Map.of(), null, preview).toBuilder().id(id).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() == 404 && ignore) {
+                    return ResponseOutput.builder().id(id).statusCode(404).body(Map.of()).build();
+                }
+                throw e;
             }
-            throw e;
         }
     }
 }

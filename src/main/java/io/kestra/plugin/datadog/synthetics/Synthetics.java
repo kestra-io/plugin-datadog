@@ -3,6 +3,7 @@ package io.kestra.plugin.datadog.synthetics;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 
 import java.io.BufferedOutputStream;
 import java.nio.file.Files;
@@ -79,16 +80,7 @@ final class Synthetics {
                 safe.put(key, raw.get(key));
             }
         }
-        return safe;
+        return MonitorIO.redactMap(safe, false);
     }
 
-    static URI store(RunContext context, List<Map<String, Object>> rows) throws Exception {
-        var file = context.workingDir().createTempFile(".ion");
-        try (var stream = new BufferedOutputStream(Files.newOutputStream(file))) {
-            for (var row : rows) {
-                FileSerde.write(stream, row);
-            }
-        }
-        return context.storage().putFile(file.toFile());
-    }
 }

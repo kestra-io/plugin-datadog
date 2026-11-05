@@ -39,9 +39,11 @@ public class Disable extends AbstractDatadogTask implements RunnableTask<Disable
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
-        boolean ignore = AccessApi.flag(context, ignoreNotFound);
-        return Output.builder().disabled(AccessApi.delete(client(context, true), path, ignore)).build();
+        try (var client = client(context, true)) {
+            String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
+            boolean ignore = AccessApi.flag(context, ignoreNotFound);
+            return Output.builder().disabled(AccessApi.delete(client, path, ignore)).build();
+        }
     }
 
     @Builder

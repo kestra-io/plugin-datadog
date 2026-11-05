@@ -25,7 +25,7 @@ import java.util.Map;
         type: io.kestra.plugin.datadog.users.List
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
-        store: true
+        fetchType: STORE
     """))
 public class List extends PagedTask {
     @Schema(title = "User filter", description = "Datadog's filter for user names, handles or emails.")

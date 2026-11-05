@@ -67,72 +67,73 @@ public class Evaluate extends AbstractDatadogTask implements RunnableTask<Evalua
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
-        attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
-        context.render(identifier).as(String.class).ifPresent(value -> attributes.put("identifier", value));
-        context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
-        context.render(primaryTag).as(String.class).ifPresent(value -> attributes.put("primary_tag", value));
-        Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
-        Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
-        Deadline.validate(wait, "maxWait");
-        Deadline.validate(interval, "pollInterval");
-        boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
-        boolean failTimeout = context.render(failOnTimeout).as(Boolean.class).orElse(true);
-        var client = client(context, true);
-        String id = null;
-        Status status = Status.IN_PROGRESS;
-        Boolean dryRun = null;
-        List<RuleResult> rules = List.of();
-        try (var deadline = new Deadline(wait)) {
-            try {
-                var answer = deadline.call(() -> client.post("/api/v2/deployments/gates/evaluation",
-                    Deployments.body("deployment_gates_evaluation_request", attributes)).map());
-                var data = Deployments.object(answer.get("data"), "evaluation data");
-                var accepted = Deployments.object(data.get("attributes"), "evaluation attributes");
-                id = Deployments.required((String) accepted.get("evaluation_id"), "evaluation_id returned by Datadog");
-                if (!UUID.fromString(id).toString().equalsIgnoreCase(id)) {
-                    throw new IllegalStateException("Datadog evaluation_id is not a UUID");
-                }
-                final String path = "/api/v2/deployments/gates/evaluation/" + id;
-                while (!deadline.expired()) {
-                    try {
-                        var response = deadline.call(() -> client.get(path, Map.of()).map());
-                        var resultData = Deployments.object(response.get("data"), "evaluation result data");
-                        var result = Deployments.object(resultData.get("attributes"), "evaluation result attributes");
-                        status = Status.from(result.get("gate_status"));
-                        dryRun = (Boolean) result.get("dry_run");
-                        if (!(result.get("rules") instanceof List<?> rows)) {
-                            throw new IllegalStateException("Datadog returned no rules array");
-                        }
-                        rules = rows.stream().map(row -> {
-                            var rule = Deployments.object(row, "rule");
-                            return RuleResult.builder().name((String) rule.get("name")).reason((String) rule.get("reason"))
-                                .status(Status.from(rule.get("status"))).dryRun((Boolean) rule.get("dry_run")).build();
-                        }).toList();
-                        if (status != Status.IN_PROGRESS) {
-                            break;
-                        }
-                    } catch (DatadogClient.DatadogException e) {
-                        if (e.getStatus() != 429 && e.getStatus() < 500) {
-                            throw e;
-                        }
+        try (var client = client(context, true)) {
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
+            attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
+            context.render(identifier).as(String.class).ifPresent(value -> attributes.put("identifier", value));
+            context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
+            context.render(primaryTag).as(String.class).ifPresent(value -> attributes.put("primary_tag", value));
+            Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
+            Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
+            Deadline.validate(wait, "maxWait");
+            Deadline.validate(interval, "pollInterval");
+            boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
+            boolean failTimeout = context.render(failOnTimeout).as(Boolean.class).orElse(true);
+            String id = null;
+            Status status = Status.IN_PROGRESS;
+            Boolean dryRun = null;
+            List<RuleResult> rules = List.of();
+            try (var deadline = new Deadline(wait)) {
+                try {
+                    var answer = deadline.call(() -> client.post("/api/v2/deployments/gates/evaluation",
+                        Deployments.body("deployment_gates_evaluation_request", attributes)).map());
+                    var data = Deployments.object(answer.get("data"), "evaluation data");
+                    var accepted = Deployments.object(data.get("attributes"), "evaluation attributes");
+                    id = Deployments.required((String) accepted.get("evaluation_id"), "evaluation_id returned by Datadog");
+                    if (!UUID.fromString(id).toString().equalsIgnoreCase(id)) {
+                        throw new IllegalStateException("Datadog evaluation_id is not a UUID");
                     }
-                    deadline.pause(interval);
+                    final String path = "/api/v2/deployments/gates/evaluation/" + id;
+                    while (!deadline.expired()) {
+                        try {
+                            var response = deadline.call(() -> client.get(path, Map.of()).map());
+                            var resultData = Deployments.object(response.get("data"), "evaluation result data");
+                            var result = Deployments.object(resultData.get("attributes"), "evaluation result attributes");
+                            status = Status.from(result.get("gate_status"));
+                            dryRun = (Boolean) result.get("dry_run");
+                            if (!(result.get("rules") instanceof List<?> rows)) {
+                                throw new IllegalStateException("Datadog returned no rules array");
+                            }
+                            rules = rows.stream().map(row -> {
+                                var rule = Deployments.object(row, "rule");
+                                return RuleResult.builder().name((String) rule.get("name")).reason((String) rule.get("reason"))
+                                    .status(Status.from(rule.get("status"))).dryRun((Boolean) rule.get("dry_run")).build();
+                            }).toList();
+                            if (status != Status.IN_PROGRESS) {
+                                break;
+                            }
+                        } catch (DatadogClient.DatadogException e) {
+                            if (e.getStatus() != 429 && e.getStatus() < 500) {
+                                throw e;
+                            }
+                        }
+                        deadline.pause(interval);
+                    }
+                } catch (TimeoutException ignored) {
+                    // Return the last known state when failOnTimeout is false.
                 }
-            } catch (TimeoutException ignored) {
-                // Return the last known state when failOnTimeout is false.
             }
+            boolean timedOut = status == Status.IN_PROGRESS;
+            if (timedOut && failTimeout) {
+                throw new IllegalStateException("Deployment gate evaluation " + id + " did not finish within " + wait);
+            }
+            if (status == Status.FAIL && fail) {
+                throw new IllegalStateException("Deployment gate evaluation " + id + " failed: " + String.join("; ", rules.stream()
+                    .filter(rule -> rule.status == Status.FAIL).map(rule -> rule.name + ": " + rule.reason).toList()));
+            }
+            return Output.builder().evaluationId(id).status(status).dryRun(dryRun).rules(rules).timedOut(timedOut).build();
         }
-        boolean timedOut = status == Status.IN_PROGRESS;
-        if (timedOut && failTimeout) {
-            throw new IllegalStateException("Deployment gate evaluation " + id + " did not finish within " + wait);
-        }
-        if (status == Status.FAIL && fail) {
-            throw new IllegalStateException("Deployment gate evaluation " + id + " failed: " + String.join("; ", rules.stream()
-                .filter(rule -> rule.status == Status.FAIL).map(rule -> rule.name + ": " + rule.reason).toList()));
-        }
-        return Output.builder().evaluationId(id).status(status).dryRun(dryRun).rules(rules).timedOut(timedOut).build();
     }
 
     public enum Status {

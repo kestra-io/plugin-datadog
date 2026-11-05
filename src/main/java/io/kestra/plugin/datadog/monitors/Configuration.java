@@ -1,11 +1,15 @@
 package io.kestra.plugin.datadog.monitors;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -34,7 +38,7 @@ import java.util.Map;
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         resource: NOTIFICATION_RULES
-        store: true
+        fetchType: STORE
     """))
 public class Configuration extends AbstractMonitorTask implements RunnableTask<Configuration.Output> {
     @NotNull
@@ -43,54 +47,58 @@ public class Configuration extends AbstractMonitorTask implements RunnableTask<C
     @Schema(title = "Resource id", description = "Optional id. Without it the task lists the selected resource.")
     private Property<String> resourceId;
     @Schema(title = "Maximum results", description = "Between 1 and 10000. Defaults to 1000. Exceeding the limit fails instead of truncating an audit.")
-    private Property<Integer> maxResults;
-    @Schema(title = "Store results", description = "Write data rows to an ION file instead of returning them inline.")
-    private Property<Boolean> store;
+    private Property<@Min(1) @Max(10000) Integer> maxResults;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Resource selected = context.render(resource).as(Resource.class).orElseThrow(() -> new IllegalArgumentException("resource is required"));
-        String id = context.render(resourceId).as(String.class).orElse(null);
-        if (id != null && (id.isBlank() || id.equals(".") || id.equals(".."))) {
-            throw new IllegalArgumentException("resourceId must identify one object");
+        try (var client = client(context, true)) {
+            Resource selected = context.render(resource).as(Resource.class).orElseThrow(() -> new IllegalArgumentException("resource is required"));
+            String id = context.render(resourceId).as(String.class).orElse(null);
+            if (id != null && maxResults != null) {
+                throw new IllegalArgumentException("`maxResults` cannot be used with `resourceId`");
+            }
+            if (id != null && (id.isBlank() || id.equals(".") || id.equals(".."))) {
+                throw new IllegalArgumentException("resourceId must identify one object");
+            }
+            int limit = MonitorIO.limit(context.render(maxResults).as(Integer.class).orElse(null));
+            boolean include = includeSecrets(context);
+            String path = "/api/v2/monitor/" + selected.path + (id == null ? "" : "/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
+            var params = DatadogClient.query();
+            java.util.List<Map<String, Object>> rows = new ArrayList<>();
+            for (int page = 0; ; page++) {
+                if (id == null && selected == Resource.NOTIFICATION_RULES) {
+                    params.put("page", page);
+                    params.put("per_page", Math.min(100, limit + 1));
+                }
+                Object data = client.get(path, params).map().get("data");
+                if (id != null) {
+                    if (!(data instanceof Map<?, ?> map)) {
+                        throw new IllegalStateException("Datadog configuration response must contain a data object");
+                    }
+                    rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
+                    break;
+                }
+                if (!(data instanceof java.util.List<?> list)) {
+                    throw new IllegalStateException("Datadog configuration response must contain a data array");
+                }
+                for (Object row : list) {
+                    if (!(row instanceof Map<?, ?> map)) {
+                        throw new IllegalStateException("Datadog configuration data must contain objects");
+                    }
+                    rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
+                    if (rows.size() > limit) {
+                        throw new IllegalStateException("Configuration exceeds maxResults");
+                    }
+                }
+                if (selected != Resource.NOTIFICATION_RULES || list.size() < (int) params.get("per_page")) {
+                    break;
+                }
+            }
+            var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), rows);
+            return Output.builder().data(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
         }
-        int limit = MonitorIO.limit(context.render(maxResults).as(Integer.class).orElse(null));
-        boolean include = includeSecrets(context);
-        boolean storage = context.render(store).as(Boolean.class).orElse(false);
-        String path = "/api/v2/monitor/" + selected.path + (id == null ? "" : "/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
-        var client = client(context, true);
-        var params = DatadogClient.query();
-        java.util.List<Map<String, Object>> rows = new ArrayList<>();
-        for (int page = 0; ; page++) {
-            if (id == null && selected == Resource.NOTIFICATION_RULES) {
-                params.put("page", page);
-                params.put("per_page", Math.min(100, limit + 1));
-            }
-            Object data = client.get(path, params).map().get("data");
-            if (id != null) {
-                if (!(data instanceof Map<?, ?> map)) {
-                    throw new IllegalStateException("Datadog configuration response must contain a data object");
-                }
-                rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
-                break;
-            }
-            if (!(data instanceof java.util.List<?> list)) {
-                throw new IllegalStateException("Datadog configuration response must contain a data array");
-            }
-            for (Object row : list) {
-                if (!(row instanceof Map<?, ?> map)) {
-                    throw new IllegalStateException("Datadog configuration data must contain objects");
-                }
-                rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
-                if (rows.size() > limit) {
-                    throw new IllegalStateException("Configuration exceeds maxResults");
-                }
-            }
-            if (selected != Resource.NOTIFICATION_RULES || list.size() < (int) params.get("per_page")) {
-                break;
-            }
-        }
-        return Output.builder().data(storage ? null : rows).uri(storage ? MonitorIO.store(context, rows, false) : null).size(rows.size()).build();
     }
 
     public enum Resource {
@@ -104,8 +112,10 @@ public class Configuration extends AbstractMonitorTask implements RunnableTask<C
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Configuration objects", description = "One row for resourceId or the full list. Omitted when store is true.")
+        @Schema(title = "Configuration objects", description = "One row for resourceId or the full list. Omitted with STORE.")
         private final java.util.List<Map<String, Object>> data;
+        @Schema(title = "First configuration", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
         @Schema(title = "Number of objects")
         private final Integer size;
         @Schema(title = "Result file URI")

@@ -39,10 +39,12 @@ public class Get extends AbstractMonitorTask implements RunnableTask<MonitorOutp
 
     @Override
     public MonitorOutput run(RunContext context) throws Exception {
-        long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
-        var params = DatadogClient.query();
-        context.render(withDowntimes).as(Boolean.class).ifPresent(value -> params.put("with_downtimes", value));
-        context.render(withAssets).as(Boolean.class).ifPresent(value -> params.put("with_assets", value));
-        return MonitorOutput.of(client(context, true).get("/api/v1/monitor/" + id, params).map(), includeSecrets(context));
+        try (var client = client(context, true)) {
+            long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
+            var params = DatadogClient.query();
+            context.render(withDowntimes).as(Boolean.class).ifPresent(value -> params.put("with_downtimes", value));
+            context.render(withAssets).as(Boolean.class).ifPresent(value -> params.put("with_assets", value));
+            return MonitorOutput.of(client.get("/api/v1/monitor/" + id, params).map(), includeSecrets(context));
+        }
     }
 }

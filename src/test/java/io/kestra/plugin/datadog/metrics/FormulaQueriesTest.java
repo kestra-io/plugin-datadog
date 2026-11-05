@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.metrics;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -91,7 +92,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
     void storesColumnsAsIonAndOmitsInlineData() throws Exception {
         server.reply("POST", SCALAR, 200, scalar("42.5"));
         var context = runContext();
-        var output = scalarTask().store(Property.ofValue(true)).build().run(context);
+        var output = scalarTask().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getColumns());
         assertNotNull(output.getUri());
         try (var input = context.storage().getFile(output.getUri())) {
@@ -105,7 +106,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
     void storesTimeseriesAsOneIonRecord() throws Exception {
         server.reply("POST", TIMESERIES, 200, "{\"data\":{\"attributes\":{\"series\":[],\"times\":[],\"values\":[]}}}");
         var context = runContext();
-        var output = timeseriesTask().store(Property.ofValue(true)).build().run(context);
+        var output = timeseriesTask().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getData());
         try (var input = context.storage().getFile(output.getUri())) {
             assertEquals(List.of(), JacksonMapper.ofIon().readValue(input, Map.class).get("values"));

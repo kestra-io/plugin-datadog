@@ -1,5 +1,8 @@
 package io.kestra.plugin.datadog.api;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import io.kestra.core.models.tasks.common.FetchType;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -9,6 +12,8 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
+import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.keys.AccessApi;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -36,7 +41,7 @@ import java.util.Map;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@Schema(title = "Call a Datadog API operation", description = "Calls an operation from the pinned OpenAPI catalog. Use `v1:operationId` or `v2:operationId` when the ID exists in both versions. Validates parameters before sending. The selected operation can change or delete data. Responses can contain credentials: set `redact` to JSON pointers to remove them. No automatic secret detection is performed.")
+@Schema(title = "Call a Datadog API operation", description = "Calls an operation from the pinned OpenAPI catalog. Use `v1:operationId` or `v2:operationId` when the ID exists in both versions. Validates parameters before sending. The selected operation can change or delete data. Credential fields and URLs are redacted unless includeSecrets is true. Redaction pointers are applied in every mode.")
 @Plugin(examples = @Example(title = "Read a monitor through the API catalog", full = true, code = """
     id: datadog_api_monitor
     namespace: company.observability
@@ -72,11 +77,14 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
     @Schema(title = "Paginate", description = "Follow catalog query pagination: cursor, offset or page number. Unsupported operations fail before a call. Default false.")
     private Property<Boolean> paginate;
 
-    @Schema(title = "Maximum items", description = "Maximum rows collected with pagination, from 1 to 1000000. Default 1000.")
-    private Property<Integer> maxItems;
+    @Schema(title = "Maximum items", description = "Maximum rows collected with pagination, from 1 to 10000. Default 1000.")
+    private Property<@Min(1) @Max(10000) Integer> maxItems;
 
-    @Schema(title = "Store output", description = "Write JSON results as ION rows to internal storage. Binary replies are always stored. Default false.")
-    private Property<Boolean> store;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
+    @Schema(title = "Include sensitive values", description = "Preserve credential fields and URLs. Required for binary output because its fields cannot be inspected. False by default.")
+    private Property<Boolean> includeSecrets;
 
     @Schema(title = "Redaction pointers", description = "RFC 6901 pointers relative to each complete response document, such as `/data/attributes/key`. An empty pointer redacts the entire document. Applied before output or storage. Non-JSON responses cannot be redacted and fail if this is set.")
     private Property<List<String>> redact;
@@ -97,8 +105,12 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
         String site = context.render(getSite()).as(String.class).orElse(null);
         String base = context.render(getApiUrl()).as(String.class).orElse(null);
         boolean paging = context.render(paginate).as(Boolean.class).orElse(false);
-        boolean storage = context.render(store).as(Boolean.class).orElse(false);
-        int maximum = bounded(op, "maxItems", context.render(maxItems).as(Integer.class).orElse(1000), 1, 1_000_000);
+        if (!paging && maxItems != null) {
+            throw op.invalid("maxItems requires paginate: true");
+        }
+        var rFetchType = context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH);
+        var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
+        int maximum = bounded(op, "maxItems", context.render(maxItems).as(Integer.class).orElse(1000), 1, 10_000);
         int retries = bounded(op, "maxRetries", context.render(maxRetries).as(Integer.class).orElse(2), 0, 10);
         int delay = bounded(op, "maxRetryDelay", context.render(maxRetryDelay).as(Integer.class).orElse(60), 0, 3600);
         var pointers = Redaction.pointers(op, context.render(redact).asList(String.class));
@@ -128,22 +140,27 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
         Transport.Body bytes = Transport.body(context, op, plan, renderedBody);
         if (op.deprecated()) { context.logger().warn("Datadog operation {} is deprecated in the pinned catalog", op.key()); }
 
-        Path file = storage ? context.workingDir().createTempFile(".ion") : null;
-        List<Object> items = storage ? null : new ArrayList<>();
         int count = 0;
         int pages = 0;
         HashSet<String> cursors = new HashSet<>();
         if (pagination != null && params.get(pagination.position()) != null) { cursors.add(String.valueOf(params.get(pagination.position()))); }
-        try (BufferedWriter writer = file == null ? null : Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+        try (var client = Transport.client(context);
+             var sink = new DatadogFetch.Sink<Object>(context, rFetchType)) {
             while (true) {
-                Transport.Answer response = Transport.send(context, op, plan, bytes, key, app, retries, delay);
+                Transport.Answer response = Transport.send(client, context, op, plan, bytes, key, app, retries, delay);
                 pages++;
                 if (response.bytes().length == 0) { return Output.builder().statusCode(response.status()).count(0).pages(pages).build(); }
                 if (!response.contentType().toLowerCase(java.util.Locale.ROOT).contains("json")) {
                     if (!pointers.isEmpty() || paging) { throw op.invalid("redaction and pagination require a JSON response"); }
-                    if (response.contentType().startsWith("text/") && !storage) {
-                        return Output.builder().statusCode(response.status()).body(new String(response.bytes(), StandardCharsets.UTF_8)).pages(pages).count(1).build();
+                    if (response.contentType().startsWith("text/")) {
+                        var text = AccessApi.redact(new String(response.bytes(), StandardCharsets.UTF_8), rIncludeSecrets);
+                        sink.add(text);
+                        var result = sink.result();
+                        return Output.builder().statusCode(response.status()).body(result.rows() == null ? null : text)
+                            .row(result.row()).uri(result.uri()).pages(pages).count(1).build();
                     }
+                    if (rFetchType == FetchType.NONE) return Output.builder().statusCode(response.status()).pages(pages).count(1).build();
+                    if (!rIncludeSecrets) throw op.invalid("includeSecrets must be true for binary output");
                     URI uri = context.storage().putFile(new ByteArrayInputStream(response.bytes()), "response.bin");
                     return Output.builder().statusCode(response.status()).uri(uri).pages(pages).count(1).build();
                 }
@@ -151,20 +168,21 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
                 try { json = JacksonMapper.ofJson().readTree(response.bytes()); }
                 catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw op.invalid("response is not valid JSON"); }
                 if (json == null) { throw op.invalid("response is not valid JSON"); }
-                JsonNode safe = Redaction.apply(json, pointers);
+                JsonNode safe = JacksonMapper.ofJson().valueToTree(AccessApi.redact(
+                    JacksonMapper.ofJson().convertValue(Redaction.apply(json, pointers), Object.class), rIncludeSecrets));
                 if (!paging) {
                     Object result = JacksonMapper.ofJson().convertValue(safe, Object.class);
-                    if (!storage) { return Output.builder().statusCode(response.status()).body(result).pages(pages).count(safe.isArray() ? safe.size() : 1).build(); }
+                    if (rFetchType == FetchType.FETCH) { return Output.builder().statusCode(response.status()).body(result).pages(pages).count(safe.isArray() ? safe.size() : 1).build(); }
                     if (safe.isArray()) {
-                        for (JsonNode row : safe) { write(writer, JacksonMapper.ofJson().convertValue(row, Object.class)); count++; }
-                    } else { write(writer, result); count = 1; }
+                        for (JsonNode row : safe) { sink.add(JacksonMapper.ofJson().convertValue(row, Object.class)); count++; }
+                    } else { sink.add(result); count = 1; }
                 } else {
                     JsonNode rows = Paging.at(safe, pagination.results());
                     if (!rows.isArray()) { throw op.invalid("pagination response path " + pagination.results() + " must be an array after redaction"); }
                     for (JsonNode row : rows) {
                         if (count >= maximum) { break; }
                         Object item = JacksonMapper.ofJson().convertValue(row, Object.class);
-                        if (storage) { write(writer, item); } else { items.add(item); }
+                        sink.add(item);
                         count++;
                     }
                     boolean more = count < maximum && !rows.isEmpty();
@@ -180,18 +198,11 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
                     }
                     if (more) { plan = RequestPlan.prepare(op, site, base, paths, params, requestHeaders, renderedBody); continue; }
                 }
-                if (writer != null) { writer.flush(); }
-                return Output.builder().statusCode(response.status()).items(paging && !storage ? items : null)
-                    .uri(storage ? context.storage().putFile(file.toFile()) : null).count(count).pages(pages).build();
+                var result = sink.result();
+                return Output.builder().statusCode(response.status()).items(paging ? result.rows() : null).row(result.row())
+                    .uri(result.uri()).count(count).pages(pages).build();
             }
-        } finally {
-            if (file != null) { Files.deleteIfExists(file); }
         }
-    }
-
-    private static void write(BufferedWriter writer, Object row) throws Exception {
-        writer.write(JacksonMapper.ofIon().writeValueAsString(row));
-        writer.newLine();
     }
 
     private static int bounded(Catalog.Operation op, String name, int value, int min, int max) {
@@ -208,6 +219,8 @@ public class Call extends AbstractDatadogTask implements RunnableTask<Call.Outpu
         private final Object body;
         @Schema(title = "Collected items", description = "Rows from paginated responses. Null when stored.")
         private final List<Object> items;
+        @Schema(title = "First result", description = "Present with FETCH_ONE.")
+        private final Object row;
         @Schema(title = "Stored response URI", description = "ION rows for JSON responses or unchanged bytes for non-JSON responses.")
         private final URI uri;
         @Schema(title = "Output row count")

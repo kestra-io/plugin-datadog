@@ -39,7 +39,7 @@ tasks:
   - '{{ outputs.candelete.result.data.ok[0] == 12345 }}'
   - '{{ outputs.candelete.result.data.ok[1] == 3000000000 }}'
 - resource: NOTIFICATION_RULES
-  store: false
+  fetchType: FETCH
   id: configuration
   type: io.kestra.plugin.datadog.monitors.Configuration
   apiKey: e2e-api-key
@@ -110,7 +110,7 @@ tasks:
   conditions:
   - '{{ outputs.list.size == 1 }}'
 - query: tag:env:prod status:alert
-  store: false
+  fetchType: FETCH
   id: search
   type: io.kestra.plugin.datadog.monitors.Search
   apiKey: e2e-api-key

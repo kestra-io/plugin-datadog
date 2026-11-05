@@ -22,7 +22,7 @@ tasks:
   type: io.kestra.plugin.core.execution.Assert
   conditions:
   - '{{ outputs.get.user.id == "00000000-0000-0000-0000-000000000001" }}'
-- store: false
+- fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.users.List
   apiKey: e2e-api-key

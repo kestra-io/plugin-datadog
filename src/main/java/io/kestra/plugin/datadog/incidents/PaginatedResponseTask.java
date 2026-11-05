@@ -1,9 +1,13 @@
 package io.kestra.plugin.datadog.incidents;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,13 +25,13 @@ import java.util.Map;
 @NoArgsConstructor
 public abstract class PaginatedResponseTask extends ResponseSupport {
     @Schema(title = "Page size", description = "Plugin page size from 1 to 100. Defaults to 50.")
-    private Property<Integer> pageSize;
+    private Property<@Min(1) @Max(100) Integer> pageSize;
 
     @Schema(title = "Maximum results", description = "Plugin result limit from 1 to 10000. Defaults to 1000.")
-    private Property<Integer> maxResults;
+    private Property<@Min(1) @Max(10000) Integer> maxResults;
 
-    @Schema(title = "Store results", description = "Streams results to an ION file in internal storage. False by default.")
-    private Property<Boolean> store;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     protected CollectionOutput collect(RunContext context, String path, Map<String, Object> query,
                                        String sizeKey, boolean numbered, boolean search) throws Exception {
@@ -39,12 +43,9 @@ public abstract class PaginatedResponseTask extends ResponseSupport {
         if (limit < 1 || limit > 10000) {
             throw new IllegalArgumentException("`maxResults` must be between 1 and 10000");
         }
-        boolean stored = context.render(store).as(Boolean.class).orElse(false);
-        Path file = stored ? context.workingDir().createTempFile(".ion") : null;
-        java.util.List<Map<String, Object>> items = stored ? null : new ArrayList<>();
         int count = 0;
-        DatadogClient client = client(context, true);
-        try (BufferedOutputStream output = stored ? new BufferedOutputStream(Files.newOutputStream(file)) : null) {
+        try (var client = client(context, true);
+             var sink = new DatadogFetch.Sink<Map<String, Object>>(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH))) {
             long position = 0;
             while (count < limit) {
                 // Keep numbered page sizes stable so a last partial page does not shift its offset.
@@ -65,11 +66,7 @@ public abstract class PaginatedResponseTask extends ResponseSupport {
                     }
                     @SuppressWarnings("unchecked")
                     Map<String, Object> safe = safe(context, (Map<String, Object>) row);
-                    if (stored) {
-                        FileSerde.write(output, safe);
-                    } else {
-                        items.add(safe);
-                    }
+                    sink.add(safe);
                     count++;
                 }
                 Object pagination = nested(answer, "meta", "pagination");
@@ -92,9 +89,10 @@ public abstract class PaginatedResponseTask extends ResponseSupport {
                     position += numbered ? 1 : page.size();
                 }
             }
+            var result = sink.result();
+            return CollectionOutput.builder().items(result.rows()).row(result.row()).count(count).limitReached(count == limit)
+                .uri(result.uri()).build();
         }
-        return CollectionOutput.builder().items(items).count(count).limitReached(count == limit)
-            .uri(stored ? context.storage().putFile(file.toFile()) : null).build();
     }
 
     private static Object nested(Map<String, Object> map, String... keys) {

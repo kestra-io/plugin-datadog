@@ -1,5 +1,7 @@
 package io.kestra.plugin.datadog.synthetics;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
@@ -25,7 +27,7 @@ public abstract class AbstractTriggerTask extends AbstractDatadogTask {
     private Property<String> searchQuery;
 
     @Schema(title = "Maximum selected tests", description = "Maximum tests selected, from 1 to 10000. A search reaching this limit is rejected to avoid a partial quality gate.", defaultValue = "100")
-    private Property<Integer> maxTests;
+    private Property<@Min(1) @Max(10000) Integer> maxTests;
 
     @Schema(title = "CI overrides", description = "Overrides applied to every test using the TriggerCITests fields, such as startUrl, locations, variables or retry. public_id cannot be overridden.")
     @ToString.Exclude

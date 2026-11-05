@@ -30,7 +30,9 @@ import lombok.experimental.SuperBuilder;
 public class Create extends AbstractDefinitionTask implements RunnableTask<MonitorOutput> {
     @Override
     public MonitorOutput run(RunContext context) throws Exception {
-        var body = definition(context, true);
-        return MonitorOutput.of(client(context, true).post("/api/v1/monitor", body).map(), includeSecrets(context));
+        try (var client = client(context, true)) {
+            var body = definition(context, true);
+            return MonitorOutput.of(client.post("/api/v1/monitor", body).map(), includeSecrets(context));
+        }
     }
 }

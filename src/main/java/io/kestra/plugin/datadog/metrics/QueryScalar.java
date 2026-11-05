@@ -1,10 +1,12 @@
 package io.kestra.plugin.datadog.metrics;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -43,16 +45,17 @@ public class QueryScalar extends AbstractFormulaTask implements RunnableTask<Que
     @Schema(title = "Time aggregation", description = "Aggregation applied to each metric query. Defaults to AVG.")
     private Property<Aggregator> aggregator;
 
-    @Schema(title = "Store columns", description = "Write one column per ION record to internal storage and omit inline columns. Defaults to false.")
-    private Property<Boolean> store;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
-        var columns = FormulaQueries.columns(FormulaQueries.attributes(client(context, true).post("/api/v2/query/scalar", body)));
-        boolean stored = context.render(store).as(Boolean.class).orElse(false);
-        return Output.builder().columns(stored ? null : columns).columnCount(columns.size())
-            .uri(stored ? FormulaQueries.store(context, columns) : null).build();
+        try (var client = client(context, true)) {
+            var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
+            var columns = FormulaQueries.columns(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
+            var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), columns);
+            return Output.builder().columns(result.rows()).row(result.row()).columnCount(result.size()).uri(result.uri()).build();
+        }
     }
 
     @Builder
@@ -60,6 +63,8 @@ public class QueryScalar extends AbstractFormulaTask implements RunnableTask<Que
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Columns", description = "Datadog group and numeric columns with parallel values arrays. Null cells remain null.")
         private final List<Map<String, Object>> columns;
+        @Schema(title = "First column", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
         @Schema(title = "Column count")
         private final Integer columnCount;
         @Schema(title = "Stored ION columns")

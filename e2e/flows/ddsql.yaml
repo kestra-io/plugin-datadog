@@ -4,7 +4,7 @@ tasks:
 - query: SELECT 42
   lookback: PT1H
   rowLimit: 1000
-  store: false
+  fetchType: FETCH
   pollDelay: PT0.01S
   id: query
   type: io.kestra.plugin.datadog.ddsql.Query

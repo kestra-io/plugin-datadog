@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.keys;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
@@ -129,8 +130,8 @@ class KeysTest extends OrganizationTestSupport {
     void storedRowsAreRedactedAndDoNotPopulateInlineOutput() throws Exception {
         server.reply("GET", "/api/v2/api_keys", 200, page(List.of(resource("a", "api_keys", Map.of("key", VALUE))), 1));
         var context = runContext();
-        var output = connection(ListApiKeys.builder()).store(Property.ofValue(true)).build().run(context);
-        assertTrue(output.getRows().isEmpty());
+        var output = connection(ListApiKeys.builder()).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
+        assertNull(output.getRows());
         assertEquals(1, output.getSize());
         assertNotNull(output.getUri());
         List<Object> rows = new ArrayList<>();

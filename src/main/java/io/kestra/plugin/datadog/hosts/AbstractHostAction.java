@@ -31,21 +31,23 @@ public abstract class AbstractHostAction extends AbstractDatadogTask {
     private Property<Boolean> ignoreNotFound;
 
     protected Output execute(RunContext context, String action, Object body) throws Exception {
-        String host = context.render(hostName).as(String.class).orElse("").trim();
-        if (host.isEmpty() || host.contains("*") || host.contains("?")) {
-            throw new IllegalArgumentException("`hostName` must identify one host without wildcards");
-        }
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            Map<String, Object> response = client(context, true).post("/api/v1/host/" + URLEncoder.encode(host, StandardCharsets.UTF_8).replace("+", "%20") + "/" + action, body).map();
-            return Output.builder().found(true).hostname((String) response.get("hostname"))
-                .action((String) response.get("action")).message((String) response.get("message"))
-                .end(response.get("end") instanceof Number n ? n.longValue() : null).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (ignore && e.getStatus() == 404) {
-                return Output.builder().found(false).hostname(host).build();
+        try (var client = client(context, true)) {
+            String host = context.render(hostName).as(String.class).orElse("").trim();
+            if (host.isEmpty() || host.contains("*") || host.contains("?")) {
+                throw new IllegalArgumentException("`hostName` must identify one host without wildcards");
             }
-            throw e;
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                Map<String, Object> response = client.post("/api/v1/host/" + URLEncoder.encode(host, StandardCharsets.UTF_8).replace("+", "%20") + "/" + action, body).map();
+                return Output.builder().found(true).hostname((String) response.get("hostname"))
+                    .action((String) response.get("action")).message((String) response.get("message"))
+                    .end(response.get("end") instanceof Number n ? n.longValue() : null).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (ignore && e.getStatus() == 404) {
+                    return Output.builder().found(false).hostname(host).build();
+                }
+                throw e;
+            }
         }
     }
 

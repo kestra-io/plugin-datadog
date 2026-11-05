@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -95,7 +96,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
             server.reply("POST", endpoint.path(), 200, page(endpoint, "one", "cursor"));
             server.reply("POST", endpoint.path(), 200, page(endpoint, "two", null));
             RunContext context = runContext();
-            Map<String, Object> output = run(builder(endpoint).store(Property.ofValue(true)), context);
+            Map<String, Object> output = run(builder(endpoint).fetchType(Property.ofValue(FetchType.STORE)), context);
             assertNull(output.get(endpoint.resourceType().equals("log") ? "logs" : "events"));
             assertEquals(2, output.get("size"));
             List<Object> rows = new ArrayList<>();
@@ -176,7 +177,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
         assertTrue(redacted.toString().contains("orders"));
         assertTrue(run(builder(endpoint).includeSecrets(Property.ofValue(true)), runContext()).toString().contains("fixture-key"));
         RunContext context = runContext();
-        var stored = run(builder(endpoint).store(Property.ofValue(true)), context);
+        var stored = run(builder(endpoint).fetchType(Property.ofValue(FetchType.STORE)), context);
         List<Object> rows = new ArrayList<>();
         try (var input = context.storage().getFile(URI.create(stored.get("uri").toString()))) {
             FileSerde.read(input, rows::add);

@@ -6,7 +6,7 @@ Use these tasks to maintain synthetic tests, run a CI batch, evaluate a deployme
 
 | Task | What it does | Datadog operation IDs |
 |---|---|---|
-| `synthetics.List` | Lists tests or searches them with bounded paging. Supports `store: true` for ION output. | `ListTests`, `SearchTests` |
+| `synthetics.List` | Lists tests or searches them with bounded paging. Supports `fetchType: STORE` for ION output. | `ListTests`, `SearchTests` |
 | `synthetics.Get` | Reads an API, browser or mobile test by public ID. | `GetAPITest`, `GetBrowserTest`, `GetMobileTest` |
 | `synthetics.Create` | Creates an API or browser test from a full definition. | `CreateSyntheticsAPITest`, `CreateSyntheticsBrowserTest` |
 | `synthetics.Update` | Replaces one identified API or browser test. | `UpdateAPITest`, `UpdateBrowserTest` |
@@ -106,7 +106,7 @@ Replace the former `CreateGate.dryRun` input with `evaluationDryRun`. The `Evalu
 ## Limits and verification
 
 - No task claims an upsert or idempotency guarantee. Task retries can create another synthetic batch, gate, rule or deployment. The shared HTTP transport also retries HTTP 429, including POST requests. These tasks do not add a POST retry loop.
-- `maxTests` is bounded from 1 to 10000. `List.limitReached` signals a capped result. `store: true` moves list or result records to an ION file and leaves the inline collection empty.
+- `maxTests` is bounded from 1 to 10000. `List.limitReached` signals a capped result. `fetchType: STORE` moves list or result records to an ION file and leaves the inline collection empty.
 - `Results` returns the API's latest window and `lastTimestampFetched`. It does not claim to export all historical results. Use an identified result for full details.
 - `Locations` and `GetRules` use unpaged API operations.
 - `Delete`, `Update` and `SetStatus` accept `ignoreNotFound`. It defaults to false. Delete sends one public ID and `force_delete_dependencies=false`.

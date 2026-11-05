@@ -54,7 +54,7 @@ The membership and service definition previews use `plan` as both the input and 
 
 Number-paged lists accept `pageSize` from 1 to 100 and `maxResults` from 1 to 10000. Defaults are 100 and 1000. They start at page zero. Responses use total counts when present. A short final page ends a list without totals. Repeated resource IDs fail the request because they prevent a reliable inventory.
 
-List outputs contain `rows`, `size`, `truncated` and `uri`. Check `truncated` before treating a bounded result as a full inventory. With `store: true`, rows are written as ION to internal storage and `rows` is empty. Collection is bounded in memory by the result limit; storage reduces the execution output size rather than making the API reader unbounded.
+List outputs contain `rows`, `size`, `truncated` and `uri`. Check `truncated` before treating a bounded result as a full inventory. With `fetchType: STORE`, rows are written as ION to internal storage and `rows` is empty. Collection is bounded in memory by the result limit; storage reduces the execution output size rather than making the API reader unbounded.
 
 Sync inventory limits default to 10000 users and 10000 memberships. Lower limits are supported. Reaching a limit before the inventory ends fails the sync.
 

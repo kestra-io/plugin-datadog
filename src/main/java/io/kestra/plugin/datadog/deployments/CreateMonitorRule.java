@@ -58,21 +58,23 @@ public class CreateMonitorRule extends AbstractDatadogTask implements RunnableTa
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String gate = Deployments.id(context.render(gateId).as(String.class).orElse(null), "gateId");
-        String label = Deployments.required(context.render(name).as(String.class).orElse(null), "name");
-        String text = Deployments.required(context.render(query).as(String.class).orElse(null), "query");
-        long duration = context.render(healthySeconds).as(Long.class).orElse(0L);
-        long warmup = context.render(warmupSeconds).as(Long.class).orElse(0L);
-        if (duration < 0 || warmup < 0) {
-            throw new IllegalArgumentException("`healthySeconds` and `warmupSeconds` must be nonnegative");
+        try (var client = client(context, true)) {
+            String gate = Deployments.id(context.render(gateId).as(String.class).orElse(null), "gateId");
+            String label = Deployments.required(context.render(name).as(String.class).orElse(null), "name");
+            String text = Deployments.required(context.render(query).as(String.class).orElse(null), "query");
+            long duration = context.render(healthySeconds).as(Long.class).orElse(0L);
+            long warmup = context.render(warmupSeconds).as(Long.class).orElse(0L);
+            if (duration < 0 || warmup < 0) {
+                throw new IllegalArgumentException("`healthySeconds` and `warmupSeconds` must be nonnegative");
+            }
+            var options = Map.of("query", text, "duration", duration, "warmup", warmup,
+                "fail_on_no_data", context.render(failOnNoData).as(Boolean.class).orElse(true),
+                "fail_on_no_groups_found", context.render(failOnNoGroupsFound).as(Boolean.class).orElse(true));
+            var body = Deployments.body("deployment_rule", Map.of("name", label, "type", "monitor", "options", options, "dry_run", false));
+            var answer = client.post("/api/v2/deployment_gates/" + gate + "/rules", body).map();
+            var data = Deployments.object(answer.get("data"), "rule data");
+            return Output.builder().ruleId(Deployments.required((String) data.get("id"), "rule id returned by Datadog")).build();
         }
-        var options = Map.of("query", text, "duration", duration, "warmup", warmup,
-            "fail_on_no_data", context.render(failOnNoData).as(Boolean.class).orElse(true),
-            "fail_on_no_groups_found", context.render(failOnNoGroupsFound).as(Boolean.class).orElse(true));
-        var body = Deployments.body("deployment_rule", Map.of("name", label, "type", "monitor", "options", options, "dry_run", false));
-        var answer = client(context, true).post("/api/v2/deployment_gates/" + gate + "/rules", body).map();
-        var data = Deployments.object(answer.get("data"), "rule data");
-        return Output.builder().ruleId(Deployments.required((String) data.get("id"), "rule id returned by Datadog")).build();
     }
 
     @Builder

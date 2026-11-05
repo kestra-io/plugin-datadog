@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.cost;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -54,7 +55,7 @@ class CostTest extends AbstractDatadogTest {
     void historicalCanWriteIonWithoutInlineCosts() throws Exception {
         server.reply("GET", "/api/v2/usage/historical_cost", 200, COSTS);
         var context = runContext();
-        var output = historical().store(Property.ofValue(true)).build().run(context);
+        var output = historical().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getCosts());
         assertTrue(server.only().query().contains("view=summary"));
         assertTrue(server.only().query().contains("include_connected_accounts=false"));

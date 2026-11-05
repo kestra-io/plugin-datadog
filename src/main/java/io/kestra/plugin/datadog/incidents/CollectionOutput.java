@@ -9,13 +9,15 @@ import java.util.Map;
 @Builder
 @Getter
 public class CollectionOutput implements io.kestra.core.models.tasks.Output {
-    @Schema(title = "Results", description = "JSON resources. Null when store is true.")
+    @Schema(title = "First resource", description = "Present with FETCH_ONE.")
+    private final Map<String, Object> row;
+    @Schema(title = "Results", description = "JSON resources. Null with STORE.")
     private final java.util.List<Map<String, Object>> items;
 
     @Schema(title = "Number of results")
     private final int count;
 
-    @Schema(title = "Stored results", description = "Internal storage URI of the ION file when store is true.")
+    @Schema(title = "Stored results", description = "Internal storage URI of the ION file with STORE.")
     private final URI uri;
 
     @Schema(title = "Result limit reached", description = "True when maxResults was reached. More results can exist.")

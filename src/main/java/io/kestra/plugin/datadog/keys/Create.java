@@ -68,9 +68,11 @@ public class Create extends AbstractDatadogTask implements RunnableTask<KeyOutpu
 
     @Override
     public KeyOutput run(RunContext context) throws Exception {
-        KeyKind kind = kind(context);
-        Map<String, Object> body = body(context, kind);
-        boolean include = AccessApi.flag(context, includeSecrets);
-        return KeyOutput.from(AccessApi.json(AccessApi.request(client(context, true), "POST", kind.createPath, Map.of(), body)), include);
+        try (var client = client(context, true)) {
+            KeyKind kind = kind(context);
+            Map<String, Object> body = body(context, kind);
+            boolean include = AccessApi.flag(context, includeSecrets);
+            return KeyOutput.from(AccessApi.json(AccessApi.request(client, "POST", kind.createPath, Map.of(), body)), include);
+        }
     }
 }

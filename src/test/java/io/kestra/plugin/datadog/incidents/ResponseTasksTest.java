@@ -230,7 +230,7 @@ class ResponseTasksTest extends AbstractDatadogTest {
             assertNull(byDefault.getStatusCode());
             assertEquals(byDefault.getRequest(), explicit.getRequest());
             assertEquals(c.method, explicit.getRequest().get("method"));
-            assertEquals(server.url() + c.path, explicit.getRequest().get("url"));
+            assertEquals("[REDACTED_URL]", explicit.getRequest().get("url"));
             assertEquals(c.body, explicit.getRequest().get("body"));
             assertFalse(explicit.getRequest().toString().contains(API_KEY));
             server.reply(c.method, c.path, c.status, c.response);
@@ -358,7 +358,7 @@ class ResponseTasksTest extends AbstractDatadogTest {
             // A full first page is followed by a short second page.
             String first = contract.response;
             Map<String, Object> props = new LinkedHashMap<>(contract.properties);
-            props.putAll(Map.of("pageSize", 1, "maxResults", 3, "store", store));
+            props.putAll(Map.of("pageSize", 1, "maxResults", 3, "fetchType", store ? "STORE" : "FETCH"));
             server.reply("GET", contract.path, 200, first);
             server.reply("GET", contract.path, 200, first.replace(ID, OTHER));
             server.reply("GET", contract.path, 200, name.equals("incidents.Search")

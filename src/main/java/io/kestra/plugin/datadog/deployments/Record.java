@@ -68,39 +68,41 @@ public class Record extends AbstractDatadogTask implements RunnableTask<Record.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String name = Deployments.required(context.render(service).as(String.class).orElse(null), "service");
-        Instant start = context.render(startedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`startedAt` is required"));
-        Instant finish = context.render(finishedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`finishedAt` is required"));
-        if (start.isAfter(finish)) {
-            throw new IllegalArgumentException("`finishedAt` must be at or after startedAt");
-        }
-        Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("service", name);
-        attributes.put("started_at", nanos(start));
-        attributes.put("finished_at", nanos(finish));
-        context.render(env).as(String.class).ifPresent(value -> attributes.put("env", value));
-        context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
-        context.render(team).as(String.class).ifPresent(value -> attributes.put("team", value));
-        String id = context.render(deploymentId).as(String.class).orElse(null);
-        if (id != null) {
-            if (!id.matches("[A-Za-z0-9_.:-]{16,128}")) {
-                throw new IllegalArgumentException("`deploymentId` must contain 16 to 128 allowed characters");
+        try (var client = client(context, false)) {
+            String name = Deployments.required(context.render(service).as(String.class).orElse(null), "service");
+            Instant start = context.render(startedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`startedAt` is required"));
+            Instant finish = context.render(finishedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`finishedAt` is required"));
+            if (start.isAfter(finish)) {
+                throw new IllegalArgumentException("`finishedAt` must be at or after startedAt");
             }
-            attributes.put("id", id);
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            attributes.put("service", name);
+            attributes.put("started_at", nanos(start));
+            attributes.put("finished_at", nanos(finish));
+            context.render(env).as(String.class).ifPresent(value -> attributes.put("env", value));
+            context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
+            context.render(team).as(String.class).ifPresent(value -> attributes.put("team", value));
+            String id = context.render(deploymentId).as(String.class).orElse(null);
+            if (id != null) {
+                if (!id.matches("[A-Za-z0-9_.:-]{16,128}")) {
+                    throw new IllegalArgumentException("`deploymentId` must contain 16 to 128 allowed characters");
+                }
+                attributes.put("id", id);
+            }
+            String repo = context.render(repositoryUrl).as(String.class).orElse(null);
+            String sha = context.render(commitSha).as(String.class).orElse(null);
+            if (repo != null || sha != null) {
+                attributes.put("git", Map.of("repository_url", Deployments.required(repo, "repositoryUrl"), "commit_sha", Deployments.required(sha, "commitSha")));
+            }
+            var tags = context.render(customTags).asList(String.class);
+            if (!tags.isEmpty()) {
+                attributes.put("custom_tags", tags);
+            }
+            var answer = client.post("/api/v2/dora/deployment", Map.of("data", Map.of("attributes", attributes)));
+            var data = Deployments.object(answer.map().get("data"), "deployment data");
+            return Output.builder().deploymentId(Deployments.required((String) data.get("id"), "deployment id returned by Datadog"))
+                .httpStatus(answer.status()).build();
         }
-        String repo = context.render(repositoryUrl).as(String.class).orElse(null);
-        String sha = context.render(commitSha).as(String.class).orElse(null);
-        if (repo != null || sha != null) {
-            attributes.put("git", Map.of("repository_url", Deployments.required(repo, "repositoryUrl"), "commit_sha", Deployments.required(sha, "commitSha")));
-        }
-        var tags = context.render(customTags).asList(String.class);
-        if (!tags.isEmpty()) {
-            attributes.put("custom_tags", tags);
-        }
-        var answer = client(context, false).post("/api/v2/dora/deployment", Map.of("data", Map.of("attributes", attributes)));
-        var data = Deployments.object(answer.map().get("data"), "deployment data");
-        return Output.builder().deploymentId(Deployments.required((String) data.get("id"), "deployment id returned by Datadog"))
-            .httpStatus(answer.status()).build();
     }
 
     private static long nanos(Instant instant) {

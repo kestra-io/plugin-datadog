@@ -4,7 +4,7 @@ tasks:
 - filter: env:prod
   includeMutedHostsData: true
   maxResults: 10000
-  store: false
+  fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.hosts.List
   apiKey: e2e-api-key
