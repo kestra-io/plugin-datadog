@@ -15,7 +15,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Local stand-in for the Datadog API. It records every request and answers from a script: replies registered for a
- * "METHOD /path" are used one after the other, and the last one is repeated. A path without a reply gets {@code 200 {}}.
+ * "METHOD /path" are used one after the other and the last one is repeated. A path without a reply gets {@code 200 {}}.
  */
 public class MockDatadogServer {
     public record Received(String method, String path, String query, Map<String, String> headers, String body) {

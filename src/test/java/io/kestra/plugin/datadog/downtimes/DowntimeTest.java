@@ -96,7 +96,7 @@ class DowntimeTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).build().run(runContext()));
         // both
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).end(end).duration(Property.ofValue(Duration.ofMinutes(1))).build().run(runContext()));
-        // no monitor, or both monitor selectors
+        // no monitor or both monitor selectors
         assertThrows(IllegalArgumentException.class, () -> create().end(end).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> create().monitorId(Property.ofValue(1L)).monitorTags(Property.ofValue(List.of("a:b"))).end(end).build().run(runContext()));
         // an end before the start, a zero duration, a blank scope
