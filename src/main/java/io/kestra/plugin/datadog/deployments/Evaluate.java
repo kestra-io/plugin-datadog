@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
-/** Datadog operations: TriggerDeploymentGatesEvaluation and GetDeploymentGatesEvaluationResult. */
+/** Datadog operationIds: v2:TriggerDeploymentGatesEvaluation and v2:GetDeploymentGatesEvaluationResult. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

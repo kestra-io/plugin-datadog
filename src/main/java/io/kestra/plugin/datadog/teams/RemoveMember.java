@@ -17,7 +17,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Set;
 
-/** Operations: v2 GetTeamMemberships and DeleteTeamMembership. */
+/** Datadog operationIds: v2:GetTeamMemberships and v2:DeleteTeamMembership. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

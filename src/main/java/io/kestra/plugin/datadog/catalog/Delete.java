@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-/** Operation: v2 DeleteServiceDefinition. */
+/** Datadog operationId: v2:DeleteServiceDefinition. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

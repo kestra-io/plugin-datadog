@@ -1,13 +1,30 @@
 id: datadog_e2e_events
 namespace: hq.datadog.e2e
 tasks:
-  - id: create
-    type: io.kestra.plugin.datadog.events.Create
-    apiKey: mock-api-key
-    apiUrl: __MOCK_URL__
-    title: End-to-end event
-    text: Mock Datadog only
-  - id: verify
-    type: io.kestra.plugin.core.execution.Assert
-    conditions:
-      - "{{ outputs.create.eventId == '123' }}"
+- title: Orders pipeline finished
+  text: e2e fixture
+  alertType: SUCCESS
+  tags:
+  - env:prod
+  - e2e
+  - source:kestra
+  id: create
+  type: io.kestra.plugin.datadog.events.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/events.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.eventId == "123" }}'
+- query: tags:deployment
+  from: now-1h
+  id: search
+  type: io.kestra.plugin.datadog.events.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/events.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'

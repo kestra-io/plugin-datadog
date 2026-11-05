@@ -1,0 +1,83 @@
+id: datadog_e2e_statuspages
+namespace: hq.datadog.e2e
+tasks:
+- pageId: 00000000-0000-0000-0000-000000000001
+  title: Orders API latency
+  status: INVESTIGATING
+  message: e2e fixture
+  components:
+    00000000-0000-0000-0000-000000000002: DEGRADED
+  dryRun: true
+  id: createdegradation_dry
+  type: io.kestra.plugin.datadog.statuspages.CreateDegradation
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.CreateDegradation-dry
+- id: createdegradation_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.createdegradation_dry.dryRun == true }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  title: Orders API latency
+  status: INVESTIGATING
+  message: e2e fixture
+  components:
+    00000000-0000-0000-0000-000000000002: DEGRADED
+  dryRun: false
+  id: createdegradation
+  type: io.kestra.plugin.datadog.statuspages.CreateDegradation
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.CreateDegradation
+- id: createdegradation_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.createdegradation.id == "00000000-0000-0000-0000-000000000001" }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  id: get
+  type: io.kestra.plugin.datadog.statuspages.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.id == "00000000-0000-0000-0000-000000000001" }}'
+- name: Orders
+  id: list
+  type: io.kestra.plugin.datadog.statuspages.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.count == 1 }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  degradationId: 00000000-0000-0000-0000-000000000002
+  status: RESOLVED
+  message: e2e fixture
+  dryRun: true
+  id: updatedegradation_dry
+  type: io.kestra.plugin.datadog.statuspages.UpdateDegradation
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.UpdateDegradation-dry
+- id: updatedegradation_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.updatedegradation_dry.dryRun == true }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  degradationId: 00000000-0000-0000-0000-000000000002
+  status: RESOLVED
+  message: e2e fixture
+  dryRun: false
+  id: updatedegradation
+  type: io.kestra.plugin.datadog.statuspages.UpdateDegradation
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/statuspages.UpdateDegradation
+- id: updatedegradation_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.updatedegradation.id == "00000000-0000-0000-0000-000000000001" }}'

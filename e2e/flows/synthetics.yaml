@@ -1,0 +1,147 @@
+id: datadog_e2e_synthetics
+namespace: hq.datadog.e2e
+tasks:
+- definition:
+    name: Homepage smoke test
+    type: api
+    subtype: http
+    status: paused
+    message: ''
+    locations:
+    - aws:eu-west-3
+    options:
+      tick_every: 300
+    config:
+      request:
+        method: GET
+        url: https://example.com
+      assertions:
+      - type: statusCode
+        operator: is
+        target: 200
+  id: create
+  type: io.kestra.plugin.datadog.synthetics.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.test.public_id == "abc-def-ghi" }}'
+- publicId: abc-def-ghi
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.synthetics.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.deleted == true }}'
+- publicId: abc-def-ghi
+  testKind: API
+  id: get
+  type: io.kestra.plugin.datadog.synthetics.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.test.public_id == "abc-def-ghi" }}'
+- searchQuery: tag:env:prod
+  store: false
+  id: list
+  type: io.kestra.plugin.datadog.synthetics.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- id: locations
+  type: io.kestra.plugin.datadog.synthetics.Locations
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Locations
+- id: locations_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.locations.locations[0].id == "aws:eu-west-3" }}'
+- publicId: abc-def-ghi
+  id: results
+  type: io.kestra.plugin.datadog.synthetics.Results
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Results
+- id: results_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.results.size == 1 }}'
+- testIds:
+  - abc-def-ghi
+  maxWait: PT5S
+  pollInterval: PT0.01S
+  overrides:
+    startUrl: https://staging.example.com
+  id: run
+  type: io.kestra.plugin.datadog.synthetics.Run
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Run
+- id: run_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.run.passed == true }}'
+  - '{{ outputs.run.timedOut == false }}'
+- publicId: abc-def-ghi
+  status: PAUSED
+  id: setstatus
+  type: io.kestra.plugin.datadog.synthetics.SetStatus
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.SetStatus
+- id: setstatus_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.setstatus.accepted == true }}'
+- testIds:
+  - abc-def-ghi
+  id: trigger
+  type: io.kestra.plugin.datadog.synthetics.Trigger
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Trigger
+- id: trigger_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.trigger.batchId == "00000000-0000-0000-0000-000000000001" }}'
+- publicId: abc-def-ghi
+  definition:
+    name: Homepage smoke test
+    type: api
+    subtype: http
+    message: ''
+    locations:
+    - aws:eu-west-3
+    options:
+      tick_every: 300
+    config:
+      request:
+        method: GET
+        url: https://example.com
+      assertions:
+      - type: statusCode
+        operator: is
+        target: 200
+  id: update
+  type: io.kestra.plugin.datadog.synthetics.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/synthetics.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.test.public_id == "abc-def-ghi" }}'

@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Datadog v2 operationId: GetDowntime. */
+/** Datadog operationId: v2:GetDowntime. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

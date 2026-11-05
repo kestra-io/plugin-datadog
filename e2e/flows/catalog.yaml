@@ -1,0 +1,47 @@
+id: datadog_e2e_catalog
+namespace: hq.datadog.e2e
+tasks:
+- serviceName: retired-service
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.catalog.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/catalog.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.deleted == true }}'
+- definition:
+    schema-version: v2.2
+    dd-service: checkout
+    team: payments
+    tags:
+    - env:prod
+  dryRun: true
+  id: upsertservicedefinition_dry
+  type: io.kestra.plugin.datadog.catalog.UpsertServiceDefinition
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/catalog.UpsertServiceDefinition-dry
+- id: upsertservicedefinition_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.upsertservicedefinition_dry.dryRun == true }}'
+- definition:
+    schema-version: v2.2
+    dd-service: checkout
+    team: payments
+    tags:
+    - env:prod
+  dryRun: false
+  id: upsertservicedefinition
+  type: io.kestra.plugin.datadog.catalog.UpsertServiceDefinition
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/catalog.UpsertServiceDefinition
+- id: upsertservicedefinition_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.upsertservicedefinition.status == "CREATED" }}'
+  - '{{ outputs.upsertservicedefinition.serviceName == "checkout" }}'

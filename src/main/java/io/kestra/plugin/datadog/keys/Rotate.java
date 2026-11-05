@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Operations: v2 GetAPIKey, GetApplicationKey, CreateAPIKey and CreateCurrentUserApplicationKey. */
+/** Datadog operationIds: v2:GetAPIKey, v2:GetApplicationKey, v2:CreateAPIKey and v2:CreateCurrentUserApplicationKey. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

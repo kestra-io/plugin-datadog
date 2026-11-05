@@ -1,0 +1,18 @@
+id: datadog_e2e_ddsql
+namespace: hq.datadog.e2e
+tasks:
+- query: SELECT 42
+  lookback: PT1H
+  rowLimit: 1000
+  store: false
+  pollDelay: PT0.01S
+  id: query
+  type: io.kestra.plugin.datadog.ddsql.Query
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/ddsql.Query
+- id: query_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.query.state == "COMPLETED" }}'
+  - '{{ outputs.query.rowCount == 1 }}'

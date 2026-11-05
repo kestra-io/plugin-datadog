@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Operations: v2 GetServiceDefinition and CreateOrUpdateServiceDefinitions. */
+/** Datadog operationIds: v2:GetServiceDefinition and v2:CreateOrUpdateServiceDefinitions. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

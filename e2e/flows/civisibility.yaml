@@ -1,0 +1,25 @@
+id: datadog_e2e_civisibility
+namespace: hq.datadog.e2e
+tasks:
+- query: '@ci.status:error'
+  store: false
+  id: searchpipelines
+  type: io.kestra.plugin.datadog.civisibility.SearchPipelines
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/civisibility.SearchPipelines
+- id: searchpipelines_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.searchpipelines.size == 1 }}'
+- query: '@test.status:fail'
+  store: false
+  id: searchtests
+  type: io.kestra.plugin.datadog.civisibility.SearchTests
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/civisibility.SearchTests
+- id: searchtests_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.searchtests.size == 1 }}'

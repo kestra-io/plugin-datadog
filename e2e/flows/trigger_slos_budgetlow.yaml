@@ -1,0 +1,18 @@
+id: datadog_e2e_slos_budgetlow
+namespace: hq.datadog.e2e
+triggers:
+- sloId: 0123456789abcdef0123456789abcdef
+  target: 99.9
+  window: P7D
+  minRemainingBudget: 20
+  interval: PT1S
+  id: watch
+  type: io.kestra.plugin.datadog.slos.BudgetLow
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/triggers/slos.BudgetLow
+tasks:
+- id: assert_trigger
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ trigger.remainingBudget is defined }}'

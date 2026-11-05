@@ -18,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Datadog operation: DeleteTests, restricted to one public ID without forced dependency deletion. */
+/** Datadog operationId: v1:DeleteTests, restricted to one public ID without forced dependency deletion. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

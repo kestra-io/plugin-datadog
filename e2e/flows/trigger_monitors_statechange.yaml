@@ -1,0 +1,18 @@
+id: datadog_e2e_monitors_statechange
+namespace: hq.datadog.e2e
+triggers:
+- monitorTags:
+  - env:prod
+  states:
+  - ALERT
+  interval: PT1S
+  id: watch
+  type: io.kestra.plugin.datadog.monitors.StateChange
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/triggers/monitors.StateChange
+tasks:
+- id: assert_trigger
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ trigger.count is defined }}'

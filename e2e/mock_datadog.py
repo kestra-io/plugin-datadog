@@ -1,6 +1,7 @@
 """Local Datadog fixture server. Never records credentials or contacts Datadog."""
 import json
 import threading
+from collections import Counter
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -15,6 +16,10 @@ class MockDatadog:
         self.requests = []
         self.modified = now()
         self.downtimes = {}
+        from scenarios import build
+        self.scenarios, _ = build()
+        self.scenario_calls = Counter()
+        self.trigger_active = set()
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -48,7 +53,14 @@ class MockDatadog:
                 status, answer = owner.answer(self.command, path, body)
                 data = json.dumps(answer).encode() if answer is not None else b""
                 self.send_response(status)
-                self.send_header("Content-Type", "application/json")
+                media = "application/json"
+                if path.startswith("/scenarios/"):
+                    name = path.split("/")[2].removesuffix("-dry")
+                    endpoint = "/" + "/".join(path.split("/")[3:])
+                    matches = [row for row in owner.scenarios.get(name, {}).get("replies", []) if row["method"] == self.command and row["path"] == endpoint]
+                    if matches:
+                        media = matches[0]["contentType"]
+                self.send_header("Content-Type", media)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 if data:
@@ -66,6 +78,28 @@ class MockDatadog:
                 "overall_state": "Alert", "overall_state_modified": self.modified, "tags": ["env:e2e"]}
 
     def answer(self, method, path, body):
+        if path.startswith("/scenarios/"):
+            _, _, name, *parts = path.split("/")
+            task = name.removesuffix("-dry")
+            endpoint = "/" + "/".join(parts)
+            fixtures = [row for row in self.scenarios.get(task, {}).get("replies", []) if row["method"] == method and row["path"] == endpoint]
+            if fixtures:
+                key = (name, method, endpoint)
+                fixture = fixtures[min(self.scenario_calls[key], len(fixtures) - 1)]
+                self.scenario_calls[key] += 1
+                return fixture["status"], fixture["body"]
+            return 404, {"errors": ["No fixture for " + task + " " + method + " " + endpoint]}
+        if path.startswith("/triggers/"):
+            _, _, name, *parts = path.split("/")
+            active = name in self.trigger_active
+            if name == "monitors.StateChange":
+                return 200, [self.monitor()]
+            if name == "logs.CountThreshold":
+                return 200, {"data": {"buckets": [{"by": {}, "computes": {"c0": 20 if active else 0}}]}}
+            if name == "metrics.Threshold":
+                return 200, {"data": {"type": "scalar_response", "attributes": {"columns": [{"type": "number", "name": "a", "values": [90 if active else 0]}]}}}
+            if name == "slos.BudgetLow":
+                return 200, {"data": {"from_ts": 100, "to_ts": 200, "type": "metric", "overall": {"sli_value": 99.8 if active else 100, "span_precision": 3, "errors": []}}, "errors": []}
         if (method, path) == ("POST", "/api/v1/events"):
             return 202, {"status": "ok", "event": {"id": 123, "id_str": "123", "title": body["title"], "text": body["text"]}}
         if (method, path) == ("POST", "/api/v2/series"):

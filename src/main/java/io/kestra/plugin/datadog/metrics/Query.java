@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/** Datadog operationId: v1:QueryMetrics. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

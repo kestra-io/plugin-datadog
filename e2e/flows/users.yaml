@@ -1,0 +1,34 @@
+id: datadog_e2e_users
+namespace: hq.datadog.e2e
+tasks:
+- userId: 00000000-0000-0000-0000-000000000001
+  ignoreNotFound: true
+  id: disable
+  type: io.kestra.plugin.datadog.users.Disable
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/users.Disable
+- id: disable_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.disable.disabled == true }}'
+- userId: 00000000-0000-0000-0000-000000000001
+  id: get
+  type: io.kestra.plugin.datadog.users.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/users.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.user.id == "00000000-0000-0000-0000-000000000001" }}'
+- store: false
+  id: list
+  type: io.kestra.plugin.datadog.users.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/users.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 2 }}'

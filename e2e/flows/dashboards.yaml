@@ -1,0 +1,101 @@
+id: datadog_e2e_dashboards
+namespace: hq.datadog.e2e
+tasks:
+- definition:
+    title: Orders
+    layout_type: ordered
+    widgets: []
+  id: create
+  type: io.kestra.plugin.datadog.dashboards.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.dashboard.id == "abc-def-ghi" }}'
+- dashboardId: abc-def-ghi
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.dashboards.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.deleted == true }}'
+- dashboardId: abc-def-ghi
+  id: export
+  type: io.kestra.plugin.datadog.dashboards.Export
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Export
+- id: export_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.export.uri is defined }}'
+- dashboardId: abc-def-ghi
+  id: get
+  type: io.kestra.plugin.datadog.dashboards.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.dashboard.id == "abc-def-ghi" }}'
+- dryRun: true
+  definition:
+    title: Updated
+    layout_type: ordered
+    widgets: []
+  dashboardId: abc-def-ghi
+  id: import_dry
+  type: io.kestra.plugin.datadog.dashboards.Import
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Import-dry
+- id: import_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.import_dry.dryRun == true }}'
+- dryRun: false
+  definition:
+    title: Updated
+    layout_type: ordered
+    widgets: []
+  dashboardId: abc-def-ghi
+  id: import
+  type: io.kestra.plugin.datadog.dashboards.Import
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Import
+- id: import_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.import.action == "UPDATED" }}'
+- store: false
+  id: list
+  type: io.kestra.plugin.datadog.dashboards.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- dashboardId: abc-def-ghi
+  definition:
+    title: Orders
+    layout_type: ordered
+    widgets: []
+  id: update
+  type: io.kestra.plugin.datadog.dashboards.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.dashboard.id == "abc-def-ghi" }}'

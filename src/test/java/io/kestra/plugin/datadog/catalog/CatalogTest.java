@@ -34,11 +34,14 @@ class CatalogTest extends OrganizationTestSupport {
         assertEquals(UpsertServiceDefinition.Status.CREATED, first.getStatus());
         assertEquals(desired, server.requests.get(1).json());
         assertTrue(server.requests.get(0).query().contains("schema_version=v2.2"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v2:GetServiceDefinition", "v2:CreateOrUpdateServiceDefinitions");
         server.requests.clear();
         var second = task.run(runContext());
         assertEquals(UpsertServiceDefinition.Status.UNCHANGED, second.getStatus());
         assertTrue(second.getDiff().isEmpty());
         assertEquals("GET", server.only().method());
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:GetServiceDefinition").assertRequest(server.only());
     }
 
     @Test

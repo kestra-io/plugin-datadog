@@ -17,7 +17,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Datadog operation: CreateDeploymentRule with monitor query options. */
+/** Datadog operationId: v2:CreateDeploymentRule with monitor query options. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

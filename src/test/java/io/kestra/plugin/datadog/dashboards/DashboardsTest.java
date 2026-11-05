@@ -16,6 +16,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DashboardsTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void requestsMatchPinnedContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v1:GetDashboard", "v1:ListDashboards", "v1:CreateDashboard", "v1:UpdateDashboard", "v1:DeleteDashboard");
+    }
+
     // Dashboard, Widget and NoteWidgetDefinition from the v1 OpenAPI description.
     private static final String DASHBOARD = """
         {"id":"abc-def-ghi","title":"Orders","layout_type":"ordered","tags":["team:platform"],

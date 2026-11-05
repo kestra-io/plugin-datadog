@@ -55,12 +55,16 @@ class TeamsTest extends OrganizationTestSupport {
         assertFalse(add.body().contains("\"role\":\"admin\""));
         assertTrue(add.body().contains("\"id\":\"new\""));
         assertFalse(add.body().contains("membership-new"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v2:ListUsers", "v2:GetTeamMemberships", "v2:CreateTeamMembership", "v2:DeleteTeamMembership");
         server.requests.clear();
         var second = task.run(runContext());
         assertEquals(SyncMembers.Status.UNCHANGED, second.getStatus());
         assertTrue(second.getDiff().isEmpty());
         assertTrue(second.getAdded().isEmpty());
         assertTrue(second.getRemoved().isEmpty());
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v2:ListUsers", "v2:GetTeamMemberships");
         assertTrue(server.requests.stream().allMatch(request -> request.method().equals("GET")));
     }
 

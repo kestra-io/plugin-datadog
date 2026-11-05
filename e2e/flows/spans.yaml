@@ -1,0 +1,40 @@
+id: datadog_e2e_spans
+namespace: hq.datadog.e2e
+tasks:
+- query: service:orders
+  compute:
+  - aggregation: PC95
+    metric: '@duration'
+  id: aggregate
+  type: io.kestra.plugin.datadog.spans.Aggregate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/spans.Aggregate
+- id: aggregate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.aggregate.size == 1 }}'
+- query: service:orders status:error
+  threshold: 10
+  id: count
+  type: io.kestra.plugin.datadog.spans.Count
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/spans.Count
+- id: count_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.count.count == 1 }}'
+  - '{{ outputs.count.breached == false }}'
+- query: service:orders
+  from: now-15m
+  store: false
+  id: search
+  type: io.kestra.plugin.datadog.spans.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/spans.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'

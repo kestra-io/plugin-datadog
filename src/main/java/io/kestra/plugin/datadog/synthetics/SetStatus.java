@@ -18,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Datadog operation: UpdateTestPauseStatus. */
+/** Datadog operationId: v1:UpdateTestPauseStatus. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
