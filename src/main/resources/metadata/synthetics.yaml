@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.synthetics
+name: "synthetics"
+title: "Datadog synthetics"
+description: "Manage synthetic tests and run CI quality gates."
+body: "Discover tests, maintain API and browser definitions, pause schedules and wait for a CI batch with a bounded deadline."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
