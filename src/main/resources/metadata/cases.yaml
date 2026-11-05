@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.cases
+name: "cases"
+title: "Datadog cases"
+description: "Track incident follow-up with cases."
+body: "Create, read and search cases. Assign a case, set its status or priority and record a comment."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

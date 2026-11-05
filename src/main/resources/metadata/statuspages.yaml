@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.statuspages
+name: "statuspages"
+title: "Datadog status pages"
+description: "Publish status page degradation updates."
+body: "Read status pages. Preview a degradation, post an update and resolve it by id."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
