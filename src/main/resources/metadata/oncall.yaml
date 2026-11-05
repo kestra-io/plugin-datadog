@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.oncall
+name: "oncall"
+title: "Datadog On-Call"
+description: "Page responders and manage the page lifecycle."
+body: "Preview a page for a team or user. Acknowledge, escalate or resolve one page and read the current team responders."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
