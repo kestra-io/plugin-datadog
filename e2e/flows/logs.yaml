@@ -32,8 +32,7 @@ tasks:
   - '{{ outputs.count.breached == false }}'
 - query: service:orders status:error
   from: now-15m
-  maxResults: 1000
-  store: false
+  maxResults: 50
   id: search
   type: io.kestra.plugin.datadog.logs.Search
   apiKey: e2e-api-key

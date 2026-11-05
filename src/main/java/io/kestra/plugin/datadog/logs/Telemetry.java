@@ -15,9 +15,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Shared wire helpers for the telemetry endpoints. */
 public final class Telemetry {
+    private static final Pattern URL = Pattern.compile("https?://[^\\s<>\\\"']+", Pattern.CASE_INSENSITIVE);
     private Telemetry() {
     }
 
@@ -107,7 +109,7 @@ public final class Telemetry {
         return out;
     }
 
-    /** Redacts named credential fields, including nested telemetry attributes. Free text is not inspected. */
+    /** Redacts credential fields and URLs before results reach outputs or storage. */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> redact(Map<String, Object> row, boolean includeSecrets) {
         return includeSecrets ? row : (Map<String, Object>) redactValue(row);
@@ -129,7 +131,7 @@ public final class Telemetry {
         if (value instanceof List<?> list) {
             return list.stream().map(Telemetry::redactValue).toList();
         }
-        return value;
+        return value instanceof String text ? URL.matcher(text).replaceAll("[REDACTED_URL]") : value;
     }
 
     /** Streams rows to a temporary ION file and publishes it only on success. */

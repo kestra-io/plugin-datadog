@@ -99,6 +99,10 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in monitor messages. False by default.")
+    @PluginProperty(group = "advanced")
+    private Property<Boolean> includeSecrets;
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
@@ -118,7 +122,9 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         }
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());
-        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), monitors);
+        var rIncludeSecrets = runContext.render(includeSecrets).as(Boolean.class).orElse(false);
+        var safe = monitors.stream().map(monitor -> MonitorIO.redactMap(monitor, rIncludeSecrets)).toList();
+        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);
         return Output.builder().monitors(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
     }
 
