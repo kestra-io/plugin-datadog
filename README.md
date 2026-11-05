@@ -39,7 +39,7 @@
 
 Run Datadog from a flow. Mark a deployment, mute the right monitors for thirty minutes, wait for a synthetic test and stop the release when the SLO budget is low. All with Kestra secrets, no scripts and no hand-built HTTP calls.
 
-The plugin reaches **every one of the 1,941 operations** of the Datadog API (v1 and v2) through one validated task, and gives the jobs people actually automate their own typed tasks with real validation, paging and safe defaults.
+The plugin reaches **every one of the 1,941 operations** of the Datadog API (v1 and v2) through one validated task and gives the jobs people actually automate their own typed tasks with real validation, paging and safe defaults.
 
 ## What you can do from a flow
 
@@ -64,7 +64,7 @@ The plugin reaches **every one of the 1,941 operations** of the Datadog API (v1 
   minRemainingBudget: 20
 ```
 
-**Keep monitors in Git.** Apply monitor definitions from YAML. The task reports what it would create or change, shows a field-level diff, and a second run changes nothing.
+**Keep monitors in Git.** Apply monitor definitions from YAML. The task reports what it would create or change, shows a field-level diff and a second run changes nothing.
 
 ```yaml
 - id: apply
@@ -117,7 +117,7 @@ The generated [coverage report](docs/COVERAGE.md) maps each Datadog operation to
 
 - 1,941 operations in the official API description.
 - 122 of them have a typed task. The typed tasks are the ones a flow author reaches for: they validate input, page results, redact secrets and offer previews.
-- The other 1,819 are reachable through `api.Call`. It checks the operation, the path and query parameters and the required body against a built-in catalog before it sends anything, and `api.Operations` searches that catalog.
+- The other 1,819 are reachable through `api.Call`. It checks the operation, the path and query parameters and the required body against a built-in catalog before it sends anything and `api.Operations` searches that catalog.
 
 ## Safe by default
 
@@ -139,11 +139,11 @@ Every task needs `apiKey`. Tasks that read data or manage things also need `appK
 python3 e2e/run.py --jar build/libs/plugin-datadog-1.0.0-SNAPSHOT.jar --artifact-commit "$(git rev-parse HEAD)" --evidence /tmp/evidence --include-api
 ```
 
-The last full run: 3,461 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API, and 157 example flows validated.
+The last full run: 3,461 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API and 157 example flows validated.
 
 ## What has not been verified
 
-No test has run against a live Datadog organization. The mock server follows the official OpenAPI description, and a contract check compares requests against it for the highest-risk tasks (14 test classes so far; [details](docs/CONTRACT-TESTS.md)). Rate-limit behavior, permissions and server-side validation on a real account are covered only by that mock. Known issues from the integration audit are in [`docs/INTEGRATION-FINDINGS.md`](docs/INTEGRATION-FINDINGS.md).
+No test has run against a live Datadog organization. The mock server follows the official OpenAPI description and a contract check compares requests against it for the highest-risk tasks (14 test classes so far; [details](docs/CONTRACT-TESTS.md)). Rate-limit behavior, permissions and server-side validation on a real account are covered only by that mock. Known issues from the integration audit are in [`docs/INTEGRATION-FINDINGS.md`](docs/INTEGRATION-FINDINGS.md).
 
 ## Documentation
 
