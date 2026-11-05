@@ -19,7 +19,7 @@ def load(paths):
     for api, path in zip(("v1", "v2"), paths):
         raw = Path(path).read_bytes()
         docs[api] = yaml.load(raw, Loader=yaml.CSafeLoader)
-        sources.append({"api": api, "sha256": hashlib.sha256(raw).hexdigest()})
+        sources.append({"api": api, "sha256": hashlib.sha256(raw).hexdigest().upper()})
     return docs, sources
 
 
