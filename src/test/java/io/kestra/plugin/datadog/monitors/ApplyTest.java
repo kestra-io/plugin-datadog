@@ -59,6 +59,9 @@ class ApplyTest extends AbstractDatadogTest {
         assertTrue(second.getDiff().isEmpty());
         assertEquals(1, server.requests.stream().filter(r -> r.path().equals("/api/v1/monitor") && r.method().equals("POST")).count());
         assertEquals(0, server.requests.stream().filter(r -> r.method().equals("PUT")).count());
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v1:ListMonitors", "v1:GetMonitor", "v1:ValidateMonitor", "v1:ValidateExistingMonitor", "v1:CreateMonitor");
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:CreateMonitor").assertResponse(200, json);
     }
 
     @Test
@@ -81,6 +84,8 @@ class ApplyTest extends AbstractDatadogTest {
         var second = apply.run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.UNCHANGED, second.getAction());
         assertEquals(1, server.requests.stream().filter(r -> r.method().equals("PUT")).count());
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v1:ListMonitors", "v1:GetMonitor", "v1:ValidateExistingMonitor", "v1:UpdateMonitor");
     }
 
     @Test

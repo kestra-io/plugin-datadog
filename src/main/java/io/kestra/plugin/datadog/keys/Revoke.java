@@ -13,7 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-/** Operations: v2 DeleteAPIKey and DeleteApplicationKey. */
+/** Datadog operationIds: v2:DeleteAPIKey and v2:DeleteApplicationKey. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

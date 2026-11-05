@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operations: TriggerCITests and SearchTests. */
+/** Datadog operationIds: v1:TriggerCITests and v1:SearchTests. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

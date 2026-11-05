@@ -52,6 +52,73 @@ def components(root):
     return result
 
 
+def flow_components(value):
+    """Only executable task and trigger nodes count; comments and strings do not."""
+    found = set()
+    if isinstance(value, dict):
+        if str(value.get("type", "")).startswith("io.kestra.plugin.datadog."):
+            found.add(value["type"])
+        for key in ("tasks", "triggers", "then", "else", "errors", "finally"):
+            found.update(flow_components(value.get(key)))
+    elif isinstance(value, list):
+        for child in value:
+            found.update(flow_components(child))
+    return found
+
+
+def triggered_executions(client, flow):
+    result = client.request("GET", "/executions?" + urlencode({"namespace": flow["namespace"], "flowId": flow["id"], "size": 100}))
+    return [entry for entry in result.get("results", []) if entry.get("trigger")]
+
+
+def missing_components(root):
+    covered = set()
+    for file in (root / "e2e/flows").glob("*.yaml"):
+        covered.update(flow_components(yaml.safe_load(file.read_text())))
+    return components(root) - covered
+
+
+def exercise_triggers(client, flows, mock, evidence, summary):
+    for flow in flows:
+        name = flow["triggers"][0]["type"].removeprefix("io.kestra.plugin.datadog.")
+        prefix = "/triggers/" + name + "/"
+        polls = lambda: sum(row["path"].startswith(prefix) for row in mock.requests)
+        deadline = time.monotonic() + 60
+        while polls() < 2 and time.monotonic() < deadline:
+            time.sleep(0.5)
+        if polls() < 2:
+            summary["errors"].append(name + " did not complete baseline polls")
+            continue
+        if triggered_executions(client, flow):
+            summary["errors"].append(name + " fired before the fixture changed")
+        if name == "monitors.StateChange":
+            mock.modified = now()
+        mock.trigger_active.add(name)
+        deadline = time.monotonic() + 60
+        executions = []
+        while time.monotonic() < deadline:
+            executions = triggered_executions(client, flow)
+            if executions:
+                break
+            time.sleep(0.5)
+        for triggered in executions:
+            execution = client.wait_execution(triggered["id"])
+            stem = name.replace(".", "_")
+            (evidence / (stem + "-trigger-execution.json")).write_text(json.dumps(execution, indent=2))
+            (evidence / (stem + "-trigger-logs.json")).write_text(json.dumps(client.request("GET", "/logs/" + triggered["id"]), indent=2))
+            summary["executions"].append({"flow": flow["id"], "id": triggered["id"], "component": name, "triggered": True, "state": execution["state"]["current"]})
+            if execution["state"]["current"] != "SUCCESS":
+                summary["errors"].append(name + " triggered execution failed")
+        baseline = polls()
+        deadline = time.monotonic() + 30
+        while polls() < baseline + 3 and time.monotonic() < deadline:
+            time.sleep(0.5)
+        executions = triggered_executions(client, flow)
+        summary.setdefault("triggers", []).append({"component": name, "executions": len(executions), "followupPolls": polls() - baseline})
+        if len(executions) != 1 or polls() < baseline + 3:
+            summary["errors"].append(name + " did not fire exactly once across follow-up polls")
+
+
 class Kestra:
     def __init__(self, port):
         self.url = f"http://127.0.0.1:{port}/api/v1/main"
@@ -94,7 +161,7 @@ def main():
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--source", type=Path, default=Path("."))
     parser.add_argument("--image", default="kestra/kestra:v2.0.6")
-    parser.add_argument("--include-api", action="store_true")
+    parser.add_argument("--include-api", action="store_true", help="Compatibility flag; generic API flows are always included")
     parser.add_argument("--allow-partial", action="store_true", help="Report tasks lacking e2e flows without rejecting the run")
     parser.add_argument("--artifact-commit", required=True, help="Commit from which the jar was built")
     args = parser.parse_args()
@@ -104,7 +171,7 @@ def main():
     summary = {"image": args.image, "artifactCommit": args.artifact_commit, "jarSha256": hashlib.sha256(jar.read_bytes()).hexdigest(),
                "started": now(), "executions": [], "validations": [], "errors": []}
     port, management, controller = free_port(), free_port(), free_port()
-    name = "dd-d08-generic-contract-qa-e2e-" + str(port)
+    name = "dd-d09-e2e-complete-e2e-" + str(port)
     client = Kestra(port)
     mock = MockDatadog().start()
     configuration = {
@@ -116,6 +183,10 @@ def main():
     }
     started = False
     try:
+        missing = missing_components(root)
+        if missing and not args.allow_partial:
+            summary["uncoveredComponents"] = sorted(missing)
+            raise ValueError("Some implemented components have no e2e flow: " + ", ".join(sorted(missing)))
         subprocess.run(["docker", "run", "--detach", "--rm", "--name", name, "--memory", "3g", "--network", "host",
                         "--env", "KESTRA_CONFIGURATION=" + yaml.safe_dump(configuration), "--env", "JAVA_OPTS=-Xms256m -Xmx1536m",
                         "--volume", f"{jar}:/app/plugins/plugin-datadog.jar:ro", args.image,
@@ -128,18 +199,19 @@ def main():
             if not isinstance(result, list) or any(row.get("constraints") for row in result):
                 summary["errors"].append(f"Example validation failed: {origin}")
         covered = set()
-        monitor_flow = None
+        trigger_flows = []
         for file in sorted((root / "e2e/flows").glob("*.yaml")):
-            if file.stem == "api" and not args.include_api:
-                continue
             text = file.read_text().replace("__MOCK_URL__", mock.url)
             flow = yaml.safe_load(text)
-            covered.update(re.findall(r"type:\s*(io\.kestra\.plugin\.datadog\.[A-Za-z.]+)", text))
+            covered.update(flow_components(flow))
             result = client.request("POST", "/flows/validate", text)
             summary["validations"].append({"source": str(file.relative_to(root)), "result": result})
             if any(row.get("constraints") for row in result):
                 summary["errors"].append(f"E2e flow validation failed: {file.name}"); continue
             client.request("POST", "/flows", text)
+            if flow.get("triggers"):
+                trigger_flows.append(flow)
+                continue
             boundary = "e2e-empty-inputs"
             created = client.request("POST", f"/executions/{flow['namespace']}/{flow['id']}",
                                      f"--{boundary}--\r\n", f"multipart/form-data; boundary={boundary}")
@@ -149,32 +221,7 @@ def main():
             summary["executions"].append({"flow": flow["id"], "id": created["id"], "state": execution["state"]["current"]})
             if execution["state"]["current"] != "SUCCESS":
                 summary["errors"].append(f"Execution failed: {flow['id']}")
-            if flow.get("triggers"):
-                monitor_flow = flow
-        if monitor_flow:
-            # The initial poll only writes a cursor. A second monitor request proves
-            # polling has progressed beyond it (the first request is the manual list).
-            deadline = time.monotonic() + 45
-            while time.monotonic() < deadline and sum(row["path"] == "/api/v1/monitor" for row in mock.requests) < 2:
-                time.sleep(0.5)
-            mock.modified = now()
-            deadline = time.monotonic() + 45
-            triggered = None
-            while time.monotonic() < deadline:
-                result = client.request("GET", "/executions?" + urlencode({"namespace": monitor_flow["namespace"], "flowId": monitor_flow["id"], "size": 50}))
-                triggered = next((entry for entry in result.get("results", []) if entry.get("trigger")), None)
-                if triggered:
-                    break
-                time.sleep(1)
-            if triggered:
-                execution = client.wait_execution(triggered["id"])
-                (evidence / "trigger-execution.json").write_text(json.dumps(execution, indent=2))
-                (evidence / "trigger-logs.json").write_text(json.dumps(client.request("GET", "/logs/" + triggered["id"]), indent=2))
-                summary["executions"].append({"flow": monitor_flow["id"], "id": triggered["id"], "triggered": True, "state": execution["state"]["current"]})
-                if execution["state"]["current"] != "SUCCESS":
-                    summary["errors"].append("Triggered execution failed")
-            else:
-                summary["errors"].append("StateChange did not create an execution")
+        exercise_triggers(client, trigger_flows, mock, evidence, summary)
         summary["coveredComponents"] = sorted(covered)
         summary["uncoveredComponents"] = sorted(components(root) - covered)
         if summary["uncoveredComponents"] and not args.allow_partial:

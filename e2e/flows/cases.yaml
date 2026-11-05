@@ -1,0 +1,81 @@
+id: datadog_e2e_cases
+namespace: hq.datadog.e2e
+tasks:
+- caseId: 00000000-0000-0000-0000-000000000001
+  assigneeId: 00000000-0000-0000-0000-000000000002
+  id: assign
+  type: io.kestra.plugin.datadog.cases.Assign
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.Assign
+- id: assign_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.assign.id == "00000000-0000-0000-0000-000000000001" }}'
+- caseId: 00000000-0000-0000-0000-000000000001
+  comment: e2e fixture
+  id: comment
+  type: io.kestra.plugin.datadog.cases.Comment
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.Comment
+- id: comment_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.comment.statusCode == 200 }}'
+- title: Review the orders outage
+  caseTypeId: 00000000-0000-0000-0000-000000000001
+  projectId: 00000000-0000-0000-0000-000000000002
+  priority: P2
+  id: create
+  type: io.kestra.plugin.datadog.cases.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.id == "00000000-0000-0000-0000-000000000001" }}'
+- caseId: 00000000-0000-0000-0000-000000000001
+  id: get
+  type: io.kestra.plugin.datadog.cases.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.id == "00000000-0000-0000-0000-000000000001" }}'
+- filter: status:OPEN
+  sortField: CREATED_AT
+  id: search
+  type: io.kestra.plugin.datadog.cases.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.count == 1 }}'
+- caseId: 00000000-0000-0000-0000-000000000001
+  priority: P1
+  id: setpriority
+  type: io.kestra.plugin.datadog.cases.SetPriority
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.SetPriority
+- id: setpriority_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.setpriority.id == "00000000-0000-0000-0000-000000000001" }}'
+- caseId: 00000000-0000-0000-0000-000000000001
+  statusName: Closed
+  id: setstatus
+  type: io.kestra.plugin.datadog.cases.SetStatus
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cases.SetStatus
+- id: setstatus_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.setstatus.id == "00000000-0000-0000-0000-000000000001" }}'

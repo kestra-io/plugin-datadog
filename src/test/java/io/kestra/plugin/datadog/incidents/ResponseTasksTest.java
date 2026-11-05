@@ -146,6 +146,8 @@ class ResponseTasksTest extends AbstractDatadogTest {
             server.reply(c.method, c.path, c.status, c.response);
             Object result = task(c.task, c.properties).run(runContext());
             var request = server.only();
+            io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:" + c.operation).assertRequest(request);
+            io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:" + c.operation).assertResponse(c.status, c.response);
             assertEquals(c.method, request.method());
             assertEquals(c.path, request.path());
             assertEquals(c.query, request.query() == null ? null : java.net.URLDecoder.decode(request.query(), java.nio.charset.StandardCharsets.UTF_8));

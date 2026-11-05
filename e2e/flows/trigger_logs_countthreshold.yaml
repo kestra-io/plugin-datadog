@@ -1,0 +1,17 @@
+id: datadog_e2e_logs_countthreshold
+namespace: hq.datadog.e2e
+triggers:
+- query: service:orders status:error
+  window: PT15M
+  threshold: 10
+  interval: PT1S
+  id: watch
+  type: io.kestra.plugin.datadog.logs.CountThreshold
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/triggers/logs.CountThreshold
+tasks:
+- id: assert_trigger
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ trigger.count is defined }}'

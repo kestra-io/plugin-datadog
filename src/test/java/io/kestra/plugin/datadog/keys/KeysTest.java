@@ -14,6 +14,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KeysTest extends OrganizationTestSupport {
+    @org.junit.jupiter.api.AfterEach
+    void requestsMatchPinnedContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+            "v2:CreateAPIKey", "v2:CreateCurrentUserApplicationKey", "v2:GetAPIKey", "v2:GetApplicationKey",
+            "v2:DeleteAPIKey", "v2:DeleteApplicationKey", "v2:ListAPIKeys", "v2:ListApplicationKeys");
+    }
+
     private String keyResponse() throws Exception {
         return json(Map.of("data", resource("new-id", "api_keys", Map.of("key", VALUE, "name", "pipeline", "last4", "1234"))));
     }
@@ -21,6 +28,7 @@ class KeysTest extends OrganizationTestSupport {
     @Test
     void createRedactsByDefaultAndCanExplicitlyReturnTheValue() throws Exception {
         server.reply("POST", "/api/v2/api_keys", 201, keyResponse());
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CreateAPIKey").assertResponse(201, keyResponse());
         KeyOutput output = connection(Create.builder()).name(Property.ofValue("pipeline")).build().run(runContext());
         assertEquals("new-id", output.getKeyId());
         assertEquals("[REDACTED]", output.getKey());

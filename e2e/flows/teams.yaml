@@ -1,0 +1,54 @@
+id: datadog_e2e_teams
+namespace: hq.datadog.e2e
+tasks:
+- keyword: platform
+  id: list
+  type: io.kestra.plugin.datadog.teams.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/teams.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- teamId: 00000000-0000-0000-0000-000000000001
+  userId: 00000000-0000-0000-0000-000000000002
+  ignoreNotFound: true
+  id: removemember
+  type: io.kestra.plugin.datadog.teams.RemoveMember
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/teams.RemoveMember
+- id: removemember_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.removemember.removed == true }}'
+- teamId: 00000000-0000-0000-0000-000000000001
+  handles:
+  - admin@example.com
+  - engineer@example.com
+  dryRun: true
+  id: syncmembers_dry
+  type: io.kestra.plugin.datadog.teams.SyncMembers
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/teams.SyncMembers-dry
+- id: syncmembers_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.syncmembers_dry.dryRun == true }}'
+- teamId: 00000000-0000-0000-0000-000000000001
+  handles:
+  - admin@example.com
+  - engineer@example.com
+  dryRun: false
+  id: syncmembers
+  type: io.kestra.plugin.datadog.teams.SyncMembers
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/teams.SyncMembers
+- id: syncmembers_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.syncmembers.status == "UPDATED" }}'
+  - '{{ outputs.syncmembers.added[0] == "engineer@example.com" }}'

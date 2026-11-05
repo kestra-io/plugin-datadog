@@ -39,3 +39,17 @@ The request assertion checks method, path template, required parameters, unknown
 Supported schema checks: local references, required fields, objects, arrays, primitives, enums, nullable values, additional properties, allOf, anyOf, oneOf, not, ranges, lengths, item counts, uniqueness, multiples, regex patterns and date formats. Required read-only fields are excluded from request requirements. Required write-only fields are excluded from response requirements. Other string formats are annotations. The helper rejects non-JSON media rather than claiming to validate binary or multipart payloads.
 
 Run `./gradlew test --tests '*YourTest*'`, then the full gate. Add a negative test when introducing a new schema feature. The coverage table distinguishes a vendored schema from an actual contract assertion. Mock correctness is not proof of live API behavior.
+
+## Integrated adoption
+
+`scripts/coverage.py` counts typed-task test classes that call helper assertions. It excludes helper self-tests and generic API tests. This is a count of adopting test classes, not operations exercised or test methods. The initial integrated tree had seven adopting classes.
+
+The high-risk adopters include monitor Apply, dashboard Import, service-definition upsert, incident Create and Update, On-Call Page, key creation and rotation, team membership sync, host mute and downtime creation. Existing output and idempotency assertions remain alongside contract assertions.
+
+`e2e/scenarios.py` owns the shared scenario fixtures. Run `python3 -B e2e/generate_flows.py` after changes. `ScenarioTest` validates success response fixtures and executes the same task configurations with request and output assertions. Real Kestra executes the generated area flows.
+
+## Strict findings
+
+`SafetyInvariantsTest` discovers plugin classes by reflection. It checks reserved property names, destructive selectors, dry-run requests and named credential output fields. Its named-field redaction check does not prove that arbitrary map payloads are safe. Existing area tests cover nested payload redaction.
+
+Known findings are executable assertions of current behavior. Set `DD_STRICT_SAFETY=1` in the test process to turn them into failures. This lets the integrated gate detect new regressions while retaining reproductions of behavior this test-only change cannot repair. See `docs/INTEGRATION-FINDINGS.md`.

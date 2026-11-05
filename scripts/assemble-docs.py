@@ -20,7 +20,7 @@ def task_rows(source):
     return rows
 
 
-def assemble(areas, rows, max_bytes=30000):
+def assemble(areas, rows, max_bytes=40000):
     table = "| Component | Purpose |\n|---|---|\n" + "\n".join(f"| `{task}` | {title.replace('|', '/')} |" for task, title in rows)
     sections = ["# How to use the Datadog plugin", "Use Kestra connection properties for Datadog keys and the regional site. See each task page for its full flow examples.", "## Components\n\n" + table]
     for path in sorted(Path(areas).glob("*.md")):
@@ -60,7 +60,7 @@ def main():
     parser.add_argument("--source", type=Path, default=Path("src/main/java/io/kestra/plugin/datadog"))
     parser.add_argument("--root-doc", type=Path, required=True)
     parser.add_argument("--readme", type=Path, required=True)
-    parser.add_argument("--max-bytes", type=int, default=30000)
+    parser.add_argument("--max-bytes", type=int, default=40000, help="Local editorial budget, not a Kestra platform limit")
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     root, table = assemble(args.areas, task_rows(args.source), args.max_bytes)

@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** Operation: v2 EditSecurityMonitoringSignal. */
+/** Datadog operationId: v2:EditSecurityMonitoringSignal. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

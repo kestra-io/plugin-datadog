@@ -17,7 +17,7 @@ import lombok.experimental.SuperBuilder;
 import java.net.URI;
 import java.util.Map;
 
-/** Datadog operations: ListTests and SearchTests. */
+/** Datadog operationIds: v1:ListTests and v1:SearchTests. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

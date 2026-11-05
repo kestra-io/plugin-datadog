@@ -20,7 +20,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Datadog v2 operationId: UpdateDowntime. */
+/** Datadog operationId: v2:UpdateDowntime. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

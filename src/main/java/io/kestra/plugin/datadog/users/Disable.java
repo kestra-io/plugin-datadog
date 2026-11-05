@@ -14,7 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
-/** Operation: v2 DisableUser. */
+/** Datadog operationId: v2:DisableUser. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

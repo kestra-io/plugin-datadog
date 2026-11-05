@@ -16,7 +16,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Operation: v2 GetUser. */
+/** Datadog operationId: v2:GetUser. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

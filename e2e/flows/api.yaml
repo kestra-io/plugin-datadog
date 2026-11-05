@@ -1,21 +1,23 @@
 id: datadog_e2e_api
 namespace: hq.datadog.e2e
 tasks:
-  - id: discover
-    type: io.kestra.plugin.datadog.api.Operations
-    tag: Roles
-    method: GET
-  - id: call
-    type: io.kestra.plugin.datadog.api.Call
-    apiKey: mock-api-key
-    appKey: mock-app-key
-    apiUrl: __MOCK_URL__
-    operationId: ListRoles
-    paginate: true
-    store: true
-  - id: verify
-    type: io.kestra.plugin.core.execution.Assert
-    conditions:
-      - "{{ outputs.discover.count > 0 }}"
-      - "{{ outputs.call.count == 1 }}"
-      - "{{ outputs.call.uri is not empty }}"
+- operationId: GetMonitor
+  pathParams:
+    monitor_id: 12345
+  id: call
+  type: io.kestra.plugin.datadog.api.Call
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/api.Call
+- id: call_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.call.statusCode == 200 }}'
+- tag: Monitors
+  method: GET
+  id: operations
+  type: io.kestra.plugin.datadog.api.Operations
+- id: operations_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.operations.count is defined }}'

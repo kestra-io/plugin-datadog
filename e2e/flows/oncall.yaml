@@ -1,0 +1,113 @@
+id: datadog_e2e_oncall
+namespace: hq.datadog.e2e
+tasks:
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: true
+  id: acknowledge_dry
+  type: io.kestra.plugin.datadog.oncall.Acknowledge
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Acknowledge-dry
+- id: acknowledge_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.acknowledge_dry.dryRun == true }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: false
+  id: acknowledge
+  type: io.kestra.plugin.datadog.oncall.Acknowledge
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Acknowledge
+- id: acknowledge_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.acknowledge.statusCode == 202 }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: true
+  id: escalate_dry
+  type: io.kestra.plugin.datadog.oncall.Escalate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Escalate-dry
+- id: escalate_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.escalate_dry.dryRun == true }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: false
+  id: escalate
+  type: io.kestra.plugin.datadog.oncall.Escalate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Escalate
+- id: escalate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.escalate.statusCode == 202 }}'
+- title: Orders API needs attention
+  targetType: TEAM_HANDLE
+  target: orders-oncall
+  urgency: HIGH
+  tags:
+  - service:orders
+  - source:kestra
+  dryRun: true
+  id: page_dry
+  type: io.kestra.plugin.datadog.oncall.Page
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Page-dry
+- id: page_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.page_dry.dryRun == true }}'
+- title: Orders API needs attention
+  targetType: TEAM_HANDLE
+  target: orders-oncall
+  urgency: HIGH
+  tags:
+  - service:orders
+  - source:kestra
+  dryRun: false
+  id: page
+  type: io.kestra.plugin.datadog.oncall.Page
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Page
+- id: page_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.page.id == "00000000-0000-0000-0000-000000000001" }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: true
+  id: resolve_dry
+  type: io.kestra.plugin.datadog.oncall.Resolve
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Resolve-dry
+- id: resolve_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.resolve_dry.dryRun == true }}'
+- pageId: 00000000-0000-0000-0000-000000000001
+  dryRun: false
+  id: resolve
+  type: io.kestra.plugin.datadog.oncall.Resolve
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.Resolve
+- id: resolve_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.resolve.statusCode == 202 }}'
+- teamId: 00000000-0000-0000-0000-000000000001
+  id: whoisoncall
+  type: io.kestra.plugin.datadog.oncall.WhoIsOnCall
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/oncall.WhoIsOnCall
+- id: whoisoncall_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.whoisoncall.id == "00000000-0000-0000-0000-000000000001" }}'

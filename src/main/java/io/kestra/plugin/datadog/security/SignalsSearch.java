@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Operation: v2 SearchSecurityMonitoringSignals. */
+/** Datadog operationId: v2:SearchSecurityMonitoringSignals. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

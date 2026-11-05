@@ -53,6 +53,9 @@ class HostsTest extends AbstractDatadogTest {
         assertTrue(output.getFound());
         assertEquals("Muted", output.getAction());
         assertEquals(stop.getEpochSecond(), output.getEnd());
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:MuteHost").assertRequest(server.only());
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:MuteHost").assertResponse(200,
+            "{\"action\":\"Muted\",\"hostname\":\"worker-01\",\"end\":4070908800,\"message\":\"maintenance\"}");
     }
 
     @Test

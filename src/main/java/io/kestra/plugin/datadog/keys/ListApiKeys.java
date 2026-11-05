@@ -13,7 +13,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Operation: v2 ListAPIKeys. */
+/** Datadog operationId: v2:ListAPIKeys. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

@@ -20,7 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operations: GetAPITestLatestResults, GetBrowserTestLatestResults, GetAPITestResult and GetBrowserTestResult. */
+/** Datadog operationIds: v1:GetAPITestLatestResults, v1:GetBrowserTestLatestResults, v1:GetAPITestResult and v1:GetBrowserTestResult. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

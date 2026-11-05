@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-/** Datadog operations: TriggerCITests, SearchTests, GetSyntheticsCIBatch, GetAPITestResult and GetBrowserTestResult. */
+/** Datadog operationIds: v1:TriggerCITests, v1:SearchTests, v1:GetSyntheticsCIBatch, v1:GetAPITestResult and v1:GetBrowserTestResult. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

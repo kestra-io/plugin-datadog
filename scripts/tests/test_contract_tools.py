@@ -63,6 +63,15 @@ class ToolsTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 assembly.update_readme(assembly.START, table)
 
+    def test_contract_adoption_requires_assertions_and_excludes_helper_self_tests(self):
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)
+            (source / "WriteTest.java").write_text('class WriteTest { void test() { OpenApiContract.of("v2:Write").assertRequest(request); } }')
+            (source / "UnusedTest.java").write_text('import OpenApiContract; // OpenApiContract.assertRequests(requests);')
+            (source / "contract").mkdir()
+            (source / "contract/HelperTest.java").write_text('OpenApiContract.assertRequests(requests);')
+            self.assertEqual(["WriteTest"], coverage.contract_adoption(source))
+
 
 if __name__ == "__main__":
     unittest.main()

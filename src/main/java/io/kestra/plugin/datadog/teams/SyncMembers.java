@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Operations: v2 ListUsers, GetTeamMemberships, CreateTeamMembership and DeleteTeamMembership. */
+/** Datadog operationIds: v2:ListUsers, v2:GetTeamMemberships, v2:CreateTeamMembership and v2:DeleteTeamMembership. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

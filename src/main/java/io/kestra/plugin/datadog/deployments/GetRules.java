@@ -18,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operation: GetDeploymentGateRules. */
+/** Datadog operationId: v2:GetDeploymentGateRules. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

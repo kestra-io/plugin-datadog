@@ -18,7 +18,7 @@ import lombok.experimental.SuperBuilder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Datadog operation: CreateDeploymentGate. */
+/** Datadog operationId: v2:CreateDeploymentGate. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
