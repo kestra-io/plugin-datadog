@@ -1,0 +1,27 @@
+id: datadog_e2e_security
+namespace: hq.datadog.e2e
+tasks:
+- from: '2026-01-01T00:00:00Z'
+  to: '2026-01-02T00:00:00Z'
+  query: status:high
+  fetchType: FETCH
+  id: signalssearch
+  type: io.kestra.plugin.datadog.security.SignalsSearch
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/security.SignalsSearch
+- id: signalssearch_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.signalssearch.size == 1 }}'
+- signalId: signal-id
+  state: UNDER_REVIEW
+  id: triagesignal
+  type: io.kestra.plugin.datadog.security.TriageSignal
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/security.TriageSignal
+- id: triagesignal_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.triagesignal.updated == true }}'

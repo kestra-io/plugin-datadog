@@ -1,0 +1,60 @@
+id: datadog_e2e_downtimes
+namespace: hq.datadog.e2e
+tasks:
+- downtimeId: 00000000-0000-0000-0000-000000000001
+  ignoreNotFound: true
+  id: cancel
+  type: io.kestra.plugin.datadog.downtimes.Cancel
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/downtimes.Cancel
+- id: cancel_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.cancel.cancelled == true }}'
+- scope: env:prod AND service:orders
+  monitorTags:
+  - service:orders
+  duration: PT30M
+  message: e2e fixture
+  id: create
+  type: io.kestra.plugin.datadog.downtimes.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/downtimes.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.downtimeId == "00000000-0000-0000-0000-000000000001" }}'
+- downtimeId: 00000000-0000-0000-0000-000000000001
+  id: get
+  type: io.kestra.plugin.datadog.downtimes.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/downtimes.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.downtime.data.id == "00000000-0000-0000-0000-000000000001" }}'
+- currentOnly: true
+  fetchType: FETCH
+  id: list
+  type: io.kestra.plugin.datadog.downtimes.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/downtimes.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- downtimeId: 00000000-0000-0000-0000-000000000001
+  message: e2e fixture
+  id: update
+  type: io.kestra.plugin.datadog.downtimes.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/downtimes.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.downtime.data.id == "00000000-0000-0000-0000-000000000001" }}'

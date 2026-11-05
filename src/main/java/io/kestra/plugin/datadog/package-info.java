@@ -1,7 +1,10 @@
 @PluginSubGroup(
     title = "Datadog",
-    description = "Datadog plugin for Kestra",
-    categories = PluginSubGroup.PluginCategory.DATA
+    description = "Tasks and a trigger to send events, metrics and logs to Datadog, query metrics and logs, read monitors and schedule downtimes.",
+    categories = {
+        PluginSubGroup.PluginCategory.DATA,
+        PluginSubGroup.PluginCategory.INFRASTRUCTURE
+    }
 )
 package io.kestra.plugin.datadog;
 

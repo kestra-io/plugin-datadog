@@ -1,0 +1,15 @@
+id: datadog_e2e_audit
+namespace: hq.datadog.e2e
+tasks:
+- from: now-1h
+  maxResults: 10000
+  fetchType: FETCH
+  id: search
+  type: io.kestra.plugin.datadog.audit.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/audit.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'

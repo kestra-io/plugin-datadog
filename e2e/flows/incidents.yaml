@@ -1,0 +1,85 @@
+id: datadog_e2e_incidents
+namespace: hq.datadog.e2e
+tasks:
+- title: Orders API error rate
+  customerImpacted: true
+  severity: SEV_2
+  dryRun: true
+  id: create_dry
+  type: io.kestra.plugin.datadog.incidents.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Create-dry
+- id: create_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create_dry.dryRun == true }}'
+- title: Orders API error rate
+  customerImpacted: true
+  severity: SEV_2
+  dryRun: false
+  id: create
+  type: io.kestra.plugin.datadog.incidents.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.id == "00000000-0000-0000-0000-000000000001" }}'
+  - '{{ outputs.create.dryRun == false }}'
+- incidentId: 00000000-0000-0000-0000-000000000001
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.incidents.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.statusCode == 204 }}'
+- incidentId: 00000000-0000-0000-0000-000000000001
+  id: get
+  type: io.kestra.plugin.datadog.incidents.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.id == "00000000-0000-0000-0000-000000000001" }}'
+  - '{{ outputs.get.dryRun == false }}'
+- fetchType: FETCH
+  id: list
+  type: io.kestra.plugin.datadog.incidents.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.count == 1 }}'
+- query: state:active
+  sort: CREATED_DESC
+  id: search
+  type: io.kestra.plugin.datadog.incidents.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.count == 1 }}'
+- incidentId: 00000000-0000-0000-0000-000000000001
+  state: RESOLVED
+  id: update
+  type: io.kestra.plugin.datadog.incidents.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/incidents.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.id == "00000000-0000-0000-0000-000000000001" }}'
+  - '{{ outputs.update.dryRun == false }}'

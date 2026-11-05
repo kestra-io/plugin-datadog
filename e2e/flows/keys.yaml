@@ -1,0 +1,62 @@
+id: datadog_e2e_keys
+namespace: hq.datadog.e2e
+tasks:
+- keyKind: APPLICATION
+  name: pipeline-reader
+  scopes:
+  - user_access_read
+  id: create
+  type: io.kestra.plugin.datadog.keys.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/keys.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.keyId == "00000000-0000-0000-0000-000000000001" }}'
+  - '{{ outputs.create.key == "[REDACTED]" }}'
+- fetchType: FETCH
+  id: listapikeys
+  type: io.kestra.plugin.datadog.keys.ListApiKeys
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/keys.ListApiKeys
+- id: listapikeys_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.listapikeys.size == 1 }}'
+  - '{{ outputs.listapikeys.rows[0].attributes.key == "[REDACTED]" }}'
+- fetchType: FETCH
+  id: listapplicationkeys
+  type: io.kestra.plugin.datadog.keys.ListApplicationKeys
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/keys.ListApplicationKeys
+- id: listapplicationkeys_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.listapplicationkeys.size == 1 }}'
+- keyId: 00000000-0000-0000-0000-000000000001
+  ignoreNotFound: true
+  id: revoke
+  type: io.kestra.plugin.datadog.keys.Revoke
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/keys.Revoke
+- id: revoke_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.revoke.revoked == true }}'
+- oldKeyId: 00000000-0000-0000-0000-000000000001
+  name: pipeline-replacement
+  includeSecrets: false
+  id: rotate
+  type: io.kestra.plugin.datadog.keys.Rotate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/keys.Rotate
+- id: rotate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.rotate.keyId == "00000000-0000-0000-0000-000000000001" }}'
+  - '{{ outputs.rotate.key == "[REDACTED]" }}'

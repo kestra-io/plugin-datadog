@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.monitors
+name: "monitors"
+title: "Datadog monitors"
+description: "Validate, apply, export and audit Datadog monitors from Kestra flows."
+body: "Manage monitor definitions with field diffs and dry runs. Read monitor state, search facets, notification rules, policies and templates. Use StateChange to react to alerts."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

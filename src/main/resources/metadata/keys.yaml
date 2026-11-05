@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.keys
+name: "keys"
+title: "Datadog keys"
+description: "Audit and manage API and application keys."
+body: "Create a redacted replacement key then revoke the old key in a separate step after deploying the replacement."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

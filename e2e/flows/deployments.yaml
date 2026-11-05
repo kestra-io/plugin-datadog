@@ -1,0 +1,81 @@
+id: datadog_e2e_deployments
+namespace: hq.datadog.e2e
+tasks:
+- service: checkout
+  env: production
+  identifier: pre-deploy
+  evaluationDryRun: true
+  id: creategate_evaluation_dry
+  type: io.kestra.plugin.datadog.deployments.CreateGate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.CreateGate
+- id: creategate_evaluation_dry_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.creategate_evaluation_dry.gateId == ''00000000-0000-0000-0000-000000000001'' }}'
+- service: checkout
+  env: production
+  identifier: pre-deploy
+  evaluationDryRun: false
+  id: creategate
+  type: io.kestra.plugin.datadog.deployments.CreateGate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.CreateGate
+- id: creategate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.creategate.gateId == "00000000-0000-0000-0000-000000000001" }}'
+- gateId: 00000000-0000-0000-0000-000000000001
+  name: Healthy checkout monitors
+  query: service:checkout env:production
+  healthySeconds: 60
+  id: createmonitorrule
+  type: io.kestra.plugin.datadog.deployments.CreateMonitorRule
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.CreateMonitorRule
+- id: createmonitorrule_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.createmonitorrule.ruleId == "00000000-0000-0000-0000-000000000001" }}'
+- service: checkout
+  env: production
+  deploymentVersion: v1.2.3
+  maxWait: PT5S
+  pollInterval: PT0.01S
+  id: evaluate
+  type: io.kestra.plugin.datadog.deployments.Evaluate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.Evaluate
+- id: evaluate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.evaluate.status == "PASS" }}'
+  - '{{ outputs.evaluate.timedOut == false }}'
+- gateId: 00000000-0000-0000-0000-000000000001
+  id: getrules
+  type: io.kestra.plugin.datadog.deployments.GetRules
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.GetRules
+- id: getrules_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.getrules.size == 0 }}'
+- service: checkout
+  env: production
+  deploymentVersion: v1.2.3
+  startedAt: '2026-11-05T10:00:00Z'
+  finishedAt: '2026-11-05T10:02:00Z'
+  id: record
+  type: io.kestra.plugin.datadog.deployments.Record
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/deployments.Record
+- id: record_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.record.deploymentId == "00000000-0000-0000-0000-000000000001" }}'

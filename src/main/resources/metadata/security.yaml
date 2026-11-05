@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.security
+name: "security"
+title: "Datadog security"
+description: "Search and triage security signals."
+body: "Search an explicit time window with cursor paging or change one signal's state and assignee."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

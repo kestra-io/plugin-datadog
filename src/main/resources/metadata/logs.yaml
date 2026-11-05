@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.logs
+name: "logs"
+title: "Datadog logs"
+description: "Send, search, aggregate and count Datadog logs."
+body: "Export logs as ION, compute grouped measures or trigger a flow when a count crosses a threshold."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

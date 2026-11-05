@@ -1,0 +1,34 @@
+id: datadog_e2e_usage
+namespace: hq.datadog.e2e
+tasks:
+- from: '2026-01-01T00:00:00Z'
+  to: '2026-01-02T00:00:00Z'
+  productFamilies:
+  - INFRA_HOSTS
+  usageType: infra_host_count
+  budget: 100
+  aggregation: MAX
+  id: check
+  type: io.kestra.plugin.datadog.usage.Check
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/usage.Check
+- id: check_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.check.value == 20 }}'
+  - '{{ outputs.check.breached == false }}'
+- from: '2026-01-01T00:00:00Z'
+  to: '2026-01-02T00:00:00Z'
+  productFamilies:
+  - INFRA_HOSTS
+  fetchType: FETCH
+  id: hourly
+  type: io.kestra.plugin.datadog.usage.Hourly
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/usage.Hourly
+- id: hourly_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.hourly.count == 1 }}'

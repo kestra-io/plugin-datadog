@@ -1,0 +1,50 @@
+id: datadog_e2e_hosts
+namespace: hq.datadog.e2e
+tasks:
+- filter: env:prod
+  includeMutedHostsData: true
+  maxResults: 10000
+  fetchType: FETCH
+  id: list
+  type: io.kestra.plugin.datadog.hosts.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/hosts.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.count == 1 }}'
+- hostName: worker-01
+  duration: PT30M
+  message: e2e fixture
+  id: mute
+  type: io.kestra.plugin.datadog.hosts.Mute
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/hosts.Mute
+- id: mute_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.mute.action == "Muted" }}'
+  - '{{ outputs.mute.found == true }}'
+- id: totals
+  type: io.kestra.plugin.datadog.hosts.Totals
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/hosts.Totals
+- id: totals_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.totals.totalActive == 2 }}'
+- hostName: worker-01
+  ignoreNotFound: true
+  id: unmute
+  type: io.kestra.plugin.datadog.hosts.Unmute
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/hosts.Unmute
+- id: unmute_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.unmute.action == "Unmuted" }}'
+  - '{{ outputs.unmute.found == true }}'

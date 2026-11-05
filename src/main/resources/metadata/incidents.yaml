@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.incidents
+name: "incidents"
+title: "Datadog incidents"
+description: "Run incident response from a flow."
+body: "Preview incident creation, read and search incidents then update or delete one incident by id."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

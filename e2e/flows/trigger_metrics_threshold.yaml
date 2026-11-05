@@ -1,0 +1,18 @@
+id: datadog_e2e_metrics_threshold
+namespace: hq.datadog.e2e
+triggers:
+- query: avg:system.cpu.user{env:prod}
+  threshold: 80
+  comparison: GT
+  lookback: PT5M
+  interval: PT1S
+  id: watch
+  type: io.kestra.plugin.datadog.metrics.Threshold
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/triggers/metrics.Threshold
+tasks:
+- id: assert_trigger
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ trigger.value is defined }}'

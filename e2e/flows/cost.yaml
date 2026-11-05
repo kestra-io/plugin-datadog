@@ -1,0 +1,26 @@
+id: datadog_e2e_cost
+namespace: hq.datadog.e2e
+tasks:
+- startMonth: 2026-01
+  view: SUB_ORG
+  id: estimated
+  type: io.kestra.plugin.datadog.cost.Estimated
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cost.Estimated
+- id: estimated_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.estimated.count == 1 }}'
+- startMonth: 2026-01
+  endMonth: 2026-03
+  fetchType: FETCH
+  id: historical
+  type: io.kestra.plugin.datadog.cost.Historical
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/cost.Historical
+- id: historical_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.historical.count == 1 }}'

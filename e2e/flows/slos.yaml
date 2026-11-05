@@ -1,0 +1,96 @@
+id: datadog_e2e_slos
+namespace: hq.datadog.e2e
+tasks:
+- sloId: 0123456789abcdef0123456789abcdef
+  from: 100
+  to: 200
+  target: 99.9
+  minRemainingBudget: 20
+  id: check
+  type: io.kestra.plugin.datadog.slos.Check
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.Check
+- id: check_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.check.sli == 99.95 }}'
+- name: Orders availability
+  sloType: METRIC
+  numerator: sum:orders.good{*}.as_count()
+  denominator: sum:orders.total{*}.as_count()
+  thresholds:
+  - timeframe: SEVEN_DAYS
+    target: 99.9
+  id: create
+  type: io.kestra.plugin.datadog.slos.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.slos[0].id == "0123456789abcdef0123456789abcdef" }}'
+- sloId: 0123456789abcdef0123456789abcdef
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.slos.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.deleted == true }}'
+- sloId: 0123456789abcdef0123456789abcdef
+  id: get
+  type: io.kestra.plugin.datadog.slos.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.slo.id == "0123456789abcdef0123456789abcdef" }}'
+- sloId: 0123456789abcdef0123456789abcdef
+  from: 100
+  to: 200
+  fetchType: FETCH
+  id: history
+  type: io.kestra.plugin.datadog.slos.History
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.History
+- id: history_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.history.history.overall.sli_value == 99.95 }}'
+- tagsQuery: env:prod
+  fetchType: FETCH
+  id: list
+  type: io.kestra.plugin.datadog.slos.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- sloId: 0123456789abcdef0123456789abcdef
+  name: Orders availability
+  sloType: MONITOR
+  monitorIds:
+  - 12345
+  - 3000000000
+  thresholds:
+  - timeframe: THIRTY_DAYS
+    target: 99.9
+  id: update
+  type: io.kestra.plugin.datadog.slos.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/slos.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.slos[0].id == "0123456789abcdef0123456789abcdef" }}'

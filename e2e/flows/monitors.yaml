@@ -1,0 +1,146 @@
+id: datadog_e2e_monitors
+namespace: hq.datadog.e2e
+tasks:
+- plan: true
+  definitions: "- name: CPU usage\n  type: query alert\n  query: \"avg(last_5m):avg:system.cpu.user{env:prod} > 80\"\n  tags:\n\
+    \    - managed_by:kestra:cpu-prod\n    - env:prod\n  options:\n    thresholds:\n      critical: 80\n"
+  id: apply_plan
+  type: io.kestra.plugin.datadog.monitors.Apply
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Apply-plan
+- id: apply_plan_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.apply_plan.plan == true }}'
+- plan: false
+  definitions: "- name: CPU usage\n  type: query alert\n  query: \"avg(last_5m):avg:system.cpu.user{env:prod} > 80\"\n  tags:\n\
+    \    - managed_by:kestra:cpu-prod\n    - env:prod\n  options:\n    thresholds:\n      critical: 80\n"
+  id: apply
+  type: io.kestra.plugin.datadog.monitors.Apply
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Apply
+- id: apply_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.apply.results[0].action == "CREATED" }}'
+- monitorIds:
+  - 12345
+  - 3000000000
+  id: candelete
+  type: io.kestra.plugin.datadog.monitors.CanDelete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.CanDelete
+- id: candelete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.candelete.result.data.ok[0] == 12345 }}'
+  - '{{ outputs.candelete.result.data.ok[1] == 3000000000 }}'
+- resource: NOTIFICATION_RULES
+  fetchType: FETCH
+  id: configuration
+  type: io.kestra.plugin.datadog.monitors.Configuration
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Configuration
+- id: configuration_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.configuration.size == 0 }}'
+- definition:
+    type: query alert
+    name: CPU usage
+    query: avg(last_5m):avg:system.cpu.user{env:prod} > 80
+  id: create
+  type: io.kestra.plugin.datadog.monitors.Create
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Create
+- id: create_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.create.monitor.id == 12345 }}'
+- monitorId: 12345
+  ignoreNotFound: true
+  id: delete
+  type: io.kestra.plugin.datadog.monitors.Delete
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Delete
+- id: delete_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.delete.deleted == true }}'
+- monitorTags:
+  - env:prod
+  format: YAML
+  id: export
+  type: io.kestra.plugin.datadog.monitors.Export
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Export
+- id: export_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.export.uri is defined }}'
+- monitorId: 12345
+  withDowntimes: true
+  id: get
+  type: io.kestra.plugin.datadog.monitors.Get
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Get
+- id: get_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.get.monitor.id == 12345 }}'
+- monitorTags:
+  - env:prod
+  groupStates:
+  - alert
+  id: list
+  type: io.kestra.plugin.datadog.monitors.List
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.List
+- id: list_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.list.size == 1 }}'
+- query: tag:env:prod status:alert
+  fetchType: FETCH
+  id: search
+  type: io.kestra.plugin.datadog.monitors.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'
+- monitorId: 12345
+  definition:
+    message: Contact @team-platform
+  id: update
+  type: io.kestra.plugin.datadog.monitors.Update
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Update
+- id: update_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.update.monitor.id == 12345 }}'
+- definition:
+    type: query alert
+    query: avg(last_5m):avg:system.cpu.user{env:prod} > 80
+  id: validate
+  type: io.kestra.plugin.datadog.monitors.Validate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/monitors.Validate
+- id: validate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.validate.valid == true }}'

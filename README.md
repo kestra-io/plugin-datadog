@@ -37,46 +37,119 @@
 
 # Kestra Datadog Plugin
 
-## Why
+Run Datadog from a flow. Mark a deployment, mute the right monitors for thirty minutes, wait for a synthetic test and stop the release when the SLO budget is low. All with Kestra secrets, no scripts and no hand-built HTTP calls.
 
-- What user problem does this solve? Teams need a concrete starting point for building and validating new Kestra plugins without recreating the same project scaffolding from scratch.
-- Why would a team adopt this plugin in a workflow? It gives plugin authors a ready-made reference repo they can adapt alongside their own build, test, and publishing workflow.
-- What operational/business outcome does it enable? It shortens plugin delivery time, reduces setup mistakes, and makes internal or partner plugin development more repeatable.
+The plugin reaches **every one of the 1,941 operations** of the Datadog API (v1 and v2) through one validated task and gives the jobs people actually automate their own typed tasks with real validation, paging and safe defaults.
 
-## What
+## What you can do from a flow
 
-- Provides plugin components under `io.kestra.plugin.datadog`.
-- Includes classes such as `Example`, `Trigger`.
+**Hold a release until Datadog says it is healthy.** Run synthetic tests, wait for the batch to finish and fail with the failing test and location.
 
-## Running Kestra locally with this plugin
-
-1. Build the shadow JAR: `./gradlew shadowJar`. The output lands in `build/libs/`.
-2. Run `docker compose up`. `docker-compose.yml` builds `kestra/kestra:latest` and mounts `build/libs/` to `/app/plugins/`, so Kestra picks up the jar on startup.
-3. Kestra UI is available at [localhost:8080](http://localhost:8080).
-
-### Plugins folder gotcha
-
-Mounting a host folder onto `/app/plugins/` replaces the container's plugins directory rather than adding to it. Core plugins (the ones logged as `Registered N core plugins`) are compiled into Kestra itself and aren't affected, but any additional plugin normally bundled in the base image under `/app/plugins/` (e.g. the Python script plugin) gets hidden once the mount is in place. If a flow you're testing depends on another plugin, copy its jar into `build/libs/` too before starting the container.
-
-### JFR startup error
-
-On some hosts, `command: server local` fails with:
+```yaml
+- id: smoke
+  type: io.kestra.plugin.datadog.synthetics.Run
+  apiKey: "{{ secret('DATADOG_API_KEY') }}"
+  appKey: "{{ secret('DATADOG_APP_KEY') }}"
+  testIds: [abc-def-ghi]
+  maxWait: PT10M
 ```
-Unable to create JFR repository directory using base location (/tmp)
+
+**Gate on an error budget.** Fail the flow when the remaining budget of an SLO is below a limit.
+
+```yaml
+- id: budget
+  type: io.kestra.plugin.datadog.slos.Check
+  sloId: 0123456789abcdef0123456789abcdef
+  target: 99.9
+  minRemainingBudget: 20
 ```
-`docker-compose.yml` works around this by mounting `/tmp` as `tmpfs`. If you build your own compose file or run Kestra via `docker run`, add the same workaround, e.g. `-v /tmp:/tmp` or `--tmpfs /tmp`. Tracked upstream in [kestra-io/kestra#17405](https://github.com/kestra-io/kestra/issues/17405).
+
+**Keep monitors in Git.** Apply monitor definitions from YAML. The task reports what it would create or change, shows a field-level diff and a second run changes nothing.
+
+```yaml
+- id: apply
+  type: io.kestra.plugin.datadog.monitors.Apply
+  dryRun: true
+  definitions: |
+    - name: CPU usage
+      type: query alert
+      query: "avg(last_5m):avg:system.cpu.user{env:prod} > 80"
+      tags: [managed_by:kestra:cpu-prod]
+```
+
+**Mute for a deployment, then unmute.** A downtime always needs an end or a duration, so a failed flow cannot leave monitors muted for good.
+
+**Stop a flow on bad telemetry.** Count error logs or spans in a window and branch on the result.
+
+```yaml
+- id: gate
+  type: io.kestra.plugin.datadog.logs.Count
+  query: "service:orders status:error"
+  from: now-15m
+  threshold: 0
+  failOnBreach: true
+```
+
+**Page a person, open an incident, post a status update.** `oncall.Page` and the incident tasks can preview the exact request first.
+
+**React when Datadog changes.** Triggers start a flow when a monitor enters a watched state, an SLO budget runs low, a log count crosses a limit or a metric crosses a threshold. Each keeps a cursor, so an alert that stays red starts one execution.
+
+Every example above is validated against a real Kestra 2.0.6 in the test suite.
+
+## Where each part lives
+
+| You want to | Package |
+|---|---|
+| Monitors, downtimes, monitor notification rules | `monitors`, `downtimes` |
+| Dashboards, SLOs, notebooks | `dashboards`, `slos` |
+| Synthetic tests and deployment gates | `synthetics`, `deployments` |
+| Incidents, cases, paging, status pages | `incidents`, `cases`, `oncall`, `statuspages` |
+| Search logs, spans, RUM, audit and CI data | `logs`, `spans`, `rum`, `audit`, `civisibility`, `events` |
+| Metrics, hosts, usage and cost | `metrics`, `hosts`, `usage`, `cost`, `ddsql` |
+| Users, teams, keys, security signals, service catalog | `users`, `teams`, `keys`, `security`, `catalog` |
+| Anything else in the Datadog API | `api.Call`, `api.Operations` |
+
+The full list of tasks, grouped by package, is in [`docs/TASKS.md`](docs/TASKS.md).
+
+## How much of Datadog this covers
+
+The generated [coverage report](docs/COVERAGE.md) maps each Datadog operation to the task that implements it.
+
+- 1,941 operations in the official API description.
+- 122 of them have a typed task. The typed tasks are the ones a flow author reaches for: they validate input, page results, redact secrets and offer previews.
+- The other 1,819 are reachable through `api.Call`. It checks the operation, the path and query parameters and the required body against a built-in catalog before it sends anything and `api.Operations` searches that catalog.
+
+## Safe by default
+
+- Anything that deletes, disables, revokes or overwrites works on **one named object**. There is no "delete everything matching".
+- Downtimes and host mutes need an end or a duration.
+- Tasks that apply a definition can run as a preview first and show the exact changes.
+- Key values, tokens and webhook secrets are redacted from outputs unless you set `includeSecrets: true`. Keys are never written to a log.
+- Tasks that page people or open incidents can preview the exact request before sending it.
+
+## Authentication
+
+Every task needs `apiKey`. Tasks that read data or manage things also need `appKey`, created with the scopes that task needs (each task page lists them). Set `site` to the domain of your organization (`datadoghq.com` by default, `datadoghq.eu`, `us3.datadoghq.com` and so on). A key only works on the site that issued it.
+
+## Build and test
+
+```sh
+./gradlew check        # unit tests, contract tests and the documentation lint
+./gradlew shadowJar    # build/libs/plugin-datadog-*.jar
+python3 e2e/run.py --jar build/libs/plugin-datadog-1.0.0-SNAPSHOT.jar --artifact-commit "$(git rev-parse HEAD)" --evidence /tmp/evidence --include-api
+```
+
+The last full run: 3,896 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API and 156 example flows validated.
+
+## What has not been verified
+
+No test has run against a live Datadog organization. The mock server follows the official OpenAPI description and a contract check compares requests against it for the highest-risk tasks (14 test classes so far; [details](docs/CONTRACT-TESTS.md)). Rate-limit behavior, permissions and server-side validation on a real account are covered only by that mock. Known issues from the integration audit are in [`docs/INTEGRATION-FINDINGS.md`](docs/INTEGRATION-FINDINGS.md).
 
 ## Documentation
-* Full documentation can be found under: [kestra.io/docs](https://kestra.io/docs)
-* Documentation for developing a plugin is included in the [Plugin Developer Guide](https://kestra.io/docs/plugin-developer-guide/)
 
+- [Kestra plugin documentation](https://kestra.io/docs/plugin-developer-guide)
+- [Datadog API reference](https://docs.datadoghq.com/api/latest/)
 
 ## License
+
 Apache 2.0 © [Kestra Technologies](https://kestra.io)
-
-
-## Stay up to date
-
-We release new versions every month. Give the [main repository](https://github.com/kestra-io/kestra) a star to stay up to date with the latest releases and get notified about future updates.
-
-![Star the repo](https://kestra.io/star.gif)

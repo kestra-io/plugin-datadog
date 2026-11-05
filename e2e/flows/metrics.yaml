@@ -1,0 +1,78 @@
+id: datadog_e2e_metrics
+namespace: hq.datadog.e2e
+tasks:
+- queries:
+    a: avg:system.cpu.user{env:prod}
+  threshold: 80
+  comparison: GT
+  lookback: PT5M
+  id: check
+  type: io.kestra.plugin.datadog.metrics.Check
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/metrics.Check
+- id: check_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.check.value == 42 }}'
+  - '{{ outputs.check.breached == false }}'
+- query: avg:trace.http.request.errors{service:orders}.as_rate()
+  lookback: PT15M
+  id: query
+  type: io.kestra.plugin.datadog.metrics.Query
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/metrics.Query
+- id: query_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.query.status == "ok" }}'
+- queries:
+    a: sum:requests.errors{env:prod}.as_count()
+    b: sum:requests.total{env:prod}.as_count()
+  formulas:
+  - a / b * 100
+  aggregator: SUM
+  lookback: PT15M
+  id: queryscalar
+  type: io.kestra.plugin.datadog.metrics.QueryScalar
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/metrics.QueryScalar
+- id: queryscalar_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.queryscalar.columnCount == 1 }}'
+- queries:
+    a: avg:system.cpu.user{env:prod}
+    b: avg:system.cpu.system{env:prod}
+  formulas:
+  - a + b
+  queryInterval: 60000
+  lookback: PT1H
+  fetchType: FETCH
+  id: querytimeseries
+  type: io.kestra.plugin.datadog.metrics.QueryTimeseries
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/metrics.QueryTimeseries
+- id: querytimeseries_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.querytimeseries.seriesCount == 1 }}'
+- metric: kestra.orders.rows_loaded
+  value: 1250
+  metricType: GAUGE
+  tags:
+  - env:prod
+  - e2e
+  id: submit
+  type: io.kestra.plugin.datadog.metrics.Submit
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/metrics.Submit
+- id: submit_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.submit.points == 1 }}'
+  - '{{ outputs.submit.series == 1 }}'

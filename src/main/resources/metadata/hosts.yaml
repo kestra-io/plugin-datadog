@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.hosts
+name: "hosts"
+title: "Datadog hosts"
+description: "Host inventory and maintenance."
+body: "List hosts, read active totals and mute one host until an explicit end."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

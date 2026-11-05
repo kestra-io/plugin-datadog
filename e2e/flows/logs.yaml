@@ -1,0 +1,62 @@
+id: datadog_e2e_logs
+namespace: hq.datadog.e2e
+tasks:
+- query: status:error
+  compute:
+  - aggregation: COUNT
+  groupBy:
+  - facet: service
+    limit: 10
+  id: aggregate
+  type: io.kestra.plugin.datadog.logs.Aggregate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/logs.Aggregate
+- id: aggregate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.aggregate.size == 1 }}'
+- query: service:orders status:error
+  from: now-15m
+  threshold: 10
+  failOnBreach: true
+  id: count
+  type: io.kestra.plugin.datadog.logs.Count
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/logs.Count
+- id: count_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.count.count == 1 }}'
+  - '{{ outputs.count.breached == false }}'
+- query: service:orders status:error
+  from: now-15m
+  maxResults: 50
+  id: search
+  type: io.kestra.plugin.datadog.logs.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/logs.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'
+- message: e2e fixture
+  service: orders-pipeline
+  source: kestra
+  tags:
+  - env:prod
+  attributes:
+    execution_id: e2e
+    rows: 1250
+  intakeUrl: __MOCK_URL__/scenarios/logs.Send
+  id: send
+  type: io.kestra.plugin.datadog.logs.Send
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/logs.Send
+- id: send_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.send.sent == 1 }}'

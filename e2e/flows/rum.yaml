@@ -1,0 +1,29 @@
+id: datadog_e2e_rum
+namespace: hq.datadog.e2e
+tasks:
+- query: '@type:error'
+  compute:
+  - aggregation: COUNT
+    computeType: TIMESERIES
+    interval: 1m
+  id: aggregate
+  type: io.kestra.plugin.datadog.rum.Aggregate
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/rum.Aggregate
+- id: aggregate_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.aggregate.size == 1 }}'
+- query: '@type:error'
+  from: now-15m
+  fetchType: FETCH
+  id: search
+  type: io.kestra.plugin.datadog.rum.Search
+  apiKey: e2e-api-key
+  appKey: e2e-app-key
+  apiUrl: __MOCK_URL__/scenarios/rum.Search
+- id: search_assert
+  type: io.kestra.plugin.core.execution.Assert
+  conditions:
+  - '{{ outputs.search.size == 1 }}'

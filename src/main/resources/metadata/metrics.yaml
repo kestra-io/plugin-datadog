@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.metrics
+name: "metrics"
+title: "Datadog metrics"
+description: "Metric submission, formula queries and threshold automation."
+body: "Submit gauges, counts and rates. Query metric formulas, gate flows on scalar thresholds and react to crossings with a re-arming trigger."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

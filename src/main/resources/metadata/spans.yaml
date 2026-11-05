@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.spans
+name: "spans"
+title: "Datadog spans"
+description: "Search, aggregate and count retained APM spans."
+body: "Export spans as ION or compare counts with a workflow threshold."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.downtimes
+name: "downtimes"
+title: "Datadog downtimes"
+description: "Schedule, inspect, update and cancel Datadog v2 downtimes."
+body: "Mute selected monitors for a finite window. Audit active downtimes and use a finally task to cancel maintenance windows after work succeeds or fails."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
