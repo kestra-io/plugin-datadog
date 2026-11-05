@@ -5,7 +5,6 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -16,7 +15,9 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
+import java.net.URI;
 
+/** Datadog operationId: ListMonitors. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -60,7 +61,7 @@ import java.util.Map;
         )
     }
 )
-public class List extends AbstractDatadogTask implements RunnableTask<List.Output> {
+public class List extends AbstractMonitorTask implements RunnableTask<List.Output> {
     private static final int DEFAULT_MAX = 1000;
 
     @Schema(title = "Name filter", description = "Returns the monitors whose name contains this text.")
@@ -78,6 +79,9 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @Schema(title = "Maximum number of monitors", description = "Stops after this many monitors, between 1 and 10000.", defaultValue = "1000")
     private Property<Integer> maxMonitors;
 
+    @Schema(title = "Store results", description = "Write monitors to an ION file instead of returning them inline.")
+    private Property<Boolean> store;
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         int limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
@@ -91,10 +95,13 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         Monitors.join(runContext.render(this.monitorTags).asList(String.class)).ifPresent(value -> params.put("monitor_tags", value));
         Monitors.join(runContext.render(this.groupStates).asList(String.class)).ifPresent(value -> params.put("group_states", value));
 
-        java.util.List<Map<String, Object>> monitors = Monitors.collect(client(runContext, true), params, limit);
+        boolean include = includeSecrets(runContext);
+        boolean storage = runContext.render(store).as(Boolean.class).orElse(false);
+        java.util.List<Map<String, Object>> monitors = Monitors.collect(client(runContext, true), params, limit).stream()
+            .map(row -> MonitorIO.redactMap(row, include)).toList();
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());
-        return Output.builder().monitors(monitors).size(monitors.size()).build();
+        return Output.builder().monitors(storage ? null : monitors).uri(storage ? MonitorIO.store(runContext, monitors, false) : null).size(monitors.size()).build();
     }
 
     @Builder
@@ -105,5 +112,8 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
 
         @Schema(title = "Number of monitors")
         private final Integer size;
+
+        @Schema(title = "Result file URI", description = "Set when store is true.")
+        private final URI uri;
     }
 }

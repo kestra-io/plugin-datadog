@@ -27,6 +27,9 @@ final class Monitors {
                 throw new IllegalStateException("Datadog returned an unexpected answer for the monitor list: a JSON array was expected");
             }
             for (Object row : rows) {
+                if (!(row instanceof Map<?, ?>)) {
+                    throw new IllegalStateException("Datadog returned a non-object in the monitor list");
+                }
                 if (row instanceof Map<?, ?> raw && monitors.size() < limit) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> monitor = (Map<String, Object>) raw;
