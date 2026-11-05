@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.api
+name: "api"
+title: "Datadog API"
+description: "Discover and call Datadog API operations."
+body: "Search the pinned operation catalog and call an operation with validated parameters."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
