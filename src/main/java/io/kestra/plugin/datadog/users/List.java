@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.users;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,7 +11,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 /** Datadog operationId: v2:ListUsers. */
 @SuperBuilder
@@ -29,11 +29,12 @@ import java.util.Map;
     """))
 public class List extends PagedTask {
     @Schema(title = "User filter", description = "Datadog's filter for user names, handles or emails.")
+    @PluginProperty(group = "processing")
     private Property<String> filter;
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Map<String, Object> params = new LinkedHashMap<>();
+        var params = new LinkedHashMap<String, Object>();
         context.render(filter).as(String.class).ifPresent(value -> params.put("filter", value));
         return collect(context, "/api/v2/users", params);
     }

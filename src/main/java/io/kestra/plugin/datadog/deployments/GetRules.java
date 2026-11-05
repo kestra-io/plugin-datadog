@@ -2,9 +2,10 @@ package io.kestra.plugin.datadog.deployments;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogFetch;
@@ -18,9 +19,9 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.net.URI;
 
 /** Datadog operationId: v2:GetDeploymentGateRules. */
 @SuperBuilder
@@ -42,19 +43,22 @@ import java.net.URI;
 public class GetRules extends AbstractDatadogTask implements RunnableTask<GetRules.Output> {
     @NotNull
     @Schema(title = "Gate ID")
+    @PluginProperty(group = "main")
     private Property<String> gateId;
 
     @Schema(title = "Fetch type", description = "FETCH returns rules, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only size.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType;
 
     @Schema(title = "Include sensitive values", description = "Return credential fields and URLs without redaction. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String gate = Deployments.id(context.render(gateId).as(String.class).orElse(null), "gateId");
-            var answer = client.get("/api/v2/deployment_gates/" + gate + "/rules", Map.of()).map();
+            var rGate = Deployments.id(context.render(gateId).as(String.class).orElse(null), "gateId");
+            var answer = client.get("/api/v2/deployment_gates/" + rGate + "/rules", Map.of()).map();
             var data = Deployments.object(answer.get("data"), "gate rules data");
             var attributes = Deployments.object(data.get("attributes"), "gate rules attributes");
             if (!(attributes.get("rules") instanceof List<?> rows)) {

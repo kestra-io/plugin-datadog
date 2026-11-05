@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -15,20 +16,22 @@ import lombok.experimental.SuperBuilder;
 public abstract class AbstractCount extends AbstractWindow {
     @NotNull
     @Schema(title = "Threshold", description = "Nonnegative count boundary. Breached only when count is strictly greater than this value.")
+    @PluginProperty(group = "main")
     private Property<Long> threshold;
 
     @Builder.Default
     @Schema(title = "Fail on breach", description = "Fail the task when the count exceeds threshold. Otherwise return count and breached.", defaultValue = "false")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnBreach = Property.ofValue(false);
 
     protected Output count(RunContext context, boolean spans) throws Exception {
         try (var client = client(context, true)) {
-            long boundary = Counts.threshold(context.render(threshold).as(Long.class).orElse(null));
+            var rBoundary = Counts.threshold(context.render(threshold).as(Long.class).orElse(null));
             var filter = filter(context);
-            long count = Counts.query(client, filter, spans);
-            boolean breached = Counts.breached(count, boundary);
+            var count = Counts.query(client, filter, spans);
+            var breached = Counts.breached(count, rBoundary);
             if (breached && context.render(failOnBreach).as(Boolean.class).orElse(false)) {
-                throw new IllegalStateException("Datadog count " + count + " exceeds threshold " + boundary);
+                throw new IllegalStateException("Datadog count " + count + " exceeds threshold " + rBoundary);
             }
             return Output.builder().count(count).breached(breached).build();
         }

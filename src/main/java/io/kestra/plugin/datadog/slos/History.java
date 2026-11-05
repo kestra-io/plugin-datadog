@@ -1,12 +1,14 @@
 package io.kestra.plugin.datadog.slos;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -16,8 +18,8 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 /** Datadog operationId: GetSLOHistory. */
 @SuperBuilder
@@ -41,28 +43,31 @@ import java.util.List;
     """))
 public class History extends AbstractWindowTask implements RunnableTask<History.Output> {
     @Schema(title = "Target percentage", description = "Optional history target, strictly between 0 and 100. Sent as the target query parameter.")
+    @PluginProperty(group = "main")
     private Property<Double> target;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in history attributes. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = context.render(getSloId()).as(String.class).orElse(null);
-            Slos.path(id);
-            Long from = context.render(getFrom()).as(Long.class).orElse(null);
-            Long to = context.render(getTo()).as(Long.class).orElse(null);
-            Slos.window(from, to);
-            Double target = context.render(this.target).as(Double.class).orElse(null);
-            if (target != null) {
-                Slos.target(target);
+            var rId = context.render(getSloId()).as(String.class).orElse(null);
+            Slos.path(rId);
+            var rFrom = context.render(getFrom()).as(Long.class).orElse(null);
+            var rTo = context.render(getTo()).as(Long.class).orElse(null);
+            Slos.window(rFrom, rTo);
+            var rTarget = context.render(this.target).as(Double.class).orElse(null);
+            if (rTarget != null) {
+                Slos.target(rTarget);
             }
-            boolean corrections = context.render(getApplyCorrections()).as(Boolean.class).orElse(true);
-            var history = Slos.history(client, id, from, to, target, corrections);
-            history = io.kestra.plugin.datadog.monitors.MonitorIO.redactMap(history, context.render(includeSecrets).as(Boolean.class).orElse(false));
+            var rCorrections = context.render(getApplyCorrections()).as(Boolean.class).orElse(true);
+            var history = Slos.history(client, rId, rFrom, rTo, rTarget, rCorrections);
+            history = MonitorIO.redactMap(history, context.render(includeSecrets).as(Boolean.class).orElse(false));
             var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), List.of(history));
             return Output.builder().history(result.rows() == null ? null : result.rows().getFirst()).row(result.row()).uri(result.uri()).size(result.size()).build();
         }

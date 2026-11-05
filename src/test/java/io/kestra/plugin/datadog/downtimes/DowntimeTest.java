@@ -1,8 +1,10 @@
 package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.property.Property;
-import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.core.utils.IdUtils;
+import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -17,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DowntimeTest extends AbstractDatadogTest {
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void assertContracts() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:CreateDowntime", "v2:CancelDowntime");
+        OpenApiContract.assertRequests(server.requests, "v2:CreateDowntime", "v2:CancelDowntime");
     }
 
     private Create.CreateBuilder<?, ?> create() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CreateDowntime").assertResponse(200,
+        OpenApiContract.of("v2:CreateDowntime").assertResponse(200,
             "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         server.reply("POST", "/api/v2/downtime", 200, "{\"data\":{\"id\":\"dt-1\",\"type\":\"downtime\",\"attributes\":{\"status\":\"active\"}}}");
         return Create.builder()
@@ -42,8 +44,8 @@ class DowntimeTest extends AbstractDatadogTest {
 
     @Test
     void createsADowntimeOnMonitorTagsForAGivenDuration() throws Exception {
-        Instant before = Instant.now();
-        Create.Output output = create()
+        var before = Instant.now();
+        var output = create()
             .monitorTags(Property.ofValue(List.of("service:orders")))
             .duration(Property.ofValue(Duration.ofMinutes(30)))
             .message(Property.ofValue("deploy"))
@@ -57,16 +59,16 @@ class DowntimeTest extends AbstractDatadogTest {
         assertEquals(APP_KEY, request.header("DD-APPLICATION-KEY"));
         assertEquals("downtime", ((Map<?, ?>) request.json().get("data")).get("type"));
 
-        Map<String, Object> attributes = attributes();
+        var attributes = attributes();
         assertEquals("env:prod AND service:orders", attributes.get("scope"));
         assertEquals(Map.of("monitor_tags", List.of("service:orders")), attributes.get("monitor_identifier"));
         assertEquals("deploy", attributes.get("message"));
         assertEquals("Europe/Paris", attributes.get("display_timezone"));
         assertEquals(true, attributes.get("mute_first_recovery_notification"));
         @SuppressWarnings("unchecked")
-        Map<String, Object> schedule = (Map<String, Object>) attributes.get("schedule");
+        var schedule = (Map<String, Object>) attributes.get("schedule");
         assertFalse(schedule.containsKey("start"), "it starts now when no start is given");
-        Instant end = Instant.parse((String) schedule.get("end"));
+        var end = Instant.parse((String) schedule.get("end"));
         assertTrue(end.isAfter(before.plus(Duration.ofMinutes(29))) && end.isBefore(Instant.now().plus(Duration.ofMinutes(31))));
 
         assertEquals("dt-1", output.getDowntimeId());
@@ -81,14 +83,14 @@ class DowntimeTest extends AbstractDatadogTest {
             .end(Property.ofValue(Instant.parse("2026-01-01T11:00:00Z")))
             .build().run(runContext());
 
-        Map<String, Object> attributes = attributes();
+        var attributes = attributes();
         assertEquals(Map.of("monitor_id", 42), attributes.get("monitor_identifier"));
         assertEquals(Map.of("start", "2026-01-01T10:00:00Z", "end", "2026-01-01T11:00:00Z"), attributes.get("schedule"));
     }
 
     @Test
     void aDurationRunsFromTheStart() throws Exception {
-        Create.Output output = create().monitorId(Property.ofValue(1L))
+        var output = create().monitorId(Property.ofValue(1L))
             .start(Property.ofValue(Instant.parse("2026-01-01T10:00:00Z")))
             .duration(Property.ofValue(Duration.ofHours(2)))
             .build().run(runContext());
@@ -125,10 +127,10 @@ class DowntimeTest extends AbstractDatadogTest {
 
     @Test
     void cancelsADowntime() throws Exception {
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CancelDowntime").assertResponse(204, "");
+        OpenApiContract.of("v2:CancelDowntime").assertResponse(204, "");
         server.reply("DELETE", "/api/v2/downtime/dt-1", 204, "");
 
-        Cancel.Output output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
+        var output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("dt-1")).build().run(runContext());
 
@@ -150,7 +152,7 @@ class DowntimeTest extends AbstractDatadogTest {
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> strict.run(runContext()));
         assertTrue(error.getMessage().contains("404"), error.getMessage());
 
-        Cancel.Output output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
+        var output = Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .downtimeId(Property.ofValue("gone")).ignoreNotFound(Property.ofValue(true)).build().run(runContext());
         assertFalse(output.getCancelled());

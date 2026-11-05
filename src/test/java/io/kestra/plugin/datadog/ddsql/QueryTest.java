@@ -1,7 +1,7 @@
 package io.kestra.plugin.datadog.ddsql;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -9,9 +9,12 @@ import io.kestra.plugin.datadog.DatadogClient;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.function.Executable;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -53,7 +56,7 @@ class QueryTest extends AbstractDatadogTest {
         assertEquals(2, attributes.get("row_limit"));
         assertEquals(FROM.toEpochMilli(), ((Map<?, ?>) attributes.get("time")).get("from_timestamp"));
         assertEquals(FROM.plusSeconds(3600).toEpochMilli(), ((Map<?, ?>) attributes.get("time")).get("to_timestamp"));
-        for (int i = 1; i <= 2; i++) {
+        for (var i = 1; i <= 2; i++) {
             var fetchData = (Map<?, ?>) server.requests.get(i).json().get("data");
             assertEquals("ddsql_query_fetch_request", fetchData.get("type"));
             assertEquals(i == 1 ? "first+/=" : "second+/=", ((Map<?, ?>) fetchData.get("attributes")).get("query_id"));
@@ -90,7 +93,7 @@ class QueryTest extends AbstractDatadogTest {
         var context = runContext();
         var stored = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         try (var input = context.storage().getFile(stored.getUri())) {
-            assertFalse(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).contains("fixture-only-credential"));
+            assertFalse(new String(input.readAllBytes(), StandardCharsets.UTF_8).contains("fixture-only-credential"));
         }
     }
 
@@ -104,7 +107,7 @@ class QueryTest extends AbstractDatadogTest {
 
     @Test
     void malformedLifecycleOrColumnsFail() {
-        for (String attributes : java.util.List.of("{\"state\":\"unknown\"}", "{\"state\":\"running\"}",
+        for (var attributes : List.of("{\"state\":\"unknown\"}", "{\"state\":\"running\"}",
             "{\"state\":\"completed\"}", "{\"state\":\"completed\",\"columns\":[{\"name\":\"a\",\"type\":\"BIGINT\",\"values\":[1]},{\"name\":\"b\",\"type\":\"BIGINT\",\"values\":[]}]}",
             "{\"state\":\"completed\",\"columns\":[{}]}")) {
             server.reply("POST", EXECUTE, 200, response(attributes));
@@ -114,7 +117,7 @@ class QueryTest extends AbstractDatadogTest {
 
     @TestFactory
     Stream<DynamicTest> validatesBeforeCalling() {
-        return Stream.<Map.Entry<String, org.junit.jupiter.api.function.Executable>>of(
+        return Stream.<Map.Entry<String, Executable>>of(
             Map.entry("blank query", () -> task().query(Property.ofValue(" ")).build().run(runContext())),
             Map.entry("missing query", () -> task().query(null).build().run(runContext())),
             Map.entry("zero row limit", () -> task().rowLimit(Property.ofValue(0)).build().run(runContext())),

@@ -7,9 +7,9 @@ record Paging(Style style, String position, String limit, String results, String
     enum Style { CURSOR, OFFSET, NUMBER }
 
     static Paging detect(Catalog.Operation op) {
-        JsonNode hint = op.definition().path("pagination");
+        var hint = op.definition().path("pagination");
         if (op.parameter("query", "page[cursor]") != null) {
-            String limit = op.parameter("query", "page[limit]") != null ? "page[limit]" : "page[size]";
+            var limit = op.parameter("query", "page[limit]") != null ? "page[limit]" : "page[size]";
             return new Paging(Style.CURSOR, "page[cursor]", limit, hint.path("resultsPath").asText("data"), hint.path("cursorPath").asText("meta.page.after"));
         }
         if (op.parameter("query", "page[offset]") != null && op.parameter("query", "page[limit]") != null) {
@@ -22,9 +22,9 @@ record Paging(Style style, String position, String limit, String results, String
     }
 
     static JsonNode at(JsonNode root, String dotted) {
-        JsonNode value = root;
+        var value = root;
         if (dotted == null || dotted.isBlank()) { return value; }
-        for (String part : dotted.split("\\.")) { value = value.path(part); }
+        for (var part : dotted.split("\\.")) { value = value.path(part); }
         return value;
     }
 }

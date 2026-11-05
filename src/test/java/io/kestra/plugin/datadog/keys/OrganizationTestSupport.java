@@ -8,8 +8,10 @@ import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -20,13 +22,13 @@ public abstract class OrganizationTestSupport extends AbstractDatadogTest {
     protected static final String VALUE = "fixture-credential-do-not-log-1234";
     private Object logs;
     private Object root;
-    private final java.util.List<Object> contextLoggers = new java.util.ArrayList<>();
+    private final List<Object> contextLoggers = new ArrayList<>();
 
     @Override
     protected RunContext runContext() {
-        RunContext context = super.runContext();
+        var context = super.runContext();
         try {
-            Object logger = context.logger();
+            var logger = context.logger();
             logger.getClass().getMethod("addAppender", Class.forName("ch.qos.logback.core.Appender")).invoke(logger, logs);
             contextLoggers.add(logger);
         } catch (ReflectiveOperationException e) {
@@ -40,7 +42,7 @@ public abstract class OrganizationTestSupport extends AbstractDatadogTest {
         // Logback is provided by Kestra at runtime rather than on the compile classpath.
         logs = Class.forName("ch.qos.logback.core.read.ListAppender").getConstructor().newInstance();
         logs.getClass().getMethod("start").invoke(logs);
-        root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+        root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         root.getClass().getMethod("addAppender", Class.forName("ch.qos.logback.core.Appender")).invoke(root, logs);
         LoggerFactory.getLogger(getClass()).warn("Organization test log capture active");
     }
@@ -48,20 +50,20 @@ public abstract class OrganizationTestSupport extends AbstractDatadogTest {
     @AfterEach
     void checkLogs() throws Exception {
         root.getClass().getMethod("detachAppender", Class.forName("ch.qos.logback.core.Appender")).invoke(root, logs);
-        for (Object logger : contextLoggers) {
+        for (var logger : contextLoggers) {
             logger.getClass().getMethod("detachAppender", Class.forName("ch.qos.logback.core.Appender")).invoke(logger, logs);
         }
         contextLoggers.clear();
         logs.getClass().getMethod("stop").invoke(logs);
         List<?> events = (List<?>) logs.getClass().getField("list").get(logs);
-        boolean marker = false;
-        for (Object event : events) {
-            String message = (String) event.getClass().getMethod("getFormattedMessage").invoke(event);
+        var marker = false;
+        for (var event : events) {
+            var message = (String) event.getClass().getMethod("getFormattedMessage").invoke(event);
             marker |= message.contains("log capture active");
             assertFalse(message.contains(VALUE), "Response credential reached a log line");
             assertFalse(message.contains(API_KEY), "API credential reached a log line");
             assertFalse(message.contains(APP_KEY), "Application credential reached a log line");
-            Object throwable = event.getClass().getMethod("getThrowableProxy").invoke(event);
+            var throwable = event.getClass().getMethod("getThrowableProxy").invoke(event);
             if (throwable != null) {
                 assertFalse(String.valueOf(throwable.getClass().getMethod("getMessage").invoke(throwable)).contains(VALUE));
             }

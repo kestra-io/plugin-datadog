@@ -1,7 +1,7 @@
 package io.kestra.plugin.datadog.metrics;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -9,6 +9,7 @@ import io.kestra.plugin.datadog.DatadogClient;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.function.Executable;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -140,7 +141,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
 
     @Test
     void emptyScalarAndEmptyColumnsAreNoData() throws Exception {
-        for (String response : List.of(scalar(""), "{\"data\":{\"attributes\":{\"columns\":[]}}}")) {
+        for (var response : List.of(scalar(""), "{\"data\":{\"attributes\":{\"columns\":[]}}}")) {
             server.reply("POST", SCALAR, 200, response);
             assertTrue(checkTask().onNoData(Property.ofValue(Check.OnNoData.NO_DATA)).build().run(runContext()).getNoData());
         }
@@ -148,7 +149,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
 
     @Test
     void groupedOrMultipleColumnAnswersCannotSilentlyPass() {
-        for (String response : List.of(scalar("10,100"),
+        for (var response : List.of(scalar("10,100"),
             "{\"data\":{\"attributes\":{\"columns\":[{\"type\":\"number\",\"values\":[1]},{\"type\":\"number\",\"values\":[2]}]}}}")) {
             server.reply("POST", SCALAR, 200, response);
             assertThrows(IllegalStateException.class, () -> checkTask().onNoData(Property.ofValue(Check.OnNoData.PASS)).build().run(runContext()));
@@ -157,7 +158,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
 
     @Test
     void malformedResponsesFailInsteadOfBecomingNoData() {
-        for (String response : List.of("{}", "{\"data\":{\"attributes\":{}}}", scalar("\"80\""), "{\"errors\":\"invalid query\"}")) {
+        for (var response : List.of("{}", "{\"data\":{\"attributes\":{}}}", scalar("\"80\""), "{\"errors\":\"invalid query\"}")) {
             server.reply("POST", SCALAR, 200, response);
             assertThrows(IllegalStateException.class, () -> checkTask().onNoData(Property.ofValue(Check.OnNoData.PASS)).build().run(runContext()));
         }
@@ -167,7 +168,7 @@ class FormulaQueriesTest extends AbstractDatadogTest {
 
     @TestFactory
     Stream<DynamicTest> validatesBeforeAnyRequest() {
-        return Stream.<Map.Entry<String, org.junit.jupiter.api.function.Executable>>of(
+        return Stream.<Map.Entry<String, Executable>>of(
             Map.entry("missing queries", () -> scalarTask().queries(null).build().run(runContext())),
             Map.entry("empty queries", () -> scalarTask().queries(Property.ofValue(Map.of())).build().run(runContext())),
             Map.entry("blank query", () -> scalarTask().queries(Property.ofValue(Map.of("a", " "))).build().run(runContext())),
@@ -205,10 +206,10 @@ class FormulaQueriesTest extends AbstractDatadogTest {
 
     @Test
     void everyComparisonUsesNumericOrderingIncludingEquality() {
-        BigDecimal threshold = new BigDecimal("80.00");
+        var threshold = new BigDecimal("80.00");
         boolean[][] expected = {{false, false, true}, {false, true, true}, {true, false, false}, {true, true, false}, {false, true, false}, {true, false, true}};
-        for (Comparison comparison : Comparison.values()) {
-            for (int i = 0; i < 3; i++) {
+        for (var comparison : Comparison.values()) {
+            for (var i = 0; i < 3; i++) {
                 assertEquals(expected[comparison.ordinal()][i], comparison.breached(BigDecimal.valueOf(79 + i), threshold), comparison + " at " + i);
             }
         }

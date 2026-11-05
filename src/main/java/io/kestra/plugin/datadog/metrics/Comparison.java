@@ -7,7 +7,7 @@ public enum Comparison {
     GT, GTE, LT, LTE, EQ, NE;
 
     public boolean breached(BigDecimal value, BigDecimal threshold) {
-        int order = value.compareTo(threshold);
+        var order = value.compareTo(threshold);
         return switch (this) {
             case GT -> order > 0;
             case GTE -> order >= 0;

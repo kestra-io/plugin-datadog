@@ -29,7 +29,7 @@ class TelemetryCountTest extends AbstractDatadogTest {
     @TestFactory
     Stream<DynamicTest> countBoundariesAndFailOnBreach() {
         return Stream.of("logs", "spans").map(area -> DynamicTest.dynamicTest(area + " threshold comparison", () -> {
-            for (long count : List.of(9L, 10L, 11L)) {
+            for (var count : List.of(9L, 10L, 11L)) {
                 server.requests.clear();
                 server.reply("POST", TelemetryAggregateTest.path(area), 200, TelemetryAggregateTest.answer(area, String.valueOf(count)));
                 var output = run(builder(area).query(Property.ofValue("status:error")));
@@ -53,7 +53,7 @@ class TelemetryCountTest extends AbstractDatadogTest {
     @TestFactory
     Stream<DynamicTest> validatesEveryCount() {
         return Stream.of("logs", "spans").map(area -> DynamicTest.dynamicTest(area + " count validation", () -> {
-            int before = server.requests.size();
+            var before = server.requests.size();
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).threshold(null)));
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).threshold(Property.ofValue(-1L))));
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).from(Property.ofValue("invalid"))));
@@ -72,15 +72,15 @@ class TelemetryCountTest extends AbstractDatadogTest {
 
     @Test
     void emptyCountsAreZeroAndBadCountsNeverPassTheGate() throws Exception {
-        for (String area : List.of("logs", "spans")) {
-            String path = TelemetryAggregateTest.path(area);
+        for (var area : List.of("logs", "spans")) {
+            var path = TelemetryAggregateTest.path(area);
             server.reply("POST", path, 200, area.equals("spans") ? "{\"data\":[]}" : "{\"data\":{\"buckets\":[]}}");
             var output = run(builder(area).threshold(Property.ofValue(0L)));
             assertEquals(0L, output.getCount());
             assertFalse(output.getBreached());
             server.reply("POST", path, 200, TelemetryAggregateTest.answer(area, "\"12\""));
             assertEquals(12L, run(builder(area)).getCount());
-            for (String value : List.of("-1", "1.5", "9223372036854775808", "null", "\"unknown\"")) {
+            for (var value : List.of("-1", "1.5", "9223372036854775808", "null", "\"unknown\"")) {
                 server.reply("POST", path, 200, TelemetryAggregateTest.answer(area, value));
                 assertThrows(IllegalStateException.class, () -> run(builder(area)));
             }

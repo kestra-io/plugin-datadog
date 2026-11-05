@@ -38,7 +38,7 @@ public class Trigger extends AbstractTriggerTask implements RunnableTask<Trigger
         try (var client = client(context, true)) {
             var body = triggerBody(context, client);
             var answer = client.post("/api/v1/synthetics/tests/trigger/ci", body).map();
-            String batch = Synthetics.id((String) answer.get("batch_id"), "batch_id returned by Datadog");
+            var batch = Synthetics.id((String) answer.get("batch_id"), "batch_id returned by Datadog");
             return Output.builder().batchId(batch)
                 .results(Synthetics.rows(answer.getOrDefault("results", List.of()), "results")).build();
         }

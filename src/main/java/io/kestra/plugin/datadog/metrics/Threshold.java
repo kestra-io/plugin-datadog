@@ -16,7 +16,6 @@ import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.storages.kv.KVMetadata;
 import io.kestra.core.storages.kv.KVStore;
-import io.kestra.core.storages.kv.KVValue;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -68,6 +67,7 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
 
     @Builder.Default
     @Schema(title = "Poll interval", description = "Positive duration between polls. Defaults to PT5M.")
+    @PluginProperty(group = "reliability")
     private final Duration interval = Duration.ofMinutes(5);
 
     @NotNull
@@ -83,85 +83,92 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
     private Property<String> appKey;
 
     @Schema(title = "Datadog site", description = "Organization site. Defaults to datadoghq.com.")
+    @PluginProperty(group = "connection")
     private Property<String> site;
 
     @Schema(title = "API base URL", description = "Optional proxy or test server URL.")
+    @PluginProperty(group = "advanced")
     private Property<String> apiUrl;
 
     @NotNull
     @Schema(title = "Metric query", description = "A metric query returning one scalar value without group-by.")
+    @PluginProperty(group = "main")
     private Property<String> query;
 
     @NotNull
     @Schema(title = "Threshold", description = "Limit in the units returned by the query.")
+    @PluginProperty(group = "main")
     private Property<BigDecimal> threshold;
 
     @Schema(title = "Comparison", description = "Breach predicate. Defaults to GT.")
+    @PluginProperty(group = "main")
     private Property<Comparison> comparison;
 
     @Schema(title = "Time aggregation", description = "Aggregation over the polling window. Defaults to AVG.")
+    @PluginProperty(group = "processing")
     private Property<Aggregator> aggregator;
 
     @Schema(title = "Lookback", description = "Positive duration ending at each poll. Defaults to PT5M.")
+    @PluginProperty(group = "processing")
     private Property<Duration> lookback;
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
-        String expression = runContext.render(query).as(String.class).orElse("");
-        BigDecimal limit = runContext.render(threshold).as(BigDecimal.class)
+        var rExpression = runContext.render(query).as(String.class).orElse("");
+        var rLimit = runContext.render(threshold).as(BigDecimal.class)
             .orElseThrow(() -> new IllegalArgumentException("`threshold` is required"));
-        Comparison predicate = runContext.render(comparison).as(Comparison.class).orElse(Comparison.GT);
-        Aggregator aggregation = runContext.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG);
-        Duration window = runContext.render(lookback).as(Duration.class).orElse(Duration.ofMinutes(5));
-        if (window.isZero() || window.isNegative() || interval == null || interval.isZero() || interval.isNegative()) {
+        var rPredicate = runContext.render(comparison).as(Comparison.class).orElse(Comparison.GT);
+        var rAggregation = runContext.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG);
+        var rWindow = runContext.render(lookback).as(Duration.class).orElse(Duration.ofMinutes(5));
+        if (rWindow.isZero() || rWindow.isNegative() || interval == null || interval.isZero() || interval.isNegative()) {
             throw new IllegalArgumentException("`lookback` and `interval` must be positive");
         }
-        Instant now = Instant.now();
-        var body = FormulaQueries.body(Map.of("a", expression), List.of(), now.minus(window), now, DataSource.METRICS, aggregation, null);
+        var now = Instant.now();
+        var body = FormulaQueries.body(Map.of("a", rExpression), List.of(), now.minus(rWindow), now, DataSource.METRICS, rAggregation, null);
         try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
-        String signature = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
-            JacksonMapper.ofJson().writeValueAsBytes(List.of(expression, limit.stripTrailingZeros().toPlainString(), predicate, aggregation, window.toString(), client.apiBase()))));
-        KVStore kv = runContext.namespaceKv(context.getNamespace());
-        String key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
-        Optional<Boolean> previous = readState(kv, key, signature);
+            var signature = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
+                JacksonMapper.ofJson().writeValueAsBytes(List.of(rExpression, rLimit.stripTrailingZeros().toPlainString(), rPredicate, rAggregation, rWindow.toString(), client.apiBase()))));
+            var kv = runContext.namespaceKv(context.getNamespace());
+            var key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
+            var previous = readState(kv, key, signature);
 
-        BigDecimal value;
-        try {
-            value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
-        } catch (DatadogClient.DatadogException e) {
-            if (e.isTransient()) {
-                runContext.logger().warn("Datadog threshold poll skipped after HTTP {}", e.getStatus());
+            BigDecimal value;
+            try {
+                value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
+            } catch (DatadogClient.DatadogException e) {
+                if (e.isTransient()) {
+                    runContext.logger().warn("Datadog threshold poll skipped after HTTP {}", e.getStatus());
+                    return Optional.empty();
+                }
+                throw e;
+            }
+            if (value == null) {
                 return Optional.empty();
             }
-            throw e;
-        }
-        if (value == null) {
-            return Optional.empty();
-        }
-        var sampledAt = client.serverTime().orElse(null);
-        if (sampledAt == null) {
-            runContext.logger().warn("Datadog threshold poll skipped because the Date header is missing");
-            return Optional.empty();
-        }
-        boolean breached = predicate.breached(value, limit);
-        if (previous.isEmpty() || !breached || previous.get()) {
-            writeState(kv, key, signature, breached, sampledAt);
-            return Optional.empty();
-        }
-        Output output = Output.builder().value(value).threshold(limit).breached(true).observedAt(sampledAt).build();
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
-        writeState(kv, key, signature, true, sampledAt);
-        return Optional.of(execution);
+            var sampledAt = client.serverTime().orElse(null);
+            if (sampledAt == null) {
+                runContext.logger().warn("Datadog threshold poll skipped because the Date header is missing");
+                return Optional.empty();
+            }
+            var breached = rPredicate.breached(value, rLimit);
+            if (previous.isEmpty() || !breached || previous.get()) {
+                writeState(kv, key, signature, breached, sampledAt);
+                return Optional.empty();
+            }
+            var output = Output.builder().value(value).threshold(rLimit).breached(true).observedAt(sampledAt).build();
+            var execution = TriggerService.generateExecution(this, conditionContext, context, output);
+            writeState(kv, key, signature, true, sampledAt);
+            return Optional.of(execution);
         }
     }
 
     private static Optional<Boolean> readState(KVStore kv, String key, String signature) throws Exception {
-        Optional<KVValue> stored = kv.getValue(key);
+        var stored = kv.getValue(key);
         if (stored.isEmpty()) {
             return Optional.empty();
         }
-        Map<String, Object> state = switch (stored.get().value()) {
+        var state = switch (stored.get().value()) {
             case byte[] bytes -> JacksonMapper.ofJson().readValue(bytes, MAP_TYPE);
             case String text -> JacksonMapper.ofJson().readValue(text, MAP_TYPE);
             case Map<?, ?> map -> JacksonMapper.ofJson().convertValue(map, MAP_TYPE);
@@ -177,7 +184,7 @@ public class Threshold extends AbstractTrigger implements PollingTriggerInterfac
     }
 
     private static void writeState(KVStore kv, String key, String signature, boolean breached, Instant sampledAt) throws Exception {
-        byte[] value = JacksonMapper.ofJson().writeValueAsString(Map.of("signature", signature, "breached", breached, "sampledAt", sampledAt.toString())).getBytes(StandardCharsets.UTF_8);
+        var value = JacksonMapper.ofJson().writeValueAsString(Map.of("signature", signature, "breached", breached, "sampledAt", sampledAt.toString())).getBytes(StandardCharsets.UTF_8);
         kv.put(key, new KVValueAndMetadata(new KVMetadata("Datadog threshold state", (Duration) null), value));
     }
 

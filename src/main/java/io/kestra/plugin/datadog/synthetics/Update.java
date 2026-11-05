@@ -2,9 +2,11 @@ package io.kestra.plugin.datadog.synthetics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -46,22 +48,24 @@ import java.util.Map;
 public class Update extends AbstractWriteTest implements RunnableTask<Update.Output> {
     @NotNull
     @Schema(title = "Public test ID")
+    @PluginProperty(group = "main")
     private Property<String> publicId;
     @Schema(title = "Ignore missing test", description = "Return updated=false if Datadog answers 404.", defaultValue = "false")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var rId = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
             var body = definition(context);
-            boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rReveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
             try {
-                var test = client.put("/api/v1/synthetics/tests/" + body.get("type") + "/" + id, body).map();
-                return Output.builder().updated(true).test(Synthetics.summary(test, reveal)).build();
-            } catch (io.kestra.plugin.datadog.DatadogClient.DatadogException e) {
-                if (e.getStatus() != 404 || !ignore) {
+                var test = client.put("/api/v1/synthetics/tests/" + body.get("type") + "/" + rId, body).map();
+                return Output.builder().updated(true).test(Synthetics.summary(test, rReveal)).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() != 404 || !rIgnore) {
                     throw e;
                 }
                 return Output.builder().updated(false).test(Map.of()).build();

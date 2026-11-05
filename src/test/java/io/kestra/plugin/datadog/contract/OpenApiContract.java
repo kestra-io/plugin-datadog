@@ -1,21 +1,22 @@
 package io.kestra.plugin.datadog.contract;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.DecimalNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.MockDatadogServer;
 
-import java.io.InputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Offline contract assertions backed by reference-preserving OpenAPI schemas. */
 public final class OpenApiContract {
@@ -31,10 +32,10 @@ public final class OpenApiContract {
     }
 
     public static OpenApiContract of(String id) {
-        JsonNode index = resource("/openapi/index.json");
-        String qualified = id;
+        var index = resource("/openapi/index.json");
+        var qualified = id;
         if (!index.has(qualified)) {
-            List<String> matches = new ArrayList<>();
+            var matches = new ArrayList<String>();
             index.fieldNames().forEachRemaining(key -> { if (key.endsWith(":" + id)) { matches.add(key); } });
             if (matches.size() != 1) { throw new AssertionError("Unknown or ambiguous vendored operation " + id); }
             qualified = matches.getFirst();
@@ -43,7 +44,7 @@ public final class OpenApiContract {
     }
 
     public static void assertRequests(List<MockDatadogServer.Received> requests, String... operationIds) {
-        List<OpenApiContract> contracts = java.util.Arrays.stream(operationIds).map(OpenApiContract::of).toList();
+        var contracts = Arrays.stream(operationIds).map(OpenApiContract::of).toList();
         for (var request : requests) {
             OpenApiContract match = null;
             for (var contract : contracts) {
@@ -56,49 +57,49 @@ public final class OpenApiContract {
     }
 
     private static JsonNode resource(String name) {
-        try (InputStream input = OpenApiContract.class.getResourceAsStream(name)) {
+        try (var input = OpenApiContract.class.getResourceAsStream(name)) {
             if (input == null) { throw new AssertionError("Missing contract resource " + name); }
             return JacksonMapper.ofJson().readTree(input);
-        } catch (java.io.IOException e) { throw new AssertionError("Cannot read contract resource " + name, e); }
+        } catch (IOException e) { throw new AssertionError("Cannot read contract resource " + name, e); }
     }
 
     public void assertRequest(MockDatadogServer.Received request) {
         require(operation.path("method").asText().equals(request.method()), "request method differs");
-        String template = operation.path("path").asText();
+        var template = operation.path("path").asText();
         var actual = pathPattern(template).matcher(request.path());
         require(actual.matches(), "request path differs");
-        Map<String, List<String>> path = new HashMap<>();
-        var placeholders = java.util.regex.Pattern.compile("\\{([^}]+)}").matcher(template);
-        int index = 1;
+        var path = new HashMap<String, List<String>>();
+        var placeholders = Pattern.compile("\\{([^}]+)}").matcher(template);
+        var index = 1;
         while (placeholders.find()) {
-            String value = actual.group(index++);
+            var value = actual.group(index++);
             require(!value.isBlank(), "empty path parameter");
             path.put(placeholders.group(1), List.of(value));
         }
-        Map<String, List<String>> query = query(request.query());
-        for (String name : query.keySet()) {
-            boolean known = false;
-            for (JsonNode p : operation.path("parameters")) {
+        var query = query(request.query());
+        for (var name : query.keySet()) {
+            var known = false;
+            for (var p : operation.path("parameters")) {
                 if (p.path("in").asText().equals("query") && p.path("name").asText().equals(name)) { known = true; }
             }
             require(known, "unknown query parameter " + name);
         }
-        for (JsonNode p : operation.path("parameters")) {
-            String name = p.path("name").asText();
-            String location = p.path("in").asText();
-            List<String> values = switch (location) {
+        for (var p : operation.path("parameters")) {
+            var name = p.path("name").asText();
+            var location = p.path("in").asText();
+            var values = switch (location) {
                 case "path" -> path.get(name);
                 case "query" -> query.get(name);
                 case "header" -> request.header(name) == null ? null : List.of(request.header(name));
                 default -> throw new AssertionError("Unsupported parameter location " + location);
             };
             if (values == null) { require(!p.path("required").asBoolean(), "missing required " + location + " parameter " + name); continue; }
-            JsonNode schema = validator.resolve(p.path("schema"));
+            var schema = validator.resolve(p.path("schema"));
             JsonNode value;
             if (schema.path("type").asText().equals("array")) {
-                ArrayNode array = JacksonMapper.ofJson().createArrayNode();
-                for (String raw : values) {
-                    for (String part : p.path("explode").asBoolean() ? new String[]{raw} : raw.split(",", -1)) { array.add(parameter(schema.path("items"), part)); }
+                var array = JacksonMapper.ofJson().createArrayNode();
+                for (var raw : values) {
+                    for (var part : p.path("explode").asBoolean() ? new String[]{raw} : raw.split(",", -1)) { array.add(parameter(schema.path("items"), part)); }
                 }
                 value = array;
             } else {
@@ -107,12 +108,12 @@ public final class OpenApiContract {
             }
             validate(schema, value, location + "/" + name, true);
         }
-        boolean present = request.body() != null && !request.body().isBlank();
-        JsonNode body = operation.path("request");
+        var present = request.body() != null && !request.body().isBlank();
+        var body = operation.path("request");
         require(present || !body.path("required").asBoolean(), "missing required request body");
         if (present) {
-            JsonNode content = body.path("content");
-            String media = media(content, request.header("Content-Type"));
+            var content = body.path("content");
+            var media = media(content, request.header("Content-Type"));
             require(media != null, "request Content-Type is missing or not declared");
             require(media.contains("json"), "contract helper supports JSON request bodies only");
             validate(content.path(media).path("schema"), json(request.body()), "request", true);
@@ -122,11 +123,11 @@ public final class OpenApiContract {
     public void assertResponse(int status, String body) { assertResponse(status, "application/json", body); }
 
     public void assertResponse(int status, String contentType, String body) {
-        JsonNode response = operation.path("responses").path(String.valueOf(status));
+        var response = operation.path("responses").path(String.valueOf(status));
         require(!response.isMissingNode(), "response status " + status + " is not a declared success");
-        JsonNode content = response.path("content");
+        var content = response.path("content");
         if (content.isEmpty()) { require(body == null || body.isBlank(), "body on a no-content response"); return; }
-        String media = media(content, contentType);
+        var media = media(content, contentType);
         require(media != null, "response Content-Type is not declared");
         require(body != null && !body.isBlank(), "response body is missing");
         require(media.contains("json"), "contract helper supports JSON response bodies only");
@@ -137,7 +138,7 @@ public final class OpenApiContract {
         if (type == null) { return null; }
         var names = content.fieldNames();
         while (names.hasNext()) {
-            String name = names.next();
+            var name = names.next();
             if (type.equals(name) || type.startsWith(name + ";")) { return name; }
         }
         return null;
@@ -145,11 +146,11 @@ public final class OpenApiContract {
 
     private JsonNode json(String raw) {
         try { return JacksonMapper.ofJson().readTree(raw); }
-        catch (java.io.IOException e) { throw new AssertionError(id + ": invalid JSON"); }
+        catch (IOException e) { throw new AssertionError(id + ": invalid JSON"); }
     }
 
     private JsonNode parameter(JsonNode rawSchema, String value) {
-        JsonNode schema = validator.resolve(rawSchema);
+        var schema = validator.resolve(rawSchema);
         return switch (schema.path("type").asText()) {
             case "integer", "number" -> {
                 try { yield DecimalNode.valueOf(new BigDecimal(value)); }
@@ -168,27 +169,27 @@ public final class OpenApiContract {
     private void require(boolean condition, String message) { SchemaValidator.require(condition, id + ": " + message); }
 
     private static Map<String, List<String>> query(String raw) {
-        Map<String, List<String>> values = new HashMap<>();
+        var values = new HashMap<String, List<String>>();
         if (raw != null && !raw.isBlank()) {
-            for (String pair : raw.split("&")) {
-                String[] entry = pair.split("=", 2);
-                String name = URLDecoder.decode(entry[0], StandardCharsets.UTF_8);
-                String value = entry.length == 2 ? URLDecoder.decode(entry[1], StandardCharsets.UTF_8) : "";
+            for (var pair : raw.split("&")) {
+                var entry = pair.split("=", 2);
+                var name = URLDecoder.decode(entry[0], StandardCharsets.UTF_8);
+                var value = entry.length == 2 ? URLDecoder.decode(entry[1], StandardCharsets.UTF_8) : "";
                 values.computeIfAbsent(name, ignored -> new ArrayList<>()).add(value);
             }
         }
         return values;
     }
 
-    private static java.util.regex.Pattern pathPattern(String template) {
-        var placeholders = java.util.regex.Pattern.compile("\\{[^}]+}").matcher(template);
-        StringBuilder regex = new StringBuilder("^");
-        int start = 0;
+    private static Pattern pathPattern(String template) {
+        var placeholders = Pattern.compile("\\{[^}]+}").matcher(template);
+        var regex = new StringBuilder("^");
+        var start = 0;
         while (placeholders.find()) {
-            regex.append(java.util.regex.Pattern.quote(template.substring(start, placeholders.start()))).append("(.+?)");
+            regex.append(Pattern.quote(template.substring(start, placeholders.start()))).append("(.+?)");
             start = placeholders.end();
         }
-        regex.append(java.util.regex.Pattern.quote(template.substring(start))).append('$');
-        return java.util.regex.Pattern.compile(regex.toString());
+        regex.append(Pattern.quote(template.substring(start))).append('$');
+        return Pattern.compile(regex.toString());
     }
 }

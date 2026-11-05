@@ -12,14 +12,14 @@ public final class Counts {
     }
 
     public static long query(DatadogClient client, Map<String, Object> filter, boolean spans) throws Exception {
-        Map<String, Object> attributes = Map.of("filter", filter, "compute", List.of(Map.of("aggregation", "count", "type", "total")));
-        String path = spans ? "/api/v2/spans/analytics/aggregate" : "/api/v2/logs/analytics/aggregate";
-        Map<String, Object> answer = client.post(path, spans ? Telemetry.envelope(attributes, "aggregate_request") : attributes).map();
+        var attributes = Map.<String, Object>of("filter", filter, "compute", List.of(Map.of("aggregation", "count", "type", "total")));
+        var path = spans ? "/api/v2/spans/analytics/aggregate" : "/api/v2/logs/analytics/aggregate";
+        var answer = client.post(path, spans ? Telemetry.envelope(attributes, "aggregate_request") : attributes).map();
         Telemetry.complete(answer);
         if (Telemetry.cursor(answer) != null) {
             throw new IllegalStateException("Datadog returned a paged answer for a total count");
         }
-        List<Map<String, Object>> buckets = Telemetry.buckets(answer, spans);
+        var buckets = Telemetry.buckets(answer, spans);
         if (buckets.isEmpty()) {
             return 0;
         }
@@ -28,7 +28,7 @@ public final class Counts {
             throw new IllegalStateException("Datadog returned a total count without a numeric computes.c0");
         }
         try {
-            long value = new BigDecimal(computes.get("c0").toString()).longValueExact();
+            var value = new BigDecimal(computes.get("c0").toString()).longValueExact();
             if (value < 0) {
                 throw new ArithmeticException("negative count");
             }

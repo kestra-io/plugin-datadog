@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -35,24 +36,26 @@ import java.util.Map;
 public class Update extends AbstractDefinitionTask implements RunnableTask<Update.Output> {
     @NotNull
     @Schema(title = "Monitor id", description = "The positive id of the monitor to update.")
+    @PluginProperty(group = "main")
     private Property<Long> monitorId;
 
     @Schema(title = "Ignore a missing monitor", description = "False by default. Only HTTP 404 is treated as a no-op.")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
+            var rId = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
             var body = definition(context, false);
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-            boolean include = includeSecrets(context);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var include = includeSecrets(context);
             try {
-                var monitor = MonitorOutput.of(client.put("/api/v1/monitor/" + id, body).map(), include);
+                var monitor = MonitorOutput.of(client.put("/api/v1/monitor/" + rId, body).map(), include);
                 return Output.builder().monitorId(monitor.getMonitorId()).monitor(monitor.getMonitor()).updated(true).build();
             } catch (DatadogClient.DatadogException e) {
-                if (e.getStatus() == 404 && ignore) {
-                    return Output.builder().monitorId(id).updated(false).build();
+                if (e.getStatus() == 404 && rIgnore) {
+                    return Output.builder().monitorId(rId).updated(false).build();
                 }
                 throw e;
             }

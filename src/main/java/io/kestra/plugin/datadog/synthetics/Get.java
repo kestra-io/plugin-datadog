@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.synthetics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -38,20 +39,23 @@ import java.util.Map;
 public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output> {
     @NotNull
     @Schema(title = "Public test ID")
+    @PluginProperty(group = "main")
     private Property<String> publicId;
     @Schema(title = "Test kind", defaultValue = "API")
+    @PluginProperty(group = "main")
     private Property<TestKind> testKind;
     @Schema(title = "Include secrets", description = "Return the full test. False returns summary fields and omits configuration, steps, options and notification messages.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-            var kind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
-            boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
-            var test = client.get("/api/v1/synthetics/tests/" + kind.apiValue + "/" + id, Map.of()).map();
-            return Output.builder().test(Synthetics.summary(test, reveal)).build();
+            var rId = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var rKind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
+            var rReveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var test = client.get("/api/v1/synthetics/tests/" + rKind.apiValue + "/" + rId, Map.of()).map();
+            return Output.builder().test(Synthetics.summary(test, rReveal)).build();
         }
     }
 

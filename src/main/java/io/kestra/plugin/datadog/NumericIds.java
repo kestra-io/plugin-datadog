@@ -15,7 +15,7 @@ public final class NumericIds {
     public static List<Long> render(RunContext context, Property<List<Long>> property, String name) throws Exception {
         var result = new ArrayList<Long>();
         // Property.asList can retain Integer elements even when its requested element type is Long.
-        for (Object value : context.render(property).asList(Object.class)) {
+        for (var value : (List<?>) context.render(property).asList(Object.class)) {
             try {
                 if (value instanceof Number number) {
                     result.add(new BigDecimal(number.toString()).longValueExact());

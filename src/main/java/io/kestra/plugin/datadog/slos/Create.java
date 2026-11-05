@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
 import java.util.Map;
 
 /** Datadog operationId: CreateSLO. */
@@ -50,6 +51,6 @@ public class Create extends AbstractSloDefinitionTask implements RunnableTask<Cr
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Created SLOs", description = "The data array returned by CreateSLO.")
-        private final java.util.List<Map<String, Object>> slos;
+        private final List<Map<String, Object>> slos;
     }
 }

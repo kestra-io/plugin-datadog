@@ -12,6 +12,7 @@ import org.junit.jupiter.api.TestFactory;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -148,11 +149,11 @@ class RunTest extends AbstractDatadogTest {
         trigger();
         // The spec has no enum value for progress. A missing status is unfinished.
         server.reply("GET", BATCH, 200, "{\"data\":{\"results\":[]}}");
-        long start = System.nanoTime();
+        var start = System.nanoTime();
         var output = assertTimeoutPreemptively(Duration.ofSeconds(2), () -> task()
             .maxWait(Property.ofValue(Duration.ofSeconds(1))).pollInterval(Property.ofValue(Duration.ofMinutes(1)))
             .failOnTimeout(Property.ofValue(false)).build().run(runContext()));
-        long elapsed = System.nanoTime() - start;
+        var elapsed = System.nanoTime() - start;
         assertTrue(elapsed >= Duration.ofMillis(900).toNanos());
         assertTrue(output.getTimedOut());
         assertFalse(output.getPassed());
@@ -256,7 +257,7 @@ class RunTest extends AbstractDatadogTest {
 
     @TestFactory
     Stream<DynamicTest> validatesSelectionBeforeHttp() {
-        return Stream.<java.util.function.Supplier<Run>>of(
+        return Stream.<Supplier<Run>>of(
             () -> task().testIds(null).build(),
             () -> task().searchQuery(Property.ofValue("tag:prod")).build(),
             () -> task().testIds(Property.ofValue(List.of("bad/id"))).build(),

@@ -1,6 +1,5 @@
 package io.kestra.plugin.datadog.logs;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -9,8 +8,8 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -117,9 +116,9 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var limit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
-        if (limit < 1 || limit > 10_000) {
-            throw new IllegalArgumentException("The Datadog `maxResults` must be between 1 and 10000 but was " + limit);
+        var rLimit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
+        if (rLimit < 1 || rLimit > 10_000) {
+            throw new IllegalArgumentException("The Datadog `maxResults` must be between 1 and 10000 but was " + rLimit);
         }
 
         var filter = new LinkedHashMap<String, Object>();
@@ -133,11 +132,11 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
         var rSort = runContext.render(this.sort).as(Sort.class).orElse(null);
 
         var logs = new ArrayList<Map<String, Object>>();
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             String cursor = null;
             do {
                 var page = new LinkedHashMap<String, Object>();
-                page.put("limit", Math.min(PAGE_SIZE, limit - logs.size()));
+                page.put("limit", Math.min(PAGE_SIZE, rLimit - logs.size()));
                 if (cursor != null) {
                     page.put("cursor", cursor);
                 }
@@ -150,14 +149,14 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
 
                 var answer = client.post("/api/v2/logs/events/search", body).map();
                 if (answer.get("data") instanceof List<?> rows) {
-                    for (Object row : rows) {
-                        if (row instanceof Map<?, ?> raw && logs.size() < limit) {
+                    for (var row : rows) {
+                        if (row instanceof Map<?, ?> raw && logs.size() < rLimit) {
                             logs.add(flatten(raw));
                         }
                     }
                 }
                 cursor = null;
-                if (logs.size() < limit && answer.get("meta") instanceof Map<?, ?> meta && meta.get("page") instanceof Map<?, ?> metaPage && metaPage.get("after") != null) {
+                if (logs.size() < rLimit && answer.get("meta") instanceof Map<?, ?> meta && meta.get("page") instanceof Map<?, ?> metaPage && metaPage.get("after") != null) {
                     cursor = String.valueOf(metaPage.get("after"));
                 }
             } while (cursor != null);

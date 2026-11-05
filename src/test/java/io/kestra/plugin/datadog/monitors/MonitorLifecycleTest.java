@@ -1,8 +1,8 @@
 package io.kestra.plugin.datadog.monitors;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
@@ -49,7 +51,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
 
     private CanDelete.CanDeleteBuilder<?, ?> canDelete() {
         return CanDelete.builder().id(IdUtils.create()).type(CanDelete.class.getName()).apiKey(Property.ofValue(API_KEY))
-            .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).monitorIds(Property.ofValue(java.util.List.of(123L, 124L)));
+            .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).monitorIds(Property.ofValue(List.of(123L, 124L)));
     }
 
     private Export.ExportBuilder<?, ?> export() {
@@ -86,8 +88,8 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     void listStoresFilteredRowsAndRejectsMalformedRows() throws Exception {
         var context = runContext();
         server.reply("GET", "/api/v1/monitor", 200, "[{\"id\":123,\"message\":\"https://hooks.example.org/value\"}]");
-        var task = List.builder().id(IdUtils.create()).type(List.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
-            .apiUrl(Property.ofValue(server.url())).fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build();
+        var task = io.kestra.plugin.datadog.monitors.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.monitors.List.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
+            .apiUrl(Property.ofValue(server.url())).fetchType(Property.ofValue(FetchType.STORE)).build();
         var output = task.run(context);
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
@@ -112,7 +114,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     void validatesBothNewAndExistingWithoutSaving() throws Exception {
         assertTrue(validate().build().run(runContext()).getValid());
         assertTrue(validate().monitorId(Property.ofValue(123L)).build().run(runContext()).getValid());
-        assertEquals(java.util.List.of("/api/v1/monitor/validate", "/api/v1/monitor/123/validate"), server.requests.stream().map(r -> r.path()).toList());
+        assertEquals(List.of("/api/v1/monitor/validate", "/api/v1/monitor/123/validate"), server.requests.stream().map(r -> r.path()).toList());
     }
 
     @Test
@@ -129,14 +131,14 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     void checksDeletionDependencies() throws Exception {
         server.reply("GET", "/api/v1/monitor/can_delete", 200, "{\"data\":{\"ok\":[123]},\"errors\":{\"124\":[\"Referenced in composite monitor 125\"]}}");
         var output = canDelete().build().run(runContext());
-        assertEquals(Map.of("ok", java.util.List.of(123)), output.getResult().get("data"));
+        assertEquals(Map.of("ok", List.of(123)), output.getResult().get("data"));
         assertEquals("monitor_ids=123,124", URLDecoder.decode(server.only().query(), StandardCharsets.UTF_8));
     }
 
     @Test
     void searchPagesAndFacetsAreNotSummed() throws Exception {
         var rows = IntStream.range(0, 100).mapToObj(i -> Map.of("id", i, "name", "CPU " + i, "type", "query alert", "status", "Alert")).toList();
-        var facets = Map.of("status", java.util.List.of(Map.of("name", "Alert", "count", 101)));
+        var facets = Map.of("status", List.of(Map.of("name", "Alert", "count", 101)));
         server.reply("GET", "/api/v1/monitor/search", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("monitors", rows, "counts", facets, "metadata", Map.of("page_count", 2, "total_count", 101))));
         server.reply("GET", "/api/v1/monitor/search", 200, "{\"monitors\":[{\"id\":100,\"name\":\"CPU 100\"}],\"metadata\":{\"page_count\":2}}");
         var output = search().query(Property.ofValue("status:alert")).sort(Property.ofValue("name,asc")).build().run(runContext());
@@ -166,11 +168,11 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         var response = ApplyTest.definition();
         response.put("id", 123);
         response.put("overall_state", "Alert");
-        server.reply("GET", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(java.util.List.of(response)));
+        server.reply("GET", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(List.of(response)));
         var output = export().build().run(context);
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {
-            assertEquals(java.util.List.of(ApplyTest.definition()), JacksonMapper.ofYaml().readValue(input, java.util.List.class));
+            assertEquals(List.of(ApplyTest.definition()), JacksonMapper.ofYaml().readValue(input, List.class));
         }
         server.reply("GET", "/api/v1/monitor/123", 200, JacksonMapper.ofJson().writeValueAsString(response));
         var applied = Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
@@ -181,7 +183,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     @Test
     void exportIonAndRefusesTruncation() throws Exception {
         var context = runContext();
-        server.reply("GET", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(java.util.List.of(ApplyTest.definition(), ApplyTest.definition())));
+        server.reply("GET", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(List.of(ApplyTest.definition(), ApplyTest.definition())));
         assertThrows(IllegalStateException.class, () -> export().maxMonitors(Property.ofValue(1)).build().run(context));
         var output = export().format(Property.ofValue(Export.Format.ION)).build().run(context);
         try (var input = context.storage().getFile(output.getUri()); var iterator = JacksonMapper.ofIon().readerFor(Map.class).readValues(input)) {
@@ -194,19 +196,19 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> create().definition(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> update().definition(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> validate().definition(null).build().run(runContext()));
-        for (Long id : java.util.Arrays.asList(null, 0L, -1L)) {
+        for (var id : Arrays.asList(null, 0L, -1L)) {
             assertThrows(IllegalArgumentException.class, () -> get().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> update().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> delete().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
         }
         assertThrows(IllegalArgumentException.class, () -> validate().monitorId(Property.ofValue(0L)).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(java.util.List.of())).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(java.util.List.of(-1L))).build().run(runContext()));
-        for (int limit : new int[]{0, 10001}) {
+        assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(List.of())).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(List.of(-1L))).build().run(runContext()));
+        for (var limit : new int[]{0, 10001}) {
             assertThrows(IllegalArgumentException.class, () -> search().maxResults(Property.ofValue(limit)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> export().maxMonitors(Property.ofValue(limit)).build().run(runContext()));
         }
-        for (var field : Map.<String, Object>of("options", "bad", "tags", java.util.List.of(1), "restricted_roles", "bad", "priority", 1.5, "name", 42, "message", false, "draft_status", "other", "assets", "bad", "unknown", "bad").entrySet()) {
+        for (var field : Map.<String, Object>of("options", "bad", "tags", List.of(1), "restricted_roles", "bad", "priority", 1.5, "name", 42, "message", false, "draft_status", "other", "assets", "bad", "unknown", "bad").entrySet()) {
             var invalid = ApplyTest.definition();
             invalid.put(field.getKey(), field.getValue());
             assertThrows(IllegalArgumentException.class, () -> create().definition(Property.ofValue(invalid)).build().run(runContext()), field.getKey());
@@ -217,8 +219,8 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     @Test
     void allLifecycleTasksPropagateErrorClasses() throws Exception {
         record Case(String method, String path, RunnableTask<?> task) { }
-        for (int status : new int[]{400, 403, 404, 429, 500}) {
-            var cases = java.util.List.of(
+        for (var status : new int[]{400, 403, 404, 429, 500}) {
+            var cases = List.of(
                 new Case("POST", "/api/v1/monitor", create().build()),
                 new Case("PUT", "/api/v1/monitor/123", update().build()),
                 new Case("GET", "/api/v1/monitor/123", get().build()),
@@ -231,7 +233,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
                 new Case("GET", "/api/v1/monitor", Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
                     .apiUrl(Property.ofValue(server.url())).definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(ApplyTest.definition()))).build())
             );
-            for (Case c : cases) {
+            for (var c : cases) {
                 server.reply(c.method(), c.path(), status, "{\"errors\":[\"Request failed\"]}");
                 var error = assertThrows(DatadogClient.DatadogException.class, () -> c.task().run(runContext()), c.task().getClass().getSimpleName());
                 assertEquals(status, error.getStatus());

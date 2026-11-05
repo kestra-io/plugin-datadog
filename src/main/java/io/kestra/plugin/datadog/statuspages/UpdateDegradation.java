@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.statuspages;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -35,6 +36,7 @@ import lombok.experimental.SuperBuilder;
 public class UpdateDegradation extends DegradationTask implements RunnableTask<ResponseOutput> {
     @NotNull
     @Schema(title = "Degradation id")
+    @PluginProperty(group = "main")
     private Property<String> degradationId;
 
     @Override

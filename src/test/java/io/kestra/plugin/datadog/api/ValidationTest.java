@@ -31,8 +31,8 @@ class ValidationTest {
 
     @Test
     void queryArraysUseExplodeOrCommaAsSpecified() throws Exception {
-        String template = "{\"operationId\":\"Fixture\",\"api\":\"v1\",\"method\":\"GET\",\"path\":\"/test\",\"parameters\":[{\"name\":\"tags\",\"in\":\"query\",\"type\":\"array\",\"items\":{\"type\":\"string\"},\"explode\":%s}]}";
-        for (boolean explode : List.of(true, false)) {
+        var template = "{\"operationId\":\"Fixture\",\"api\":\"v1\",\"method\":\"GET\",\"path\":\"/test\",\"parameters\":[{\"name\":\"tags\",\"in\":\"query\",\"type\":\"array\",\"items\":{\"type\":\"string\"},\"explode\":%s}]}";
+        for (var explode : List.of(true, false)) {
             var fixture = new Catalog.Operation(JacksonMapper.ofJson().readTree(template.formatted(explode)));
             var plan = RequestPlan.prepare(fixture, null, "http://localhost", Map.of(), Map.of("tags", List.of("a b", "c")), Map.of(), null);
             assertEquals(explode ? "tags=a%20b&tags=c" : "tags=a%20b%2Cc", plan.uri().getRawQuery());

@@ -1,12 +1,7 @@
 package io.kestra.plugin.datadog.monitors;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.JacksonMapper;
-
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -23,11 +18,11 @@ public final class MonitorIO {
             return value;
         }
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
+            var result = new LinkedHashMap<String, Object>();
             map.forEach((key, item) -> result.put(String.valueOf(key), SENSITIVE.matcher(String.valueOf(key)).matches() ? "[REDACTED]" : redact(item, false)));
             return result;
         }
-        if (value instanceof java.util.List<?> list) {
+        if (value instanceof List<?> list) {
             return list.stream().map(item -> redact(item, false)).toList();
         }
         return value instanceof String text ? URL.matcher(text).replaceAll("[REDACTED_URL]") : value;
@@ -50,7 +45,7 @@ public final class MonitorIO {
     }
 
     public static int limit(Integer value) {
-        int limit = value == null ? 1000 : value;
+        var limit = value == null ? 1000 : value;
         if (limit < 1 || limit > 10000) {
             throw new IllegalArgumentException("The result limit must be between 1 and 10000");
         }

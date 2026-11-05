@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.hosts;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -37,33 +38,37 @@ import java.time.Instant;
     """))
 public class Mute extends AbstractHostAction implements RunnableTask<AbstractHostAction.Output> {
     @Schema(title = "Mute end", description = "ISO-8601 instant in the future. Mutually exclusive with duration.")
+    @PluginProperty(group = "main")
     private Property<Instant> end;
     @Schema(title = "Mute duration", description = "Positive duration from now. The resulting end must be in a future epoch second.")
+    @PluginProperty(group = "main")
     private Property<Duration> duration;
     @Schema(title = "Mute message", description = "Message associated with the downtime.")
+    @PluginProperty(group = "main")
     private Property<String> message;
     @Schema(title = "Override existing mute", description = "Explicitly overwrite the host's existing mute settings. Defaults to false.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> override;
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Instant stop = context.render(end).as(Instant.class).orElse(null);
-        Duration length = context.render(duration).as(Duration.class).orElse(null);
-        if ((stop == null) == (length == null)) {
+        var rStop = context.render(end).as(Instant.class).orElse(null);
+        var rLength = context.render(duration).as(Duration.class).orElse(null);
+        if ((rStop == null) == (rLength == null)) {
             throw new IllegalArgumentException("Set exactly one of `end` or `duration`");
         }
-        Instant now = Instant.now();
-        if (length != null) {
-            if (length.isZero() || length.isNegative()) {
+        var now = Instant.now();
+        if (rLength != null) {
+            if (rLength.isZero() || rLength.isNegative()) {
                 throw new IllegalArgumentException("`duration` must be positive");
             }
-            stop = now.plus(length);
+            rStop = now.plus(rLength);
         }
-        if (stop.getEpochSecond() <= now.getEpochSecond()) {
+        if (rStop.getEpochSecond() <= now.getEpochSecond()) {
             throw new IllegalArgumentException("The mute end must be in a future epoch second");
         }
         var body = DatadogClient.query();
-        body.put("end", stop.getEpochSecond());
+        body.put("end", rStop.getEpochSecond());
         body.put("override", context.render(override).as(Boolean.class).orElse(false));
         context.render(message).as(String.class).ifPresent(value -> body.put("message", value));
         return execute(context, "mute", body);

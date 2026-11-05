@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.keys;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -36,12 +37,16 @@ import java.util.Map;
 public class Create extends AbstractDatadogTask implements RunnableTask<KeyOutput> {
     @NotNull
     @Schema(title = "Key name", description = "Name of the new key. Must not be blank.")
+    @PluginProperty(group = "main")
     private Property<String> name;
     @Schema(title = "Key kind", description = "API or APPLICATION. Application keys are created for the authenticated user.", defaultValue = "API")
+    @PluginProperty(group = "main")
     private Property<KeyKind> keyKind;
     @Schema(title = "Application key scopes", description = "Required for APPLICATION. An explicit empty list creates a key with no scopes. Not accepted for API keys.")
+    @PluginProperty(group = "main")
     private Property<List<String>> scopes;
     @Schema(title = "Include secrets", description = "Return the newly created key value. False returns only a mask, preview and resource metadata.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     protected KeyKind kind(RunContext context) throws Exception {
@@ -49,14 +54,14 @@ public class Create extends AbstractDatadogTask implements RunnableTask<KeyOutpu
     }
 
     protected Map<String, Object> body(RunContext context, KeyKind kind) throws Exception {
-        Map<String, Object> attributes = new LinkedHashMap<>();
+        var attributes = new LinkedHashMap<String, Object>();
         attributes.put("name", AccessApi.required(context, name, "name"));
         if (kind == KeyKind.APPLICATION) {
             if (scopes == null) {
                 throw new IllegalArgumentException("`scopes` must be explicit for an application key");
             }
             List<?> values = AccessApi.explicitList(context, scopes, "scopes");
-            for (Object scope : values) {
+            for (var scope : values) {
                 AccessApi.required(scope, "scope");
             }
             attributes.put("scopes", values);
@@ -69,9 +74,9 @@ public class Create extends AbstractDatadogTask implements RunnableTask<KeyOutpu
     @Override
     public KeyOutput run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            KeyKind kind = kind(context);
-            Map<String, Object> body = body(context, kind);
-            boolean include = AccessApi.flag(context, includeSecrets);
+            var kind = kind(context);
+            var body = body(context, kind);
+            var include = AccessApi.flag(context, includeSecrets);
             return KeyOutput.from(AccessApi.json(AccessApi.request(client, "POST", kind.createPath, Map.of(), body)), include);
         }
     }

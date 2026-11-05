@@ -1,7 +1,8 @@
 package io.kestra.plugin.datadog.slos;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -44,8 +46,8 @@ class SlosTest extends AbstractDatadogTest {
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).sloId(Property.ofValue("slo-123"));
     }
 
-    private List.ListBuilder<?, ?> lister() {
-        return List.builder().id(IdUtils.create()).type(List.class.getName())
+    private io.kestra.plugin.datadog.slos.List.ListBuilder<?, ?> lister() {
+        return io.kestra.plugin.datadog.slos.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.slos.List.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()));
     }
 
@@ -100,7 +102,7 @@ class SlosTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> checker().to(Property.ofValue(100L)).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> checker().to(Property.ofValue(99L)).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> checker().target(null).build().run(runContext()));
-        for (double target : new double[]{0, -1, 100, 101}) {
+        for (var target : new double[]{0, -1, 100, 101}) {
             assertThrows(IllegalArgumentException.class, () -> checker().target(Property.ofValue(target)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> historyTask().target(Property.ofValue(target)).build().run(runContext()));
         }
@@ -114,11 +116,11 @@ class SlosTest extends AbstractDatadogTest {
 
     @Test
     void failsClosedOnMissingNullOrOutOfRangeSliEvenInFlagMode() {
-        for (String sli : java.util.List.of("null", "-1", "101", "\"99.99\"")) {
+        for (var sli : List.of("null", "-1", "101", "\"99.99\"")) {
             server.reply("GET", "/api/v1/slo/slo-123/history", 200, history(sli));
             assertThrows(IllegalStateException.class, () -> checker().failOnBreach(Property.ofValue(false)).build().run(runContext()));
         }
-        for (String response : java.util.List.of("{}", "{\"data\":{}}", "{\"data\":{\"overall\":{\"uptime\":100}}}")) {
+        for (var response : List.of("{}", "{\"data\":{}}", "{\"data\":{\"overall\":{\"uptime\":100}}}")) {
             server.reply("GET", "/api/v1/slo/slo-123/history", 200, response);
             assertThrows(IllegalStateException.class, () -> checker().build().run(runContext()));
         }
@@ -130,7 +132,7 @@ class SlosTest extends AbstractDatadogTest {
     void doesNotUseGroupUptimeOrPrecomputedTimeframeBudgetForTheGate() throws Exception {
         var response = JacksonMapper.ofJson().readValue(history("99.95"), Map.class);
         var data = Slos.object(response.get("data"), "data");
-        data.put("groups", java.util.List.of(Map.of("sli_value", 0)));
+        data.put("groups", List.of(Map.of("sli_value", 0)));
         var overall = Slos.object(data.get("overall"), "overall");
         overall.put("uptime", 0);
         overall.put("error_budget_remaining", Map.of("7d", -100));
@@ -140,7 +142,7 @@ class SlosTest extends AbstractDatadogTest {
 
     @Test
     void rejectsTopLevelAndOverallErrorsAndReplayData() throws Exception {
-        for (String response : java.util.List.of(
+        for (var response : List.of(
             "{\"data\":{},\"errors\":[{\"error\":\"query failed\"}]}",
             "{\"data\":{\"overall\":{\"sli_value\":100,\"errors\":[{\"error_type\":\"query\",\"error_message\":\"failed\"}]}}}",
             "{\"data\":{\"overall\":{\"sli_value\":100,\"preview\":true}}}"
@@ -152,7 +154,7 @@ class SlosTest extends AbstractDatadogTest {
 
     @Test
     void propagatesHttpErrorsFromTheBudgetGate() {
-        for (int status : new int[]{400, 403, 404, 429, 503}) {
+        for (var status : new int[]{400, 403, 404, 429, 503}) {
             server.reply("GET", "/api/v1/slo/slo-123/history", status, "{\"errors\":[\"request failed\"]}");
             var error = assertThrows(DatadogClient.DatadogException.class, () -> checker().failOnBreach(Property.ofValue(false)).build().run(runContext()));
             assertEquals(status, error.getStatus());
@@ -162,7 +164,7 @@ class SlosTest extends AbstractDatadogTest {
 
     @Test
     void propagatesHttpErrorsFromEveryReadTask() {
-        for (int status : new int[]{400, 403, 404, 429, 503}) {
+        for (var status : new int[]{400, 403, 404, 429, 503}) {
             server.reply("GET", "/api/v1/slo/slo-123", status, "{\"errors\":[\"failed\"]}");
             assertEquals(status, assertThrows(DatadogClient.DatadogException.class, () -> getter().build().run(runContext())).getStatus());
             server.reply("GET", "/api/v1/slo", status, "{\"errors\":[\"failed\"]}");
@@ -184,7 +186,7 @@ class SlosTest extends AbstractDatadogTest {
         assertNull(output.getHistory());
         try (var input = context.storage().getFile(output.getUri())) {
             var rows = new ArrayList<Object>();
-            io.kestra.core.serializers.FileSerde.read(input, rows::add);
+            FileSerde.read(input, rows::add);
             assertEquals(1, rows.size());
             assertEquals(99.95, ((Number) ((Map<?, ?>) ((Map<?, ?>) rows.getFirst()).get("overall")).get("sli_value")).doubleValue());
         }
@@ -201,12 +203,12 @@ class SlosTest extends AbstractDatadogTest {
 
     private String page(int size) throws Exception {
         var rows = new ArrayList<Map<String, Object>>();
-        for (int index = 0; index < size; index++) {
+        for (var index = 0; index < size; index++) {
             var row = new LinkedHashMap<String, Object>(JacksonMapper.ofJson().readValue(SLO, Map.class));
             row.put("id", "slo-" + index);
             rows.add(row);
         }
-        return JacksonMapper.ofJson().writeValueAsString(Map.of("data", rows, "errors", java.util.List.of()));
+        return JacksonMapper.ofJson().writeValueAsString(Map.of("data", rows, "errors", List.of()));
     }
 
     @Test
@@ -236,14 +238,14 @@ class SlosTest extends AbstractDatadogTest {
             assertEquals(2, rows.readAll().size());
         }
         assertEquals(0, lister().build().run(runContext()).getSize());
-        for (int limit : new int[]{0, -1, 10001}) {
+        for (var limit : new int[]{0, -1, 10001}) {
             assertThrows(IllegalArgumentException.class, () -> lister().maxResults(Property.ofValue(limit)).build().run(runContext()));
         }
     }
 
     @Test
     void rejectsMalformedAndErroredListResponses() {
-        for (String response : java.util.List.of("{}", "{\"data\":[1]}", "{\"data\":[],\"errors\":[\"failed\"]}")) {
+        for (var response : List.of("{}", "{\"data\":[1]}", "{\"data\":[],\"errors\":[\"failed\"]}")) {
             server.reply("GET", "/api/v1/slo", 200, response);
             assertThrows(IllegalStateException.class, () -> lister().build().run(runContext()));
         }

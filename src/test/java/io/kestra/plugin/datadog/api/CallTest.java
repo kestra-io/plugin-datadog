@@ -1,8 +1,8 @@
 package io.kestra.plugin.datadog.api;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import com.sun.net.httpserver.HttpServer;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -14,7 +14,6 @@ import org.junit.jupiter.api.TestFactory;
 import java.io.ByteArrayInputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,7 +70,7 @@ class CallTest extends AbstractDatadogTest {
             new Case("zero page size", "ListRoles", b -> b.paginate(Property.ofValue(true)).query(Property.ofValue(Map.of("page[size]", 0))))
         ).map(c -> DynamicTest.dynamicTest(c.name(), () -> {
             var builder = call(c.operation()); c.configure().accept(builder);
-            int before = server.requests.size();
+            var before = server.requests.size();
             var failure = assertThrows(IllegalArgumentException.class, () -> builder.build().run(runContext()));
             assertTrue(failure.getMessage().contains("Datadog"), failure.getMessage());
             assertEquals(before, server.requests.size());
@@ -81,7 +80,7 @@ class CallTest extends AbstractDatadogTest {
     @Test
     void sendsJsonWithCustomHeadersAndRedactsTheReply() throws Exception {
         server.reply("POST", "/api/v1/monitor", 200, "{\"id\":1,\"options\":{\"token\":\"private-value\"}}");
-        Call.Output output = call("CreateMonitor").body(Map.of("name", "demo", "type", "query alert", "query", "avg(last_5m):avg:system.cpu.user{*} > 90"))
+        var output = call("CreateMonitor").body(Map.of("name", "demo", "type", "query alert", "query", "avg(last_5m):avg:system.cpu.user{*} > 90"))
             .headers(Property.ofValue(Map.of("X-Example", "yes"))).redact(Property.ofValue(List.of("/options/token"))).build().run(runContext());
         assertEquals("query alert", server.only().json().get("type"));
         assertEquals(API_KEY, server.only().header("DD-API-KEY"));
@@ -157,7 +156,7 @@ class CallTest extends AbstractDatadogTest {
 
     @Test
     void errorsExposeStatusWithoutEchoingPayloadOrCredentials() throws Exception {
-        for (int status : List.of(400, 403, 404, 429, 500, 503)) {
+        for (var status : List.of(400, 403, 404, 429, 500, 503)) {
             server.reply("GET", "/api/v2/roles", status, "{\"errors\":[\"" + API_KEY + "\"]}");
             var error = assertThrows(DatadogClient.DatadogException.class, () -> call("ListRoles").build().run(runContext()));
             assertEquals(status, error.getStatus());
@@ -169,19 +168,19 @@ class CallTest extends AbstractDatadogTest {
 
     @Test
     void retriesOnlyIdempotentMethodsAndHonorsReset() throws Exception {
-        for (String method : List.of("POST", "PATCH", "GET", "PUT", "DELETE")) {
+        for (var method : List.of("POST", "PATCH", "GET", "PUT", "DELETE")) {
             assertEquals(!List.of("POST", "PATCH").contains(method), Transport.retryable(method, 429));
             assertEquals(!List.of("POST", "PATCH").contains(method), Transport.retryable(method, 503));
             assertFalse(Transport.retryable(method, 403));
         }
         assertEquals(17, Transport.retryDelay("17", 0));
         assertEquals(4, Transport.retryDelay("bad", 2));
-        AtomicInteger requests = new AtomicInteger();
-        HttpServer local = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var requests = new AtomicInteger();
+        var local = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         local.createContext("/", exchange -> {
             exchange.getRequestBody().readAllBytes();
-            int count = requests.incrementAndGet();
-            byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+            var count = requests.incrementAndGet();
+            var response = "{}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-RateLimit-Reset", "0");
             exchange.sendResponseHeaders(count % 2 == 1 ? 429 : 200, response.length);
@@ -189,7 +188,7 @@ class CallTest extends AbstractDatadogTest {
         });
         local.start();
         try {
-            String url = "http://127.0.0.1:" + local.getAddress().getPort();
+            var url = "http://127.0.0.1:" + local.getAddress().getPort();
             call("ListRoles").apiUrl(Property.ofValue(url)).maxRetries(Property.ofValue(1)).build().run(runContext());
             assertEquals(2, requests.get());
             assertThrows(DatadogClient.DatadogException.class, () -> call("CreateMonitor").body(Map.of())
@@ -200,17 +199,17 @@ class CallTest extends AbstractDatadogTest {
 
     @Test
     void textAndBinaryAnswersRemainIntactAndCannotBypassRedaction() throws Exception {
-        HttpServer local = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var local = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         local.createContext("/", exchange -> {
             exchange.getRequestBody().readAllBytes();
-            boolean text = exchange.getRequestURI().getPath().startsWith("/text");
-            byte[] bytes = text ? "ready".getBytes(StandardCharsets.UTF_8) : new byte[]{0, 1, (byte) 255, 127};
+            var text = exchange.getRequestURI().getPath().startsWith("/text");
+            var bytes = text ? "ready".getBytes(StandardCharsets.UTF_8) : new byte[]{0, 1, (byte) 255, 127};
             exchange.getResponseHeaders().set("Content-Type", text ? "text/plain" : "application/octet-stream");
             exchange.sendResponseHeaders(200, bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
         });
         local.start();
         try {
-            String url = "http://127.0.0.1:" + local.getAddress().getPort();
+            var url = "http://127.0.0.1:" + local.getAddress().getPort();
             var context = runContext();
             assertTrue(assertThrows(IllegalArgumentException.class, () -> call("ListRoles").apiUrl(Property.ofValue(url)).build().run(context)).getMessage().contains("includeSecrets"));
             var binary = call("ListRoles").apiUrl(Property.ofValue(url)).includeSecrets(Property.ofValue(true)).build().run(context);
@@ -252,7 +251,7 @@ class CallTest extends AbstractDatadogTest {
         var uri = context.storage().putFile(new ByteArrayInputStream("<metadata/>".getBytes(StandardCharsets.UTF_8)), "idp.xml");
         server.reply("POST", "/api/v2/saml_configurations/idp_metadata", 200, "");
         call("UploadIdPMetadata").body(Map.of("idp_file", uri.toString())).build().run(context);
-        String contentType = server.only().header("Content-Type");
+        var contentType = server.only().header("Content-Type");
         assertTrue(contentType.startsWith("multipart/form-data;"), contentType);
         assertTrue(contentType.contains("boundary="));
         assertTrue(server.only().body().contains("<metadata/>"));

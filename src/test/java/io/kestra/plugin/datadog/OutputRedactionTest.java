@@ -5,6 +5,8 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.contract.OpenApiContract;
+import io.kestra.plugin.datadog.logs.Search;
+import io.kestra.plugin.datadog.monitors.List;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,15 +21,15 @@ class OutputRedactionTest extends AbstractDatadogTest {
     @Test
     void sensitiveOutputRequiresExplicitOptIn() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[{\"id\":1,\"message\":\"" + WEBHOOK + "\"}]");
-        var monitor = io.kestra.plugin.datadog.monitors.List.builder()
-            .id(IdUtils.create()).type(io.kestra.plugin.datadog.monitors.List.class.getName())
+        var monitor = List.builder()
+            .id(IdUtils.create()).type(List.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .includeSecrets(Property.ofValue(true)).build().run(runContext());
         assertEquals(WEBHOOK, monitor.getMonitors().getFirst().get("message"));
         server.reply("POST", "/api/v2/logs/events/search", 200,
             "{\"data\":[{\"id\":\"log-1\",\"type\":\"log\",\"attributes\":{\"message\":\"" + WEBHOOK + "\"}}]}");
-        var log = io.kestra.plugin.datadog.logs.Search.builder()
-            .id(IdUtils.create()).type(io.kestra.plugin.datadog.logs.Search.class.getName())
+        var log = Search.builder()
+            .id(IdUtils.create()).type(Search.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .includeSecrets(Property.ofValue(true)).build().run(runContext());
         assertEquals(WEBHOOK, log.getLogs().getFirst().get("message"));
@@ -40,8 +42,8 @@ class OutputRedactionTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/monitor", 200, body);
         for (var mode : FetchType.values()) {
             var context = runContext();
-            var output = io.kestra.plugin.datadog.monitors.List.builder()
-                .id(IdUtils.create()).type(io.kestra.plugin.datadog.monitors.List.class.getName())
+            var output = List.builder()
+                .id(IdUtils.create()).type(List.class.getName())
                 .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
                 .fetchType(Property.ofValue(mode)).build().run(context);
             assertEquals(1, output.getSize());
@@ -66,8 +68,8 @@ class OutputRedactionTest extends AbstractDatadogTest {
         server.reply("POST", "/api/v2/logs/events/search", 200, body);
         for (var mode : FetchType.values()) {
             var context = runContext();
-            var output = io.kestra.plugin.datadog.logs.Search.builder()
-                .id(IdUtils.create()).type(io.kestra.plugin.datadog.logs.Search.class.getName())
+            var output = Search.builder()
+                .id(IdUtils.create()).type(Search.class.getName())
                 .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
                 .fetchType(Property.ofValue(mode)).build().run(context);
             assertEquals(1, output.getSize());

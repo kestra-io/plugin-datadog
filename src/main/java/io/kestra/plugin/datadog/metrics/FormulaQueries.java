@@ -1,13 +1,8 @@
 package io.kestra.plugin.datadog.metrics;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
 
-import java.io.OutputStream;
 import java.math.BigDecimal;
-import java.net.URI;
-import java.nio.file.Files;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,12 +21,12 @@ final class FormulaQueries {
         if (from.toEpochMilli() >= to.toEpochMilli()) {
             throw new IllegalArgumentException("`from` must be before `to` at millisecond precision");
         }
-        List<Map<String, Object>> rendered = new ArrayList<>();
+        var rendered = new ArrayList<Map<String, Object>>();
         queries.forEach((name, query) -> {
             if (name == null || name.isBlank() || query == null || query.isBlank()) {
                 throw new IllegalArgumentException("Query names and expressions must not be blank");
             }
-            Map<String, Object> item = DatadogClient.query();
+            var item = DatadogClient.query();
             item.put("name", name);
             item.put("query", query);
             item.put("data_source", source.apiValue());
@@ -40,7 +35,7 @@ final class FormulaQueries {
             }
             rendered.add(item);
         });
-        Map<String, Object> attributes = DatadogClient.query();
+        var attributes = DatadogClient.query();
         attributes.put("queries", rendered);
         attributes.put("from", from.toEpochMilli());
         attributes.put("to", to.toEpochMilli());
@@ -63,7 +58,7 @@ final class FormulaQueries {
 
     @SuppressWarnings("unchecked")
     static Map<String, Object> attributes(DatadogClient.Response response) {
-        Map<String, Object> answer = response.map();
+        var answer = response.map();
         if (answer.get("errors") != null && !answer.get("errors").toString().isBlank()) {
             throw new IllegalStateException("Datadog could not run the formula query: " + answer.get("errors"));
         }
@@ -77,20 +72,20 @@ final class FormulaQueries {
         if (!(attributes.get("columns") instanceof List<?> columns)) {
             throw new IllegalStateException("Datadog scalar response has no columns array");
         }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Object column : columns) {
+        var result = new ArrayList<Map<String, Object>>();
+        for (var column : columns) {
             if (!(column instanceof Map<?, ?> map)) {
                 throw new IllegalStateException("Datadog scalar column must be an object");
             }
             @SuppressWarnings("unchecked")
-            Map<String, Object> value = (Map<String, Object>) map;
+            var value = (Map<String, Object>) map;
             result.add(value);
         }
         return result;
     }
 
     static BigDecimal scalar(Map<String, Object> attributes) {
-        List<Map<String, Object>> columns = columns(attributes);
+        var columns = columns(attributes);
         List<Map<String, Object>> numbers = columns.stream().filter(c -> "number".equals(c.get("type"))).toList();
         if (columns.isEmpty()) {
             return null;

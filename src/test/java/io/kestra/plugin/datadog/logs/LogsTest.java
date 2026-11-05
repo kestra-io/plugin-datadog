@@ -1,10 +1,11 @@
 package io.kestra.plugin.datadog.logs;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
-import io.kestra.plugin.datadog.AbstractDatadogTest;
-import io.kestra.plugin.datadog.MockDatadogServer;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.utils.IdUtils;
+import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LogsTest extends AbstractDatadogTest {
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void assertContracts() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:SubmitLog", "v2:ListLogs");
+        OpenApiContract.assertRequests(server.requests, "v2:SubmitLog", "v2:ListLogs");
     }
 
     private Send.SendBuilder<?, ?> send() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:SubmitLog").assertResponse(202, "{}");
+        OpenApiContract.of("v2:SubmitLog").assertResponse(202, "{}");
         server.reply("POST", "/api/v2/logs", 202, "{}");
         return Send.builder().id(IdUtils.create()).type(Send.class.getName())
             .apiKey(Property.ofValue(API_KEY))
@@ -39,17 +40,17 @@ class LogsTest extends AbstractDatadogTest {
     }
 
     private static String events(int from, int count, String after) {
-        String data = IntStream.range(from, from + count)
+        var data = IntStream.range(from, from + count)
             .mapToObj(i -> "{\"id\":\"e" + i + "\",\"type\":\"log\",\"attributes\":{\"message\":\"line " + i + "\",\"service\":\"orders\",\"status\":\"error\",\"attributes\":{\"n\":" + i + "}}}")
             .collect(Collectors.joining(",", "[", "]"));
-        String response = "{\"data\":" + data + (after == null ? "" : ",\"meta\":{\"page\":{\"after\":\"" + after + "\"}}") + "}";
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:ListLogs").assertResponse(200, response);
+        var response = "{\"data\":" + data + (after == null ? "" : ",\"meta\":{\"page\":{\"after\":\"" + after + "\"}}") + "}";
+        OpenApiContract.of("v2:ListLogs").assertResponse(200, response);
         return response;
     }
 
     @Test
     void sendsOneEntryToTheIntakeWithTheApiKeyOnly() throws Exception {
-        Send.Output output = send()
+        var output = send()
             .message(Property.ofValue("Loaded 1250 orders"))
             .service(Property.ofValue("orders-pipeline"))
             .source(Property.ofValue("kestra"))
@@ -58,14 +59,14 @@ class LogsTest extends AbstractDatadogTest {
             .attributes(Property.ofValue(Map.of("rows", 1250)))
             .build().run(runContext());
 
-        MockDatadogServer.Received request = server.only();
+        var request = server.only();
         assertEquals("/api/v2/logs", request.path());
         assertEquals(API_KEY, request.header("DD-API-KEY"));
         assertNull(request.header("DD-APPLICATION-KEY"));
         List<?> body = request.jsonList();
         assertEquals(1, body.size());
         @SuppressWarnings("unchecked")
-        Map<String, Object> entry = (Map<String, Object>) body.get(0);
+        var entry = (Map<String, Object>) body.get(0);
         assertEquals("Loaded 1250 orders", entry.get("message"));
         assertEquals("orders-pipeline", entry.get("service"));
         assertEquals("kestra", entry.get("ddsource"));
@@ -77,7 +78,7 @@ class LogsTest extends AbstractDatadogTest {
 
     @Test
     void attributesCannotSetTheFieldsThatHaveAPropertyOfTheirOwn() {
-        for (String reserved : List.of("message", "service", "ddsource", "hostname", "ddtags")) {
+        for (var reserved : List.of("message", "service", "ddsource", "hostname", "ddtags")) {
             assertThrows(IllegalArgumentException.class, () -> send().message(Property.ofValue("m")).attributes(Property.ofValue(Map.of(reserved, "x"))).build().run(runContext()), reserved);
             assertThrows(IllegalArgumentException.class, () -> send().logs(Property.ofValue(List.of(Map.of("message", "m")))).attributes(Property.ofValue(Map.of(reserved, "x"))).build().run(runContext()), reserved);
         }
@@ -99,9 +100,9 @@ class LogsTest extends AbstractDatadogTest {
 
         List<?> body = server.only().jsonList();
         @SuppressWarnings("unchecked")
-        Map<String, Object> first = (Map<String, Object>) body.get(0);
+        var first = (Map<String, Object>) body.get(0);
         @SuppressWarnings("unchecked")
-        Map<String, Object> second = (Map<String, Object>) body.get(1);
+        var second = (Map<String, Object>) body.get(1);
         assertEquals("default-service", first.get("service"));
         assertEquals("kestra", first.get("ddsource"));
         assertEquals("worker-1", first.get("hostname"));
@@ -113,7 +114,7 @@ class LogsTest extends AbstractDatadogTest {
 
     @Test
     void sendsSeveralEntries() throws Exception {
-        Send.Output output = send().logs(Property.ofValue(List.of(
+        var output = send().logs(Property.ofValue(List.of(
             Map.of("message", "a", "service", "s"), Map.of("message", "b", "ddtags", "env:prod")))).build().run(runContext());
 
         assertEquals(2, server.only().jsonList().size());
@@ -127,8 +128,8 @@ class LogsTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> send().message(Property.ofValue("  ")).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> send().logs(Property.ofValue(List.of())).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> send().logs(Property.ofValue(List.of(Map.of("service", "s")))).build().run(runContext()));
-        List<Map<String, Object>> tooMany = new ArrayList<>();
-        for (int i = 0; i < 1001; i++) {
+        var tooMany = new ArrayList<Map<String, Object>>();
+        for (var i = 0; i < 1001; i++) {
             tooMany.add(Map.of("message", "m" + i));
         }
         assertThrows(IllegalArgumentException.class, () -> send().logs(Property.ofValue(tooMany)).build().run(runContext()));
@@ -148,7 +149,7 @@ class LogsTest extends AbstractDatadogTest {
     void searchSendsTheQueryAndFlattensTheEvents() throws Exception {
         server.reply("POST", "/api/v2/logs/events/search", 200, events(1, 2, null));
 
-        Search.Output output = search()
+        var output = search()
             .query(Property.ofValue("service:orders status:error"))
             .from(Property.ofValue("now-1h"))
             .indexes(Property.ofValue(List.of("main")))
@@ -156,12 +157,12 @@ class LogsTest extends AbstractDatadogTest {
             .maxResults(Property.ofValue(50))
             .build().run(runContext());
 
-        MockDatadogServer.Received request = server.only();
+        var request = server.only();
         assertEquals(API_KEY, request.header("DD-API-KEY"));
         assertEquals(APP_KEY, request.header("DD-APPLICATION-KEY"));
-        Map<String, Object> body = request.json();
+        var body = request.json();
         @SuppressWarnings("unchecked")
-        Map<String, Object> filter = (Map<String, Object>) body.get("filter");
+        var filter = (Map<String, Object>) body.get("filter");
         assertEquals("service:orders status:error", filter.get("query"));
         assertEquals("now-1h", filter.get("from"));
         assertEquals("now", filter.get("to"));
@@ -180,12 +181,12 @@ class LogsTest extends AbstractDatadogTest {
         server.reply("POST", "/api/v2/logs/events/search", 200, events(0, 1000, "cursor-1"));
         server.reply("POST", "/api/v2/logs/events/search", 200, events(1000, 1000, "cursor-2"));
 
-        Search.Output output = search().maxResults(Property.ofValue(1500)).build().run(runContext());
+        var output = search().maxResults(Property.ofValue(1500)).build().run(runContext());
 
         assertEquals(1500, output.getSize());
         assertEquals(2, server.requests.size());
         @SuppressWarnings("unchecked")
-        Map<String, Object> secondPage = (Map<String, Object>) server.requests.get(1).json().get("page");
+        var secondPage = (Map<String, Object>) server.requests.get(1).json().get("page");
         assertEquals("cursor-1", secondPage.get("cursor"));
         assertEquals(500, secondPage.get("limit"), "the second page asks only for what is missing");
     }
@@ -202,17 +203,17 @@ class LogsTest extends AbstractDatadogTest {
     void searchFetchTypeControlsWhatIsReturned() throws Exception {
         server.reply("POST", "/api/v2/logs/events/search", 200, events(1, 3, null));
 
-        Search.Output one = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.FETCH_ONE)).build().run(runContext());
+        var one = search().fetchType(Property.ofValue(FetchType.FETCH_ONE)).build().run(runContext());
         assertEquals("e1", one.getRow().get("id"));
         assertEquals(null, one.getLogs());
         assertEquals(3, one.getSize());
 
-        Search.Output none = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.NONE)).build().run(runContext());
+        var none = search().fetchType(Property.ofValue(FetchType.NONE)).build().run(runContext());
         assertEquals(null, none.getLogs());
         assertEquals(null, none.getUri());
         assertEquals(3, none.getSize());
 
-        Search.Output stored = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build().run(runContext());
+        var stored = search().fetchType(Property.ofValue(FetchType.STORE)).build().run(runContext());
         assertEquals(null, stored.getLogs());
         assertTrue(stored.getUri() != null && stored.getUri().toString().startsWith("kestra://"), String.valueOf(stored.getUri()));
         assertEquals(3, stored.getSize());
@@ -223,7 +224,7 @@ class LogsTest extends AbstractDatadogTest {
         server.reply("POST", "/api/v2/logs/events/search", 200, "{\"data\":[]}");
         assertEquals(0, search().build().run(runContext()).getSize());
         @SuppressWarnings("unchecked")
-        Map<String, Object> filter = (Map<String, Object>) server.only().json().get("filter");
+        var filter = (Map<String, Object>) server.only().json().get("filter");
         assertEquals("*", filter.get("query"));
         assertEquals("now-15m", filter.get("from"));
         assertThrows(IllegalArgumentException.class, () -> search().maxResults(Property.ofValue(0)).build().run(runContext()));

@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.deployments;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -43,60 +44,70 @@ import java.util.Map;
 public class Record extends AbstractDatadogTask implements RunnableTask<Record.Output> {
     @NotNull
     @Schema(title = "Service")
+    @PluginProperty(group = "main")
     private Property<String> service;
     @NotNull
     @Schema(title = "Deployment start", description = "ISO-8601 instant. Sent as Unix nanoseconds.")
+    @PluginProperty(group = "main")
     private Property<Instant> startedAt;
     @NotNull
     @Schema(title = "Deployment finish", description = "ISO-8601 instant at or after startedAt. Sent as Unix nanoseconds.")
+    @PluginProperty(group = "main")
     private Property<Instant> finishedAt;
     @Schema(title = "Environment")
+    @PluginProperty(group = "main")
     private Property<String> env;
     @Schema(title = "Version")
+    @PluginProperty(group = "main")
     private Property<String> deploymentVersion;
     @Schema(title = "Team")
+    @PluginProperty(group = "main")
     private Property<String> team;
     @Schema(title = "Deployment ID", description = "Optional Datadog ID, 16 to 128 alphanumeric characters or hyphens, underscores, periods and colons. No client-side upsert guarantee.")
+    @PluginProperty(group = "main")
     private Property<String> deploymentId;
     @Schema(title = "Git repository URL", description = "Requires commitSha when set.")
     @ToString.Exclude
+    @PluginProperty(group = "main")
     private Property<String> repositoryUrl;
     @Schema(title = "Git commit SHA", description = "Requires repositoryUrl when set.")
+    @PluginProperty(group = "main")
     private Property<String> commitSha;
     @Schema(title = "Custom tags")
+    @PluginProperty(group = "main")
     private Property<List<String>> customTags;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, false)) {
-            String name = Deployments.required(context.render(service).as(String.class).orElse(null), "service");
-            Instant start = context.render(startedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`startedAt` is required"));
-            Instant finish = context.render(finishedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`finishedAt` is required"));
-            if (start.isAfter(finish)) {
+            var rName = Deployments.required(context.render(service).as(String.class).orElse(null), "service");
+            var rStart = context.render(startedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`startedAt` is required"));
+            var rFinish = context.render(finishedAt).as(Instant.class).orElseThrow(() -> new IllegalArgumentException("`finishedAt` is required"));
+            if (rStart.isAfter(rFinish)) {
                 throw new IllegalArgumentException("`finishedAt` must be at or after startedAt");
             }
-            Map<String, Object> attributes = new LinkedHashMap<>();
-            attributes.put("service", name);
-            attributes.put("started_at", nanos(start));
-            attributes.put("finished_at", nanos(finish));
+            var attributes = new LinkedHashMap<String, Object>();
+            attributes.put("service", rName);
+            attributes.put("started_at", nanos(rStart));
+            attributes.put("finished_at", nanos(rFinish));
             context.render(env).as(String.class).ifPresent(value -> attributes.put("env", value));
             context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
             context.render(team).as(String.class).ifPresent(value -> attributes.put("team", value));
-            String id = context.render(deploymentId).as(String.class).orElse(null);
-            if (id != null) {
-                if (!id.matches("[A-Za-z0-9_.:-]{16,128}")) {
+            var rId = context.render(deploymentId).as(String.class).orElse(null);
+            if (rId != null) {
+                if (!rId.matches("[A-Za-z0-9_.:-]{16,128}")) {
                     throw new IllegalArgumentException("`deploymentId` must contain 16 to 128 allowed characters");
                 }
-                attributes.put("id", id);
+                attributes.put("id", rId);
             }
-            String repo = context.render(repositoryUrl).as(String.class).orElse(null);
-            String sha = context.render(commitSha).as(String.class).orElse(null);
-            if (repo != null || sha != null) {
-                attributes.put("git", Map.of("repository_url", Deployments.required(repo, "repositoryUrl"), "commit_sha", Deployments.required(sha, "commitSha")));
+            var rRepo = context.render(repositoryUrl).as(String.class).orElse(null);
+            var rSha = context.render(commitSha).as(String.class).orElse(null);
+            if (rRepo != null || rSha != null) {
+                attributes.put("git", Map.of("repository_url", Deployments.required(rRepo, "repositoryUrl"), "commit_sha", Deployments.required(rSha, "commitSha")));
             }
-            var tags = context.render(customTags).asList(String.class);
-            if (!tags.isEmpty()) {
-                attributes.put("custom_tags", tags);
+            var rTags = context.render(customTags).asList(String.class);
+            if (!rTags.isEmpty()) {
+                attributes.put("custom_tags", rTags);
             }
             var answer = client.post("/api/v2/dora/deployment", Map.of("data", Map.of("attributes", attributes)));
             var data = Deployments.object(answer.map().get("data"), "deployment data");

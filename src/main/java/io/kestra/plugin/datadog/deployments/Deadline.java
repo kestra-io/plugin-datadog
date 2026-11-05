@@ -34,7 +34,7 @@ public final class Deadline implements AutoCloseable {
     }
 
     public <T> T call(Callable<T> action) throws Exception {
-        long left = remaining();
+        var left = remaining();
         if (left == 0) {
             throw new TimeoutException("Datadog polling deadline reached");
         }

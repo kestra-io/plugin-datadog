@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.synthetics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -16,6 +17,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
 import java.util.Map;
 
 /** Datadog operationId: v1:DeleteTests, restricted to one public ID without forced dependency deletion. */
@@ -39,27 +41,29 @@ import java.util.Map;
 public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.Output> {
     @NotNull
     @Schema(title = "Public test ID")
+    @PluginProperty(group = "main")
     private Property<String> publicId;
     @Schema(title = "Ignore missing test", description = "Return deleted=false for HTTP 404 or an empty deletion response.", defaultValue = "false")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rId = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
             try {
-                var response = client.post("/api/v1/synthetics/tests/delete", Map.of("public_ids", java.util.List.of(id), "force_delete_dependencies", false)).map();
-                boolean deleted = Synthetics.rows(response.get("deleted_tests"), "deleted_tests").stream().anyMatch(row -> id.equals(row.get("public_id")));
-                if (!deleted && !ignore) {
-                    throw new IllegalStateException("Datadog did not report deletion of test " + id);
+                var response = client.post("/api/v1/synthetics/tests/delete", Map.of("public_ids", List.of(rId), "force_delete_dependencies", false)).map();
+                boolean deleted = Synthetics.rows(response.get("deleted_tests"), "deleted_tests").stream().anyMatch(row -> rId.equals(row.get("public_id")));
+                if (!deleted && !rIgnore) {
+                    throw new IllegalStateException("Datadog did not report deletion of test " + rId);
                 }
-                return Output.builder().publicId(id).deleted(deleted).build();
+                return Output.builder().publicId(rId).deleted(deleted).build();
             } catch (DatadogClient.DatadogException e) {
-                if (e.getStatus() != 404 || !ignore) {
+                if (e.getStatus() != 404 || !rIgnore) {
                     throw e;
                 }
-                return Output.builder().publicId(id).deleted(false).build();
+                return Output.builder().publicId(rId).deleted(false).build();
             }
         }
     }

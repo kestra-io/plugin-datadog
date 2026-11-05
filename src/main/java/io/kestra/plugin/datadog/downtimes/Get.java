@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -34,21 +35,23 @@ import java.util.Map;
 public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output> {
     @NotNull
     @Schema(title = "Downtime id")
+    @PluginProperty(group = "main")
     private Property<String> downtimeId;
     @Schema(title = "Include sensitive output values", description = "False by default. Filters credential-like keys and HTTP URLs.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = context.render(downtimeId).as(String.class).orElse(null);
-            String path = DowntimeSupport.path(id);
-            boolean include = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var rId = context.render(downtimeId).as(String.class).orElse(null);
+            var path = DowntimeSupport.path(rId);
+            var rInclude = context.render(includeSecrets).as(Boolean.class).orElse(false);
             var response = client.get(path, Map.of()).map();
             if (!(response.get("data") instanceof Map<?, ?>)) {
                 throw new IllegalStateException("Datadog downtime response must contain a data object");
             }
-            return Output.builder().downtimeId(id).downtime(MonitorIO.redactMap(response, include)).build();
+            return Output.builder().downtimeId(rId).downtime(MonitorIO.redactMap(response, rInclude)).build();
         }
     }
 

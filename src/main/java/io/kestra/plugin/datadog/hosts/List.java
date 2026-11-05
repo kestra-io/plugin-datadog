@@ -1,20 +1,20 @@
 package io.kestra.plugin.datadog.hosts;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -22,11 +22,8 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-import java.io.OutputStream;
 import java.net.URI;
-import java.nio.file.Files;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Map;
 
@@ -53,32 +50,42 @@ import java.util.Map;
     """))
 public class List extends AbstractDatadogTask implements RunnableTask<List.Output> {
     @Schema(title = "Search filter", description = "Datadog host search expression.")
+    @PluginProperty(group = "processing")
     private Property<String> filter;
     @Schema(title = "Sort field", description = "Datadog host field used for sorting.")
+    @PluginProperty(group = "processing")
     private Property<String> sortField;
     @Schema(title = "Sort direction", description = "ASC or DESC. Omitted by default.")
+    @PluginProperty(group = "processing")
     private Property<SortDirection> sortDirection;
     @Schema(title = "Start time", description = "Optional instant sent as epoch seconds in from.")
+    @PluginProperty(group = "processing")
     private Property<Instant> from;
     @Schema(title = "Include mute information", description = "Include host mute state and timeout.")
+    @PluginProperty(group = "processing")
     private Property<Boolean> includeMutedHostsData;
     @Schema(title = "Include host metadata", description = "Include agent and machine metadata.")
+    @PluginProperty(group = "processing")
     private Property<Boolean> includeHostsMetadata;
     @Schema(title = "Page size", description = "Hosts per request, from 1 to 1000. Defaults to 1000.")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(1000) Integer> pageSize;
     @Schema(title = "Maximum results", description = "Maximum hosts collected, from 1 to 10000. Defaults to 1000.")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxResults;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in host metadata. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
-        int page = context.render(pageSize).as(Integer.class).orElse(1000);
-        int max = context.render(maxResults).as(Integer.class).orElse(1000);
-        if (page < 1 || page > 1000 || max < 1 || max > 10000) {
+        var rPage = context.render(pageSize).as(Integer.class).orElse(1000);
+        var rMax = context.render(maxResults).as(Integer.class).orElse(1000);
+        if (rPage < 1 || rPage > 1000 || rMax < 1 || rMax > 10000) {
             throw new IllegalArgumentException("`pageSize` must be 1..1000 and `maxResults` must be 1..10000");
         }
         var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
@@ -89,16 +96,16 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         context.render(from).as(Instant.class).ifPresent(value -> params.put("from", value.getEpochSecond()));
         context.render(includeMutedHostsData).as(Boolean.class).ifPresent(value -> params.put("include_muted_hosts_data", value));
         context.render(includeHostsMetadata).as(Boolean.class).ifPresent(value -> params.put("include_hosts_metadata", value));
-        long count = 0;
+        var count = 0L;
         Long total = null;
-        boolean truncated = false;
+        var truncated = false;
         try (var client = client(context, true);
              var sink = new DatadogFetch.Sink<Map<String, Object>>(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH))) {
-            while (count < max) {
-                int requested = Math.min(page, max - (int) count);
+            while (count < rMax) {
+                var requested = Math.min(rPage, rMax - (int) count);
                 params.put("count", requested);
                 params.put("start", count);
-                Map<String, Object> answer = client.get("/api/v1/hosts", params).map();
+                var answer = client.get("/api/v1/hosts", params).map();
                 if (!(answer.get("host_list") instanceof java.util.List<?> rows)) {
                     throw new IllegalStateException("Datadog host response has no host_list array");
                 }
@@ -106,7 +113,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
                 if (rows.size() > requested) {
                     throw new IllegalStateException("Datadog returned more hosts than the requested page size");
                 }
-                for (Object row : rows) {
+                for (var row : rows) {
                     if (!(row instanceof Map<?, ?> map)) {
                         throw new IllegalStateException("Datadog host must be an object");
                     }
@@ -114,14 +121,14 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
                     sink.add(MonitorIO.redactMap(host, rIncludeSecrets));
                     count++;
                 }
-                boolean more = total != null ? count < total : rows.size() == requested;
+                var more = total != null ? count < total : rows.size() == requested;
                 if (rows.isEmpty() && more) {
                     throw new IllegalStateException("Datadog returned an empty host page before total_matching was reached");
                 }
                 if (rows.isEmpty() || !more) {
                     break;
                 }
-                if (count == max) {
+                if (count == rMax) {
                     truncated = true;
                 }
             }

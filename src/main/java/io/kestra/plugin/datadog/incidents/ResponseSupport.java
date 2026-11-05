@@ -1,15 +1,18 @@
 package io.kestra.plugin.datadog.incidents;
 
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -19,18 +22,19 @@ import java.util.Map;
 @NoArgsConstructor
 public abstract class ResponseSupport extends AbstractDatadogTask {
     @Schema(title = "Include sensitive response fields", description = "Returns structured key, token, password and webhook fields when true. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     protected String required(RunContext context, Property<String> property, String name) throws Exception {
-        String value = context.render(property).as(String.class).orElse("").trim();
-        if (value.isEmpty()) {
+        var rValue = context.render(property).as(String.class).orElse("").trim();
+        if (rValue.isEmpty()) {
             throw new IllegalArgumentException("`" + name + "` must not be blank");
         }
-        return value;
+        return rValue;
     }
 
     protected String identifier(RunContext context, Property<String> property, String name) throws Exception {
-        String value = required(context, property, name);
+        var value = required(context, property, name);
         if (!value.matches("[A-Za-z0-9_-]+")) {
             throw new IllegalArgumentException("`" + name + "` must be a single identifier without path or query characters");
         }
@@ -42,7 +46,7 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
     }
 
     protected String uuid(RunContext context, Property<String> property, String name) throws Exception {
-        String value = required(context, property, name);
+        var value = required(context, property, name);
         if (!value.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
             throw new IllegalArgumentException("`" + name + "` must be a UUID");
         }
@@ -54,7 +58,7 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
     }
 
     protected static Map<String, Object> resource(String type, String id, Map<String, Object> attributes) {
-        Map<String, Object> data = new LinkedHashMap<>();
+        var data = new LinkedHashMap<String, Object>();
         data.put("type", type);
         if (id != null) {
             data.put("id", id);
@@ -75,7 +79,7 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
     protected ResponseOutput send(RunContext context, DatadogClient client, String base, String method, String path,
                                   Map<String, Object> query, Map<String, Object> body, boolean preview) throws Exception {
         if (preview) {
-            Map<String, Object> request = new LinkedHashMap<>();
+            var request = new LinkedHashMap<String, Object>();
             request.put("method", method);
             request.put("url", base + path);
             request.put("query", query);
@@ -84,10 +88,10 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
             }
             return ResponseOutput.builder().dryRun(true).request(safe(context, request)).build();
         }
-        DatadogClient.Response response = client.exchange(method, base, path, query, body, true);
-        Map<String, Object> answer = safe(context, response.map());
-        Object data = answer.get("data");
-        String id = data instanceof Map<?, ?> map && map.get("id") != null ? String.valueOf(map.get("id")) : null;
+        var response = client.exchange(method, base, path, query, body, true);
+        var answer = safe(context, response.map());
+        var data = answer.get("data");
+        var id = data instanceof Map<?, ?> map && map.get("id") != null ? String.valueOf(map.get("id")) : null;
         return ResponseOutput.builder().id(id).statusCode(response.status()).dryRun(false).body(answer).build();
     }
 
@@ -98,20 +102,20 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
 
     public static Object redact(Object value) {
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
+            var result = new LinkedHashMap<String, Object>();
             map.forEach((key, child) -> {
-                String name = key.toString();
-                String normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                boolean sensitive = normalized.contains("password") || normalized.contains("secret")
+                var name = key.toString();
+                var normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+                var sensitive = normalized.contains("password") || normalized.contains("secret")
                     || normalized.contains("token") || normalized.equals("apikey") || normalized.equals("appkey")
                     || normalized.equals("applicationkey") || normalized.contains("webhook");
                 result.put(name, sensitive ? "[REDACTED]" : redact(child));
             });
             return result;
         }
-        if (value instanceof java.util.List<?> list) {
+        if (value instanceof List<?> list) {
             return list.stream().map(ResponseSupport::redact).toList();
         }
-        return io.kestra.plugin.datadog.monitors.MonitorIO.redact(value, false);
+        return MonitorIO.redact(value, false);
     }
 }

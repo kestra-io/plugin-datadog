@@ -52,9 +52,9 @@ public class Create extends AbstractWriteTest implements RunnableTask<Create.Out
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
             var body = definition(context);
-            boolean reveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
+            var rReveal = context.render(getIncludeSecrets()).as(Boolean.class).orElse(false);
             var test = client.post("/api/v1/synthetics/tests/" + body.get("type"), body).map();
-            return Output.builder().test(Synthetics.summary(test, reveal)).build();
+            return Output.builder().test(Synthetics.summary(test, rReveal)).build();
         }
     }
 

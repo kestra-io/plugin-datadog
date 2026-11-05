@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.teams;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -37,24 +38,28 @@ import java.util.Set;
 public class RemoveMember extends AbstractDatadogTask implements RunnableTask<RemoveMember.Output> {
     @NotNull
     @Schema(title = "Team identifier")
+    @PluginProperty(group = "main")
     private Property<String> teamId;
     @NotNull
     @Schema(title = "User identifier", description = "The user ID rather than the membership ID.")
+    @PluginProperty(group = "main")
     private Property<String> userId;
     @Schema(title = "Ignore missing membership", description = "Treat HTTP 404 as already removed.", defaultValue = "false")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
     @Schema(title = "Allow removing the last admin", description = "Permit removal of the team's final admin.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> allowRemoveLastAdmin;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String team = AccessApi.required(context, teamId, "teamId");
-            String user = AccessApi.required(context, userId, "userId");
-            String path = Memberships.path(team);
-            String target = path + "/" + AccessApi.segment(user);
-            boolean ignore = AccessApi.flag(context, ignoreNotFound);
-            boolean allow = AccessApi.flag(context, allowRemoveLastAdmin);
+            var team = AccessApi.required(context, teamId, "teamId");
+            var user = AccessApi.required(context, userId, "userId");
+            var path = Memberships.path(team);
+            var target = path + "/" + AccessApi.segment(user);
+            var ignore = AccessApi.flag(context, ignoreNotFound);
+            var allow = AccessApi.flag(context, allowRemoveLastAdmin);
             try {
                 Memberships.protectAdmins(Memberships.read(client, path, 10000), Set.of(user), allow);
             } catch (DatadogClient.DatadogException e) {

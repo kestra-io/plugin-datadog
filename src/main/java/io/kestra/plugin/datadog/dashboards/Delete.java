@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.dashboards;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -37,25 +38,27 @@ import lombok.experimental.SuperBuilder;
 public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.Output> {
     @NotNull
     @Schema(title = "Dashboard identifier")
+    @PluginProperty(group = "main")
     private Property<String> dashboardId;
 
     @Schema(title = "Ignore a missing dashboard", description = "Treat HTTP 404 as a no-op. False by default.")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = context.render(dashboardId).as(String.class).orElse(null);
-            String path = Dashboards.path(id);
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rId = context.render(dashboardId).as(String.class).orElse(null);
+            var path = Dashboards.path(rId);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
             try {
                 client.delete(path);
-                return Output.builder().dashboardId(id).deleted(true).build();
+                return Output.builder().dashboardId(rId).deleted(true).build();
             } catch (DatadogClient.DatadogException e) {
-                if (e.getStatus() != 404 || !ignore) {
+                if (e.getStatus() != 404 || !rIgnore) {
                     throw e;
                 }
-                return Output.builder().dashboardId(id).deleted(false).build();
+                return Output.builder().dashboardId(rId).deleted(false).build();
             }
         }
     }

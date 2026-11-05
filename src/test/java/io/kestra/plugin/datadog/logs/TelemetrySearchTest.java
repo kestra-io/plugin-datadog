@@ -1,14 +1,17 @@
 package io.kestra.plugin.datadog.logs;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.civisibility.SearchPipelines;
+import io.kestra.plugin.datadog.civisibility.SearchTests;
+import io.kestra.plugin.datadog.events.Search;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -34,9 +37,9 @@ class TelemetrySearchTest extends AbstractDatadogTest {
             new Endpoint("/api/v2/spans/events/search", "spans", io.kestra.plugin.datadog.spans.Search::builder),
             new Endpoint("/api/v2/rum/events/search", "rum", io.kestra.plugin.datadog.rum.Search::builder),
             new Endpoint("/api/v2/audit/events/search", "audit", io.kestra.plugin.datadog.audit.Search::builder),
-            new Endpoint("/api/v2/ci/pipelines/events/search", "cipipeline", io.kestra.plugin.datadog.civisibility.SearchPipelines::builder),
-            new Endpoint("/api/v2/ci/tests/events/search", "citest", io.kestra.plugin.datadog.civisibility.SearchTests::builder),
-            new Endpoint("/api/v2/events/search", "event", io.kestra.plugin.datadog.events.Search::builder)
+            new Endpoint("/api/v2/ci/pipelines/events/search", "cipipeline", SearchPipelines::builder),
+            new Endpoint("/api/v2/ci/tests/events/search", "citest", SearchTests::builder),
+            new Endpoint("/api/v2/events/search", "event", Search::builder)
         );
     }
 
@@ -53,7 +56,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
 
     private String page(Endpoint endpoint, String id, String after) throws Exception {
         // Resource types and attributes follow the corresponding v2 response schemas.
-        Map<String, Object> resource = Map.of("id", id, "type", endpoint.resourceType(), "attributes", Map.of("attributes", Map.of("n", 1)));
+        var resource = Map.<String, Object>of("id", id, "type", endpoint.resourceType(), "attributes", Map.of("attributes", Map.of("n", 1)));
         return JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(resource), "meta", after == null ? Map.of("status", "done") : Map.of("status", "done", "page", Map.of("after", after))));
     }
 
@@ -71,7 +74,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
             server.requests.clear();
             server.reply("POST", endpoint.path(), 200, page(endpoint, "one", "cursor-one"));
             server.reply("POST", endpoint.path(), 200, page(endpoint, "two", null));
-            Map<String, Object> output = run(builder(endpoint).query(Property.ofValue("service:orders"))
+            var output = run(builder(endpoint).query(Property.ofValue("service:orders"))
                 .from(Property.ofValue("2026-11-05T10:00:00+02:00")).to(Property.ofValue("now-1m"))
                 .sort(Property.ofValue(AbstractSearch.Sort.ASCENDING)).maxResults(Property.ofValue(3)), runContext());
             assertEquals(2, output.get("size"));
@@ -95,11 +98,11 @@ class TelemetrySearchTest extends AbstractDatadogTest {
         return endpoints().stream().map(endpoint -> DynamicTest.dynamicTest(endpoint.resourceType() + " ION", () -> {
             server.reply("POST", endpoint.path(), 200, page(endpoint, "one", "cursor"));
             server.reply("POST", endpoint.path(), 200, page(endpoint, "two", null));
-            RunContext context = runContext();
-            Map<String, Object> output = run(builder(endpoint).fetchType(Property.ofValue(FetchType.STORE)), context);
+            var context = runContext();
+            var output = run(builder(endpoint).fetchType(Property.ofValue(FetchType.STORE)), context);
             assertNull(output.get(endpoint.resourceType().equals("log") ? "logs" : "events"));
             assertEquals(2, output.get("size"));
-            List<Object> rows = new ArrayList<>();
+            var rows = new ArrayList<Object>();
             try (var input = context.storage().getFile(URI.create(output.get("uri").toString()))) {
                 FileSerde.read(input, rows::add);
             }
@@ -111,11 +114,11 @@ class TelemetrySearchTest extends AbstractDatadogTest {
     @TestFactory
     Stream<DynamicTest> validationForEverySearch() {
         return endpoints().stream().map(endpoint -> DynamicTest.dynamicTest(endpoint.resourceType() + " validation", () -> {
-            int before = server.requests.size();
-            for (int cap : List.of(0, 10_001)) {
+            var before = server.requests.size();
+            for (var cap : List.of(0, 10_001)) {
                 assertThrows(IllegalArgumentException.class, () -> run(builder(endpoint).maxResults(Property.ofValue(cap)), runContext()));
             }
-            for (String field : List.of("from", "to")) {
+            for (var field : List.of("from", "to")) {
                 var builder = builder(endpoint);
                 if (field.equals("from")) {
                     builder.from(Property.ofValue("2026-99-01T00:00:00Z"));
@@ -158,7 +161,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
     @Test
     void refusesIncompleteAndMalformedResponses() throws Exception {
         var endpoint = endpoints().getFirst();
-        for (String body : List.of("{}", "{\"data\":[42]}", "{\"data\":[],\"meta\":{\"status\":\"timeout\"}}",
+        for (var body : List.of("{}", "{\"data\":[42]}", "{\"data\":[],\"meta\":{\"status\":\"timeout\"}}",
             "{\"data\":[],\"meta\":{\"warnings\":[{\"code\":\"unknown_index\",\"title\":\"Unknown index\"}]}}")) {
             server.reply("POST", endpoint.path(), 200, body);
             assertThrows(IllegalStateException.class, () -> run(builder(endpoint), runContext()));
@@ -168,7 +171,7 @@ class TelemetrySearchTest extends AbstractDatadogTest {
     @Test
     void redactsNestedCredentialsAndHonorsOptInForInlineAndStoredRows() throws Exception {
         var endpoint = endpoints().getFirst();
-        String body = "{\"data\":[{\"id\":\"event-id\",\"type\":\"log\",\"attributes\":{\"attributes\":{\"api_key\":\"fixture-key\",\"nested\":[{\"password\":\"fixture-password\",\"webhook_url\":\"https://example.com/hook\"}],\"service\":\"orders\"}}}]}";
+        var body = "{\"data\":[{\"id\":\"event-id\",\"type\":\"log\",\"attributes\":{\"attributes\":{\"api_key\":\"fixture-key\",\"nested\":[{\"password\":\"fixture-password\",\"webhook_url\":\"https://example.com/hook\"}],\"service\":\"orders\"}}}]}";
         server.reply("POST", endpoint.path(), 200, body);
         var redacted = run(builder(endpoint), runContext());
         assertFalse(redacted.toString().contains("fixture-key"));
@@ -176,9 +179,9 @@ class TelemetrySearchTest extends AbstractDatadogTest {
         assertFalse(redacted.toString().contains("https://example.com/hook"));
         assertTrue(redacted.toString().contains("orders"));
         assertTrue(run(builder(endpoint).includeSecrets(Property.ofValue(true)), runContext()).toString().contains("fixture-key"));
-        RunContext context = runContext();
+        var context = runContext();
         var stored = run(builder(endpoint).fetchType(Property.ofValue(FetchType.STORE)), context);
-        List<Object> rows = new ArrayList<>();
+        var rows = new ArrayList<Object>();
         try (var input = context.storage().getFile(URI.create(stored.get("uri").toString()))) {
             FileSerde.read(input, rows::add);
         }
@@ -188,10 +191,10 @@ class TelemetrySearchTest extends AbstractDatadogTest {
 
     @Test
     void acceptsDocumentedTimestampFormatsWithoutTranslation() {
-        for (String time : List.of("now", "now-15m", "now-1d/d", "now+1h", "1793872800000", "2026-11-05T10:00:00Z", "2026-11-05T10:00:00.123+02:00")) {
+        for (var time : List.of("now", "now-15m", "now-1d/d", "now+1h", "1793872800000", "2026-11-05T10:00:00Z", "2026-11-05T10:00:00.123+02:00")) {
             assertEquals(time, Telemetry.timestamp("from", time));
         }
-        for (String time : List.of("", "now-", "now-1q", "2026-11-05", "2026-11-05T10:00:00", "now-15m ")) {
+        for (var time : List.of("", "now-", "now-1q", "2026-11-05", "2026-11-05T10:00:00", "now-15m ")) {
             assertThrows(IllegalArgumentException.class, () -> Telemetry.timestamp("from", time));
         }
     }

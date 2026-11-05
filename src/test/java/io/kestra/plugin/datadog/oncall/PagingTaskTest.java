@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PagingTaskTest extends AbstractDatadogTest {
     @Test
     void mapsEverySupportedRegionToItsPagingHost() {
-        Map<String, String> expected = Map.of(
+        var expected = Map.<String, String>of(
             "datadoghq.com", "navy.oncall.datadoghq.com",
             "us3.datadoghq.com", "teal.oncall.datadoghq.com",
             "us5.datadoghq.com", "coral.oncall.datadoghq.com",

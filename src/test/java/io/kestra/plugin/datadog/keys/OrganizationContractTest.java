@@ -6,11 +6,14 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.catalog.Delete;
 import io.kestra.plugin.datadog.catalog.UpsertServiceDefinition;
 import io.kestra.plugin.datadog.security.SignalsSearch;
 import io.kestra.plugin.datadog.security.TriageSignal;
 import io.kestra.plugin.datadog.teams.RemoveMember;
 import io.kestra.plugin.datadog.teams.SyncMembers;
+import io.kestra.plugin.datadog.users.Disable;
+import io.kestra.plugin.datadog.users.Get;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
@@ -36,12 +39,12 @@ class OrganizationContractTest extends OrganizationTestSupport {
             new Case("GET", "/api/v2/team/id/memberships", connection(RemoveMember.builder()).teamId(Property.ofValue("id")).userId(Property.ofValue("user")).build()),
             new Case("GET", "/api/v2/team", connection(io.kestra.plugin.datadog.teams.List.builder()).build()),
             new Case("GET", "/api/v2/users", connection(io.kestra.plugin.datadog.users.List.builder()).build()),
-            new Case("GET", "/api/v2/users/id", connection(io.kestra.plugin.datadog.users.Get.builder()).userId(Property.ofValue("id")).build()),
-            new Case("DELETE", "/api/v2/users/id", connection(io.kestra.plugin.datadog.users.Disable.builder()).userId(Property.ofValue("id")).build()),
+            new Case("GET", "/api/v2/users/id", connection(Get.builder()).userId(Property.ofValue("id")).build()),
+            new Case("DELETE", "/api/v2/users/id", connection(Disable.builder()).userId(Property.ofValue("id")).build()),
             new Case("POST", "/api/v2/security_monitoring/signals/search", connection(SignalsSearch.builder()).from(Property.ofValue("2026-01-01T00:00:00Z")).to(Property.ofValue("2026-01-02T00:00:00Z")).build()),
             new Case("PATCH", "/api/v2/security_monitoring/signals/id/update", connection(TriageSignal.builder()).signalId(Property.ofValue("id")).state(Property.ofValue(TriageSignal.State.OPEN)).build()),
             new Case("POST", "/api/v2/services/definitions", connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(Map.of("schema-version", "v2.2", "dd-service", "checkout", "team", "new"))).build()),
-            new Case("DELETE", "/api/v2/services/definitions/checkout", connection(io.kestra.plugin.datadog.catalog.Delete.builder()).serviceName(Property.ofValue("checkout")).build())
+            new Case("DELETE", "/api/v2/services/definitions/checkout", connection(Delete.builder()).serviceName(Property.ofValue("checkout")).build())
         );
     }
 
@@ -59,14 +62,14 @@ class OrganizationContractTest extends OrganizationTestSupport {
 
     @Test
     void examplesParseAsTypedKestraFlows() throws Exception {
-        for (Case test : cases()) {
+        for (var test : cases()) {
             Class<?> type = test.task().getClass();
-            Plugin plugin = type.getAnnotation(Plugin.class);
+            var plugin = type.getAnnotation(Plugin.class);
             assertNotNull(plugin, type.getName());
             assertTrue(plugin.examples().length > 0);
             for (var example : plugin.examples()) {
                 assertTrue(example.full());
-                Flow flow = JacksonMapper.ofYaml().readValue(String.join("\n", example.code()), Flow.class);
+                var flow = JacksonMapper.ofYaml().readValue(String.join("\n", example.code()), Flow.class);
                 assertFalse(flow.getTasks().isEmpty());
                 assertEquals(type, flow.getTasks().getFirst().getClass());
                 assertNotNull(flow.getId());

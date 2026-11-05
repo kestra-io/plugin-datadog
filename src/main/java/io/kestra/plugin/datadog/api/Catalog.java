@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.kestra.core.serializers.JacksonMapper;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,9 +20,9 @@ public final class Catalog {
         if (root.path("formatVersion").asInt() != 1) {
             throw new IllegalStateException("Unsupported Datadog catalog format");
         }
-        List<Operation> rows = new ArrayList<>();
-        for (JsonNode row : root.path("operations")) {
-            Operation op = new Operation(row);
+        var rows = new ArrayList<Operation>();
+        for (var row : root.path("operations")) {
+            var op = new Operation(row);
             if (qualified.put(op.key(), op) != null) {
                 throw new IllegalStateException("Duplicate catalog operation " + op.key());
             }
@@ -42,16 +41,16 @@ public final class Catalog {
     }
 
     private static Catalog load() {
-        InputStream input = Catalog.class.getResourceAsStream("/datadog/operations.json");
+        var input = Catalog.class.getResourceAsStream("/datadog/operations.json");
         try {
             if (input == null) {
-                InputStream compressed = Catalog.class.getResourceAsStream("/datadog/operations.json.gz");
+                var compressed = Catalog.class.getResourceAsStream("/datadog/operations.json.gz");
                 if (compressed == null) {
                     throw new IllegalStateException("Datadog operation catalog is missing");
                 }
                 input = new GZIPInputStream(compressed);
             }
-            try (InputStream stream = input) {
+            try (var stream = input) {
                 return new Catalog(JacksonMapper.ofJson().readTree(stream));
             }
         } catch (IOException e) {
@@ -70,7 +69,7 @@ public final class Catalog {
         if (qualified.containsKey(id)) {
             return qualified.get(id);
         }
-        List<Operation> matches = byId.getOrDefault(id, List.of());
+        var matches = byId.getOrDefault(id, List.of());
         if (matches.isEmpty()) {
             throw new IllegalArgumentException("Unknown Datadog operationId " + id);
         }
@@ -92,7 +91,7 @@ public final class Catalog {
         public boolean bodyRequired() { return definition.path("bodyRequired").asBoolean(); }
         public JsonNode parameters() { return definition.path("parameters"); }
         public JsonNode parameter(String location, String name) {
-            for (JsonNode p : parameters()) {
+            for (var p : parameters()) {
                 if (p.path("in").asText().equals(location) && p.path("name").asText().equals(name)) {
                     return p;
                 }

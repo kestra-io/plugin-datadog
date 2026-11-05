@@ -5,6 +5,7 @@ import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.keys.OrganizationTestSupport;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -12,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.*;
 class UsersTest extends OrganizationTestSupport {
     @Test
     void listPagesAndGetRedactsUnlessOptedIn() throws Exception {
-        Map<String, Object> user = resource("u1", "users", Map.of("handle", "user@example.com", "disabled", false, "password", VALUE));
-        server.reply("GET", "/api/v2/users", 200, page(java.util.List.of(user), 2));
-        server.reply("GET", "/api/v2/users", 200, page(java.util.List.of(resource("u2", "users", Map.of("handle", "service", "service_account", true))), 2));
-        var list = connection(List.builder()).filter(Property.ofValue("user")).pageSize(Property.ofValue(1)).build().run(runContext());
+        var user = resource("u1", "users", Map.of("handle", "user@example.com", "disabled", false, "password", VALUE));
+        server.reply("GET", "/api/v2/users", 200, page(List.of(user), 2));
+        server.reply("GET", "/api/v2/users", 200, page(List.of(resource("u2", "users", Map.of("handle", "service", "service_account", true))), 2));
+        var list = connection(io.kestra.plugin.datadog.users.List.builder()).filter(Property.ofValue("user")).pageSize(Property.ofValue(1)).build().run(runContext());
         assertEquals(2, list.getSize());
         noCredential(list);
         assertTrue(server.requests.get(0).query().contains("filter=user"));
@@ -23,8 +24,8 @@ class UsersTest extends OrganizationTestSupport {
         server.reply("GET", "/api/v2/users/u1", 200, json(Map.of("data", user)));
         noCredential(connection(Get.builder()).userId(Property.ofValue("u1")).build().run(runContext()));
         assertTrue(json(connection(Get.builder()).userId(Property.ofValue("u1")).includeSecrets(Property.ofValue(true)).build().run(runContext())).contains(VALUE));
-        server.reply("GET", "/api/v2/users", 200, page(java.util.List.of(user), 1));
-        assertTrue(json(connection(List.builder()).includeSecrets(Property.ofValue(true)).build().run(runContext())).contains(VALUE));
+        server.reply("GET", "/api/v2/users", 200, page(List.of(user), 1));
+        assertTrue(json(connection(io.kestra.plugin.datadog.users.List.builder()).includeSecrets(Property.ofValue(true)).build().run(runContext())).contains(VALUE));
     }
 
     @Test

@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.dashboards;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -36,13 +37,14 @@ import java.util.Map;
 public class Get extends AbstractDashboardTask implements RunnableTask<Get.Output> {
     @NotNull
     @Schema(title = "Dashboard identifier")
+    @PluginProperty(group = "main")
     private Property<String> dashboardId;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String path = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
-            return Output.builder().dashboard(Dashboards.redact(client.get(path, Map.of()).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+            var rPath = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
+            return Output.builder().dashboard(Dashboards.redact(client.get(rPath, Map.of()).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
         }
     }
 

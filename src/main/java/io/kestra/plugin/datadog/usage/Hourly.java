@@ -1,10 +1,11 @@
 package io.kestra.plugin.datadog.usage;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -40,15 +41,17 @@ import java.util.Map;
     """))
 public class Hourly extends AbstractHourlyTask implements RunnableTask<Hourly.Output> {
     @Schema(title = "Resume cursor", description = "Opaque next_record_id returned by a previous run with the same filters.")
+    @PluginProperty(group = "processing")
     private Property<String> nextRecordId;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var result = collect(context, context.render(nextRecordId).as(String.class).filter(s -> !s.isBlank()).orElse(null), context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH));
-        return Output.builder().rows(result.rows()).row(result.row()).count(result.count()).nextRecordId(result.nextRecordId())
-            .truncated(result.nextRecordId() != null).uri(result.uri()).build();
+        var rResult = collect(context, context.render(nextRecordId).as(String.class).filter(s -> !s.isBlank()).orElse(null), context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH));
+        return Output.builder().rows(rResult.rows()).row(rResult.row()).count(rResult.count()).nextRecordId(rResult.nextRecordId())
+            .truncated(rResult.nextRecordId() != null).uri(rResult.uri()).build();
     }
 
     @Builder

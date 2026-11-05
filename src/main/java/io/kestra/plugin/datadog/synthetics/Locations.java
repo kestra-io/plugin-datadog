@@ -2,9 +2,10 @@ package io.kestra.plugin.datadog.synthetics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogFetch;
@@ -16,9 +17,9 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.net.URI;
 
 /** Datadog operationId: v1:ListLocations. */
 @SuperBuilder
@@ -38,6 +39,7 @@ import java.net.URI;
     """))
 public class Locations extends AbstractDatadogTask implements RunnableTask<Locations.Output> {
     @Schema(title = "Fetch type", description = "FETCH returns locations, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only size.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType;
 
     @Override

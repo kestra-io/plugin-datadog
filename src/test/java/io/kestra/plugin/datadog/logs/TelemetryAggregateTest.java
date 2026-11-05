@@ -1,8 +1,8 @@
 package io.kestra.plugin.datadog.logs;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -49,7 +49,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
         return Stream.of("logs", "spans", "rum").map(area -> DynamicTest.dynamicTest(area + " typed aggregate", () -> {
             server.requests.clear();
             server.reply("POST", path(area), 200, answer(area, "12"));
-            Map<String, Object> extra = Map.of("filter", Map.of("query", "service:overridden"), "options", Map.of("timezone", "Europe/Paris"));
+            var extra = Map.<String, Object>of("filter", Map.of("query", "service:overridden"), "options", Map.of("timezone", "Europe/Paris"));
             var output = run(builder(area).query(Property.ofValue("service:original"))
                 .compute(Property.ofValue(List.of(AbstractAggregate.Compute.builder().aggregation(AbstractAggregate.Aggregation.PC95)
                     .metric("@duration").computeType(AbstractAggregate.ComputeType.TIMESERIES).interval("1m").build())))
@@ -74,23 +74,23 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
     @TestFactory
     Stream<DynamicTest> validationForEveryAggregate() {
         return Stream.of("logs", "spans", "rum").map(area -> DynamicTest.dynamicTest(area + " validation", () -> {
-            int before = server.requests.size();
-            for (int cap : List.of(0, 10001)) {
+            var before = server.requests.size();
+            for (var cap : List.of(0, 10001)) {
                 assertThrows(IllegalArgumentException.class, () -> run(builder(area).maxResults(Property.ofValue(cap))));
             }
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).from(Property.ofValue("yesterday"))));
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).to(Property.ofValue("later"))));
-            for (AbstractAggregate.Compute compute : List.of(
+            for (var compute : List.of(
                 AbstractAggregate.Compute.builder().build(),
                 AbstractAggregate.Compute.builder().aggregation(AbstractAggregate.Aggregation.AVG).build(),
                 AbstractAggregate.Compute.builder().aggregation(AbstractAggregate.Aggregation.COUNT).interval("1m").build(),
                 AbstractAggregate.Compute.builder().aggregation(AbstractAggregate.Aggregation.COUNT).computeType(AbstractAggregate.ComputeType.TIMESERIES).interval("0s").build())) {
                 assertThrows(IllegalArgumentException.class, () -> run(builder(area).compute(Property.ofValue(List.of(compute)))));
             }
-            for (AbstractAggregate.GroupBy group : List.of(AbstractAggregate.GroupBy.builder().build(), AbstractAggregate.GroupBy.builder().facet("service").limit(0).build())) {
+            for (var group : List.of(AbstractAggregate.GroupBy.builder().build(), AbstractAggregate.GroupBy.builder().facet("service").limit(0).build())) {
                 assertThrows(IllegalArgumentException.class, () -> run(builder(area).groupBy(Property.ofValue(List.of(group)))));
             }
-            Map<String, Object> extra = Map.of("filter", Map.of("to", "invalid"));
+            var extra = Map.<String, Object>of("filter", Map.of("to", "invalid"));
             assertThrows(IllegalArgumentException.class, () -> run(builder(area).extraBody(Property.ofValue(area.equals("spans") ? Map.of("data", Map.of("attributes", extra)) : extra))));
             assertEquals(before, server.requests.size());
         }));
@@ -106,7 +106,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
 
     @Test
     void pagesLogsAndRumAndExportsBucketsAsIon() throws Exception {
-        for (String area : List.of("logs", "rum")) {
+        for (var area : List.of("logs", "rum")) {
             server.requests.clear();
             server.reply("POST", path(area), 200, answer(area, "1").replace("\"status\":\"done\"", "\"status\":\"done\",\"page\":{\"after\":\"next\"}"));
             server.reply("POST", path(area), 200, answer(area, "2"));
@@ -118,7 +118,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
             assertNull(output.getNextCursor());
             assertEquals(Map.of("cursor", "start"), server.requests.getFirst().json().get("page"));
             assertEquals(Map.of("cursor", "next"), server.requests.get(1).json().get("page"));
-            List<Object> buckets = new ArrayList<>();
+            var buckets = new ArrayList<Object>();
             try (var input = context.storage().getFile(output.getUri())) {
                 FileSerde.read(input, buckets::add);
             }
@@ -128,7 +128,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
 
     @Test
     void aggregateCapsAndCursorGuard() throws Exception {
-        for (String area : List.of("logs", "rum")) {
+        for (var area : List.of("logs", "rum")) {
             server.requests.clear();
             server.reply("POST", path(area), 200, answer(area, "1").replace("\"status\":\"done\"", "\"status\":\"done\",\"page\":{\"after\":\"next\"}"));
             var output = run(builder(area).maxResults(Property.ofValue(1)));
@@ -154,11 +154,11 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
 
     @Test
     void storesSpanBucketsAndRedactsGroupValuesUnlessRequested() throws Exception {
-        String answer = answer("spans", "1").replace("\"by\":{}", "\"by\":{\"api_key\":\"fixture-key\"}");
+        var answer = answer("spans", "1").replace("\"by\":{}", "\"by\":{\"api_key\":\"fixture-key\"}");
         server.reply("POST", path("spans"), 200, answer);
         var context = runContext();
         var output = (AbstractAggregate.Output) ((RunnableTask<?>) builder("spans").fetchType(Property.ofValue(FetchType.STORE)).build()).run(context);
-        List<Object> rows = new ArrayList<>();
+        var rows = new ArrayList<Object>();
         try (var input = context.storage().getFile(output.getUri())) {
             FileSerde.read(input, rows::add);
         }

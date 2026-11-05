@@ -1,7 +1,7 @@
 package io.kestra.plugin.datadog.synthetics;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.TestFactory;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.stream.IntStream;
@@ -33,9 +34,9 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
 
     private Map<String, Object> definition(String kind) {
         return new LinkedHashMap<>(Map.of("name", "Smoke", "type", kind, "message", "",
-            "locations", java.util.List.of("aws:eu-west-3"), "options", Map.of("tick_every", 300),
+            "locations", List.of("aws:eu-west-3"), "options", Map.of("tick_every", 300),
             "config", Map.of("request", Map.of("method", "GET", "url", "https://example.com", "headers", Map.of("Authorization", "Bearer private-value")),
-                "assertions", java.util.List.of(Map.of("type", "statusCode", "operator", "is", "target", 200)))));
+                "assertions", List.of(Map.of("type", "statusCode", "operator", "is", "target", 200)))));
     }
 
     private String response(String kind) throws Exception {
@@ -48,7 +49,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
     Stream<DynamicTest> createAndUpdateRouteApiAndBrowserDefinitions() {
         return Stream.of("api", "browser").flatMap(kind -> Stream.of("POST", "PUT").map(method -> DynamicTest.dynamicTest(method + " " + kind, () -> {
             server.requests.clear();
-            String path = "/api/v1/synthetics/tests/" + kind + (method.equals("PUT") ? "/abc-def-ghi" : "");
+            var path = "/api/v1/synthetics/tests/" + kind + (method.equals("PUT") ? "/abc-def-ghi" : "");
             server.reply(method, path, 200, response(kind));
             Map<String, Object> output;
             if (method.equals("POST")) {
@@ -68,7 +69,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
     Stream<DynamicTest> getAllTestKindsAndRedactByDefault() {
         return Stream.of(Get.TestKind.values()).map(kind -> DynamicTest.dynamicTest("Get " + kind, () -> {
             server.requests.clear();
-            String body = kind == Get.TestKind.MOBILE
+            var body = kind == Get.TestKind.MOBILE
                 ? "{\"name\":\"Mobile\",\"type\":\"mobile\",\"public_id\":\"abc-def-ghi\",\"message\":\"\",\"config\":{},\"device_ids\":[],\"options\":{}}"
                 : response(kind.apiValue);
             server.reply("GET", "/api/v1/synthetics/tests/" + kind.apiValue + "/abc-def-ghi", 200, body);
@@ -91,7 +92,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
         var page = IntStream.range(0, 100).mapToObj(i -> Map.of("public_id", "test-" + i)).toList();
         server.reply("GET", "/api/v1/synthetics/tests", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("tests", page)));
         server.reply("GET", "/api/v1/synthetics/tests", 200, "{\"tests\":[" + response("api") + "]}");
-        var output = auth(List.builder(), List.class).maxTests(Property.ofValue(200)).build().run(runContext());
+        var output = auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).maxTests(Property.ofValue(200)).build().run(runContext());
         assertEquals(101, output.getSize());
         assertFalse(output.getLimitReached());
         assertTrue(server.requests.getFirst().query().contains("page_number=0"));
@@ -102,10 +103,10 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
     @Test
     void searchUsesOffsetAndSignalsCap() throws Exception {
         server.reply("GET", "/api/v1/synthetics/tests/search", 200, "{\"tests\":[" + response("api") + "]}");
-        var output = auth(List.builder(), List.class).searchQuery(Property.ofValue("tag:env:prod"))
+        var output = auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).searchQuery(Property.ofValue("tag:env:prod"))
             .maxTests(Property.ofValue(1)).build().run(runContext());
         assertTrue(output.getLimitReached());
-        String query = URLDecoder.decode(server.only().query(), StandardCharsets.UTF_8);
+        var query = URLDecoder.decode(server.only().query(), StandardCharsets.UTF_8);
         assertTrue(query.contains("text=tag:env:prod"));
         assertTrue(query.contains("count=1"));
         assertTrue(query.contains("start=0"));
@@ -117,12 +118,12 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
         var context = runContextFactory.of(Map.of(
             "flow", Map.of("id", "test-flow", "namespace", "company.delivery"),
             "execution", Map.of("id", IdUtils.create()), "taskrun", Map.of("id", IdUtils.create())));
-        var output = auth(List.builder(), List.class).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
+        var output = auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertEquals(1, output.getSize());
         assertNull(output.getTests());
         assertNotNull(output.getUri());
         try (var input = context.storage().getFile(output.getUri())) {
-            String ion = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            var ion = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(ion.contains("abc-def-ghi"));
             assertFalse(ion.contains("private-value"));
         }
@@ -134,7 +135,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
             "{\"deleted_tests\":[{\"public_id\":\"abc-def-ghi\",\"deleted_at\":\"2026-11-05T10:00:00Z\"}]}");
         var output = auth(Delete.builder(), Delete.class).publicId(Property.ofValue("abc-def-ghi")).build().run(runContext());
         assertTrue(output.getDeleted());
-        assertEquals(Map.of("public_ids", java.util.List.of("abc-def-ghi"), "force_delete_dependencies", false), server.only().json());
+        assertEquals(Map.of("public_ids", List.of("abc-def-ghi"), "force_delete_dependencies", false), server.only().json());
     }
 
     @Test
@@ -182,7 +183,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
     @Test
     void triggerReturnsBatchWithoutPolling() throws Exception {
         server.reply("POST", "/api/v1/synthetics/tests/trigger/ci", 200, "{\"batch_id\":\"batch-1\",\"results\":[{\"public_id\":\"abc-def-ghi\",\"result_id\":\"r1\",\"location\":1}]}");
-        var result = auth(Trigger.builder(), Trigger.class).testIds(Property.ofValue(java.util.List.of("abc-def-ghi"))).build().run(runContext());
+        var result = auth(Trigger.builder(), Trigger.class).testIds(Property.ofValue(List.of("abc-def-ghi"))).build().run(runContext());
         assertEquals("batch-1", result.getBatchId());
         assertEquals(1, result.getResults().size());
         assertEquals(1, server.requests.size());
@@ -192,9 +193,9 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
     Stream<DynamicTest> latestAndDetailedResultsRouteBothKinds() {
         return Stream.of(Results.TestKind.values()).flatMap(kind -> Stream.of(false, true).map(detail -> DynamicTest.dynamicTest(kind + " detail=" + detail, () -> {
             server.requests.clear();
-            String prefix = kind == Results.TestKind.BROWSER ? "browser/" : "";
-            String path = "/api/v1/synthetics/tests/" + prefix + "abc-def-ghi/results" + (detail ? "/r1" : "");
-            String row = "{\"result_id\":\"r1\",\"check_time\":1693491974.0,\"probe_dc\":\"aws:eu-west-3\",\"status\":0,\"result\":{}}";
+            var prefix = kind == Results.TestKind.BROWSER ? "browser/" : "";
+            var path = "/api/v1/synthetics/tests/" + prefix + "abc-def-ghi/results" + (detail ? "/r1" : "");
+            var row = "{\"result_id\":\"r1\",\"check_time\":1693491974.0,\"probe_dc\":\"aws:eu-west-3\",\"status\":0,\"result\":{}}";
             server.reply("GET", path, 200, detail ? row : "{\"results\":[" + row + "],\"last_timestamp_fetched\":1693491974}");
             var output = auth(Results.builder(), Results.class).publicId(Property.ofValue("abc-def-ghi")).testKind(Property.ofValue(kind))
                 .resultId(detail ? Property.ofValue("r1") : null).build().run(runContext());
@@ -209,7 +210,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
 
     private Stream<Endpoint> endpoints() {
         return Stream.of(
-            new Endpoint("List", "GET", "/api/v1/synthetics/tests", () -> auth(List.builder(), List.class).build().run(runContext())),
+            new Endpoint("List", "GET", "/api/v1/synthetics/tests", () -> auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).build().run(runContext())),
             new Endpoint("Get", "GET", "/api/v1/synthetics/tests/api/abc-def-ghi", () -> auth(Get.builder(), Get.class).publicId(Property.ofValue("abc-def-ghi")).build().run(runContext())),
             new Endpoint("Create", "POST", "/api/v1/synthetics/tests/api", () -> auth(Create.builder(), Create.class).definition(Property.ofValue(definition("api"))).build().run(runContext())),
             new Endpoint("Update", "PUT", "/api/v1/synthetics/tests/api/abc-def-ghi", () -> auth(Update.builder(), Update.class).publicId(Property.ofValue("abc-def-ghi")).definition(Property.ofValue(definition("api"))).build().run(runContext())),
@@ -217,7 +218,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
             new Endpoint("SetStatus", "PUT", "/api/v1/synthetics/tests/abc-def-ghi/status", () -> auth(SetStatus.builder(), SetStatus.class).publicId(Property.ofValue("abc-def-ghi")).status(Property.ofValue(SetStatus.Status.LIVE)).build().run(runContext())),
             new Endpoint("Locations", "GET", "/api/v1/synthetics/locations", () -> auth(Locations.builder(), Locations.class).build().run(runContext())),
             new Endpoint("Results", "GET", "/api/v1/synthetics/tests/abc-def-ghi/results", () -> auth(Results.builder(), Results.class).publicId(Property.ofValue("abc-def-ghi")).build().run(runContext())),
-            new Endpoint("Trigger", "POST", "/api/v1/synthetics/tests/trigger/ci", () -> auth(Trigger.builder(), Trigger.class).testIds(Property.ofValue(java.util.List.of("abc-def-ghi"))).build().run(runContext()))
+            new Endpoint("Trigger", "POST", "/api/v1/synthetics/tests/trigger/ci", () -> auth(Trigger.builder(), Trigger.class).testIds(Property.ofValue(List.of("abc-def-ghi"))).build().run(runContext()))
         );
     }
 
@@ -251,7 +252,7 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
 
     @Test
     void rejectsWrongDefinitionTypesAndUnsupportedKind() {
-        for (String key : java.util.List.of("name", "message", "type", "config", "locations", "options")) {
+        for (var key : List.of("name", "message", "type", "config", "locations", "options")) {
             var body = definition("api");
             body.put(key, 42);
             assertThrows(IllegalArgumentException.class, () -> auth(Create.builder(), Create.class).definition(Property.ofValue(body)).build().run(runContext()));
@@ -273,8 +274,8 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> auth(SetStatus.builder(), SetStatus.class).publicId(Property.ofValue("a")).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> auth(Results.builder(), Results.class).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> auth(Results.builder(), Results.class).publicId(Property.ofValue("a")).resultId(Property.ofValue("../x")).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> auth(List.builder(), List.class).maxTests(Property.ofValue(0)).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> auth(List.builder(), List.class).maxTests(Property.ofValue(10001)).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).maxTests(Property.ofValue(0)).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> auth(io.kestra.plugin.datadog.synthetics.List.builder(), io.kestra.plugin.datadog.synthetics.List.class).maxTests(Property.ofValue(10001)).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> auth(Trigger.builder(), Trigger.class).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
     }

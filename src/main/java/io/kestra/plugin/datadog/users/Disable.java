@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.users;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -33,15 +34,17 @@ import lombok.experimental.SuperBuilder;
 public class Disable extends AbstractDatadogTask implements RunnableTask<Disable.Output> {
     @NotNull
     @Schema(title = "User identifier")
+    @PluginProperty(group = "main")
     private Property<String> userId;
     @Schema(title = "Ignore missing user", description = "Treat HTTP 404 as already absent. Other errors fail.", defaultValue = "false")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
-            boolean ignore = AccessApi.flag(context, ignoreNotFound);
+            var path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
+            var ignore = AccessApi.flag(context, ignoreNotFound);
             return Output.builder().disabled(AccessApi.delete(client, path, ignore)).build();
         }
     }

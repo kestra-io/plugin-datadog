@@ -1,6 +1,5 @@
 package io.kestra.plugin.datadog.monitors;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -9,8 +8,9 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogFetch;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -107,9 +107,9 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
-        if (limit < 1 || limit > 10_000) {
-            throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + limit);
+        var rLimit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
+        if (rLimit < 1 || rLimit > 10_000) {
+            throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + rLimit);
         }
 
         var params = DatadogClient.query();
@@ -119,8 +119,8 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         Monitors.join(runContext.render(this.groupStates).asList(String.class)).ifPresent(value -> params.put("group_states", value));
 
         java.util.List<Map<String, Object>> monitors;
-        try (DatadogClient client = client(runContext, true)) {
-            monitors = Monitors.collect(client, params, limit);
+        try (var client = client(runContext, true)) {
+            monitors = Monitors.collect(client, params, rLimit);
         }
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());

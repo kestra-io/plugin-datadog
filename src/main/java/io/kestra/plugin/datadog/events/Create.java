@@ -143,7 +143,7 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
         runContext.render(this.dateHappened).as(Instant.class).ifPresent(value -> body.put("date_happened", value.getEpochSecond()));
 
         DatadogClient.Response response;
-        try (DatadogClient client = client(runContext, false)) {
+        try (var client = client(runContext, false)) {
             response = client.post("/api/v1/events", body);
         }
 

@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
@@ -13,6 +14,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public abstract class AbstractMonitorTask extends AbstractDatadogTask {
     @Schema(title = "Include sensitive output values", description = "False by default. Removes values under credential-like keys and HTTP URLs from returned data and diffs. Set true only when the execution output may contain these values.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     protected boolean includeSecrets(RunContext context) throws Exception {

@@ -1,17 +1,17 @@
 package io.kestra.plugin.datadog.teams;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.plugin.datadog.keys.AccessApi;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 import lombok.Getter;
@@ -46,50 +46,56 @@ import java.util.Set;
 public class SyncMembers extends AbstractDatadogTask implements RunnableTask<SyncMembers.Output> {
     @NotNull
     @Schema(title = "Team identifier", description = "ID of the single team to reconcile.")
+    @PluginProperty(group = "main")
     private Property<String> teamId;
     @NotNull
     @Schema(title = "Desired user handles", description = "Exact Datadog user handles. An explicit empty list requests removal of every member. Unknown, disabled or duplicate handles fail validation.")
+    @PluginProperty(group = "main")
     private Property<List<String>> handles;
     @Schema(title = "Plan changes", description = "Use GET requests to return the planned changes without writing. The last-admin guard is still checked.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> plan;
     @Schema(title = "Allow removing the last admin", description = "Permit removing every current admin. New members are regular members.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> allowRemoveLastAdmin;
     @Schema(title = "Maximum users to scan", description = "Between 1 and 10000. An incomplete user inventory fails before writing.", defaultValue = "10000")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxUsers;
     @Schema(title = "Maximum members to scan", description = "Between 1 and 10000. An incomplete membership inventory fails before writing.", defaultValue = "10000")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxMembers;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String team = AccessApi.required(context, teamId, "teamId");
-            String path = Memberships.path(team);
+            var team = AccessApi.required(context, teamId, "teamId");
+            var path = Memberships.path(team);
             if (handles == null) {
                 throw new IllegalArgumentException("`handles` must be an explicit list");
             }
-            List<?> renderedHandles = AccessApi.explicitList(context, handles, "handles");
-            Set<String> desiredHandles = new LinkedHashSet<>();
-            for (Object handle : renderedHandles) {
-                String normalized = AccessApi.required(handle, "handle");
+            List<?> rHandles = AccessApi.explicitList(context, handles, "handles");
+            var desiredHandles = new LinkedHashSet<String>();
+            for (var handle : rHandles) {
+                var normalized = AccessApi.required(handle, "handle");
                 if (!desiredHandles.add(normalized)) {
                     throw new IllegalArgumentException("`handles` contains duplicates");
                 }
             }
-            int usersLimit = AccessApi.range(context, maxUsers, 10000, 10000, "maxUsers");
-            int membersLimit = AccessApi.range(context, maxMembers, 10000, 10000, "maxMembers");
-            boolean preview = AccessApi.flag(context, plan);
-            boolean allow = AccessApi.flag(context, allowRemoveLastAdmin);
-            AccessApi.Page users = AccessApi.collect(client, "/api/v2/users", Map.of("sort", "handle", "sort_dir", "asc"), 100, usersLimit);
+            var usersLimit = AccessApi.range(context, maxUsers, 10000, 10000, "maxUsers");
+            var membersLimit = AccessApi.range(context, maxMembers, 10000, 10000, "maxMembers");
+            var preview = AccessApi.flag(context, plan);
+            var allow = AccessApi.flag(context, allowRemoveLastAdmin);
+            var users = AccessApi.collect(client, "/api/v2/users", Map.of("sort", "handle", "sort_dir", "asc"), 100, usersLimit);
             if (users.truncated()) {
                 throw new IllegalStateException("User inventory exceeds maxUsers; no changes made");
             }
-            Map<String, String> idByHandle = new LinkedHashMap<>();
-            Map<String, String> handleById = new LinkedHashMap<>();
-            Set<String> disabled = new LinkedHashSet<>();
-            for (Map<String, Object> user : users.rows()) {
-                String id = AccessApi.required(user.get("id"), "user id");
-                Map<String, Object> attributes = AccessApi.object(user.get("attributes"));
-                String handle = AccessApi.required(attributes.get("handle"), "user handle");
+            var idByHandle = new LinkedHashMap<String, String>();
+            var handleById = new LinkedHashMap<String, String>();
+            var disabled = new LinkedHashSet<String>();
+            for (var user : users.rows()) {
+                var id = AccessApi.required(user.get("id"), "user id");
+                var attributes = AccessApi.object(user.get("attributes"));
+                var handle = AccessApi.required(attributes.get("handle"), "user handle");
                 if (idByHandle.put(handle, id) != null) {
                     throw new IllegalStateException("User inventory contains ambiguous handles; no changes made");
                 }
@@ -98,34 +104,34 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
                     disabled.add(handle);
                 }
             }
-            Set<String> desiredIds = new LinkedHashSet<>();
-            for (String handle : desiredHandles) {
+            var desiredIds = new LinkedHashSet<String>();
+            for (var handle : desiredHandles) {
                 if (!idByHandle.containsKey(handle) || disabled.contains(handle)) {
                     throw new IllegalArgumentException("A desired handle is unknown or disabled; no changes made");
                 }
                 desiredIds.add(idByHandle.get(handle));
             }
-            Map<String, Memberships.Member> current = Memberships.read(client, path, membersLimit);
-            for (String id : current.keySet()) {
+            var current = Memberships.read(client, path, membersLimit);
+            for (var id : current.keySet()) {
                 if (!handleById.containsKey(id)) {
                     throw new IllegalStateException("A team member is missing from the user inventory; no changes made");
                 }
             }
-            Set<String> added = new LinkedHashSet<>(desiredIds);
+            var added = new LinkedHashSet<String>(desiredIds);
             added.removeAll(current.keySet());
-            Set<String> removed = new LinkedHashSet<>(current.keySet());
+            var removed = new LinkedHashSet<String>(current.keySet());
             removed.removeAll(desiredIds);
-            Set<String> unchanged = new LinkedHashSet<>(desiredIds);
+            var unchanged = new LinkedHashSet<String>(desiredIds);
             unchanged.retainAll(current.keySet());
             Memberships.protectAdmins(current, removed, allow);
-            List<Change> diff = new ArrayList<>();
+            var diff = new ArrayList<Change>();
             added.forEach(id -> diff.add(Change.builder().userId(id).handle(handleById.get(id)).before(false).after(true).build()));
             removed.forEach(id -> diff.add(Change.builder().userId(id).handle(handleById.get(id)).before(true).after(false).build()));
             if (!preview) {
-                for (String id : added) {
+                for (var id : added) {
                     AccessApi.request(client, "POST", path, Map.of(), Memberships.create(id));
                 }
-                for (String id : removed) {
+                for (var id : removed) {
                     // Re-read before every removal. Datadog has no conditional membership delete.
                     Memberships.protectAdmins(Memberships.read(client, path, membersLimit), Set.of(id), allow);
                     AccessApi.delete(client, path + "/" + AccessApi.segment(id), true);

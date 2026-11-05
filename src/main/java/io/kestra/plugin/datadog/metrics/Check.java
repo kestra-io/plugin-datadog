@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.metrics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -40,38 +41,43 @@ import java.math.BigDecimal;
 public class Check extends AbstractFormulaTask implements RunnableTask<Check.Output> {
     @NotNull
     @Schema(title = "Threshold", description = "Value to compare against, in the units returned by the query.")
+    @PluginProperty(group = "main")
     private Property<BigDecimal> threshold;
 
     @Schema(title = "Comparison", description = "Breach predicate: GT, GTE, LT, LTE, EQ or NE. Defaults to GT.")
+    @PluginProperty(group = "main")
     private Property<Comparison> comparison;
 
     @Schema(title = "Time aggregation", description = "Applied to each query. Defaults to AVG.")
+    @PluginProperty(group = "processing")
     private Property<Aggregator> aggregator;
 
     @Schema(title = "Fail on breach", description = "Fail the task when the predicate is true. Defaults to true.")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnBreach;
 
     @Schema(title = "No-data policy", description = "FAIL fails. PASS returns breached=false. NO_DATA returns breached=null. Both non-failing modes return noData=true. Defaults to FAIL.")
+    @PluginProperty(group = "main")
     private Property<OnNoData> onNoData;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            BigDecimal limit = context.render(threshold).as(BigDecimal.class).orElseThrow(() -> new IllegalArgumentException("`threshold` is required"));
-            Comparison predicate = context.render(comparison).as(Comparison.class).orElse(Comparison.GT);
-            OnNoData policy = context.render(onNoData).as(OnNoData.class).orElse(OnNoData.FAIL);
-            boolean fail = context.render(failOnBreach).as(Boolean.class).orElse(true);
-            var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
-            BigDecimal value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
+            var rLimit = context.render(threshold).as(BigDecimal.class).orElseThrow(() -> new IllegalArgumentException("`threshold` is required"));
+            var rPredicate = context.render(comparison).as(Comparison.class).orElse(Comparison.GT);
+            var rPolicy = context.render(onNoData).as(OnNoData.class).orElse(OnNoData.FAIL);
+            var rFail = context.render(failOnBreach).as(Boolean.class).orElse(true);
+            var rBody = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
+            var value = FormulaQueries.scalar(FormulaQueries.attributes(client.post("/api/v2/query/scalar", rBody)));
             if (value == null) {
-                if (policy == OnNoData.FAIL) {
+                if (rPolicy == OnNoData.FAIL) {
                     throw new IllegalStateException("Datadog metric check returned no data");
                 }
-                return Output.builder().noData(true).breached(policy == OnNoData.PASS ? false : null).build();
+                return Output.builder().noData(true).breached(rPolicy == OnNoData.PASS ? false : null).build();
             }
-            boolean breached = predicate.breached(value, limit);
-            if (breached && fail) {
-                throw new IllegalStateException("Datadog metric threshold breached: " + value + " " + predicate + " " + limit);
+            var breached = rPredicate.breached(value, rLimit);
+            if (breached && rFail) {
+                throw new IllegalStateException("Datadog metric threshold breached: " + value + " " + rPredicate + " " + rLimit);
             }
             return Output.builder().value(value).breached(breached).noData(false).build();
         }

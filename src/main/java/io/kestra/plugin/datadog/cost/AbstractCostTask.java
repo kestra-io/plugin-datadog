@@ -1,11 +1,11 @@
 package io.kestra.plugin.datadog.cost;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
@@ -21,7 +21,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 import java.net.URI;
-import java.nio.file.Files;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
@@ -37,26 +36,31 @@ import java.util.Map;
 public abstract class AbstractCostTask extends AbstractDatadogTask {
     @NotNull
     @Schema(title = "Start month", description = "Month in YYYY-MM format. Sent as midnight UTC on the first day to satisfy the API date-time schema.")
+    @PluginProperty(group = "main")
     private Property<String> startMonth;
     @Schema(title = "End month", description = "Optional month in YYYY-MM format. Must not precede startMonth. Sent as midnight UTC on the first day.")
+    @PluginProperty(group = "main")
     private Property<String> endMonth;
     @Schema(title = "Cost view", description = "SUMMARY for parent organization costs or SUB_ORG for child organization costs. Defaults to SUMMARY.")
+    @PluginProperty(group = "main")
     private Property<View> view;
     @Schema(title = "Include connected accounts", description = "Include partner customer accounts. Defaults to false.")
+    @PluginProperty(group = "processing")
     private Property<Boolean> includeConnectedAccounts;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     protected Output load(RunContext context, String path) throws Exception {
         try (var client = client(context, true)) {
-            YearMonth start = month(context.render(startMonth).as(String.class).orElse(""));
-            String endText = context.render(endMonth).as(String.class).orElse(null);
-            YearMonth end = endText == null ? null : month(endText);
-            if (end != null && end.isBefore(start)) {
+            var rStart = month(context.render(startMonth).as(String.class).orElse(""));
+            var rEndText = context.render(endMonth).as(String.class).orElse(null);
+            var end = rEndText == null ? null : month(rEndText);
+            if (end != null && end.isBefore(rStart)) {
                 throw new IllegalArgumentException("`endMonth` must not precede `startMonth`");
             }
             var params = DatadogClient.query();
-            params.put("start_month", start.atDay(1).atStartOfDay().toInstant(ZoneOffset.UTC).toString());
+            params.put("start_month", rStart.atDay(1).atStartOfDay().toInstant(ZoneOffset.UTC).toString());
             if (end != null) {
                 params.put("end_month", end.atDay(1).atStartOfDay().toInstant(ZoneOffset.UTC).toString());
             }
@@ -64,23 +68,23 @@ public abstract class AbstractCostTask extends AbstractDatadogTask {
             params.put("include_connected_accounts", context.render(includeConnectedAccounts).as(Boolean.class).orElse(false));
             var response = client.get(path, params);
             // Parse money from the original JSON decimal text, before any binary floating-point conversion.
-            Map<String, Object> answer = JacksonMapper.ofJson().readerFor(new TypeReference<Map<String, Object>>() { })
-                .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).readValue(response.body());
+            var answer = JacksonMapper.ofJson().readerFor(new TypeReference<Map<String, Object>>() { })
+                .with(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).<Map<String, Object>>readValue(response.body());
             if (!(answer.get("data") instanceof List<?> rows)) {
                 throw new IllegalStateException("Datadog cost response has no data array");
             }
-            List<OrganizationCost> costs = new ArrayList<>();
-            for (Object row : rows) {
+            var costs = new ArrayList<OrganizationCost>();
+            for (var row : rows) {
                 if (!(row instanceof Map<?, ?> data) || !(data.get("attributes") instanceof Map<?, ?> attributes)) {
                     throw new IllegalStateException("Datadog cost row must contain attributes");
                 }
-                Object total = attributes.get("total_cost");
+                var total = attributes.get("total_cost");
                 if (total != null && !(total instanceof Number)) {
                     throw new IllegalStateException("Datadog total_cost must be numeric");
                 }
-                List<Map<String, Object>> charges = new ArrayList<>();
+                var charges = new ArrayList<Map<String, Object>>();
                 if (attributes.get("charges") instanceof List<?> chargeRows) {
-                    for (Object charge : chargeRows) {
+                    for (var charge : chargeRows) {
                         if (!(charge instanceof Map<?, ?> map)) {
                             throw new IllegalStateException("Datadog cost charge must be an object");
                         }

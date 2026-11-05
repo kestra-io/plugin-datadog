@@ -65,7 +65,7 @@ Execution creation happens before cursor persistence. If creation fails, the nex
 
 ## Host inventory and maintenance
 
-`hosts.List` supports `filter`, `sortField`, `sortDirection`, `from`, `includeMutedHostsData` and `includeHostsMetadata`. It sends offsets in `start` and page sizes in `count`. `pageSize` is at most 1000. `maxResults` defaults to 1000 and is capped at 100000. The output includes `count`, `totalMatching` and `truncated`. Datadog inventory changes during paging can affect offset results.
+`hosts.List` supports `filter`, `sortField`, `sortDirection`, `from`, `includeMutedHostsData` and `includeHostsMetadata`. It sends offsets in `start` and page sizes in `count`. `pageSize` is at most 1000. `maxResults` defaults to 1000 and is capped at 10000. The output includes `count`, `totalMatching` and `truncated`. Datadog inventory changes during paging can affect offset results.
 
 Datadog includes hosts seen in the past three hours by default and retains seven days of host inventory. `hosts.Totals` uses the API definitions: active means reported within the past hour and up means reported within the past two hours.
 
@@ -75,7 +75,7 @@ Datadog includes hosts seen in the past three hours by default and retains seven
 
 `usage.Hourly` and `usage.Check` accept exact UTC-hour instants. Requests use full RFC 3339 timestamps such as `2026-01-01T00:00:00Z` for both bounds. This follows the pinned GetHourlyUsage date-time schemas while retaining hourly alignment. Select `productFamilies` with the documented enum names. `includeDescendants`, `includeConnectedAccounts` and `includeBreakdown` default to false.
 
-The task follows `meta.pagination.next_record_id`. A result cap returns that token as `nextRecordId` with `truncated: true`. Resume with the same filters. Repeated cursors and empty pages with a continuation token fail. `pageSize` is at most 500. `maxResults` defaults to 1000 and is capped at 100000. Usage measurements are int64 or null. Counts above the exact range of binary floating point retain their integer value.
+The task follows `meta.pagination.next_record_id`. A result cap returns that token as `nextRecordId` with `truncated: true`. Resume with the same filters. Repeated cursors and empty pages with a continuation token fail. `pageSize` is at most 500. `maxResults` defaults to 1000 and is capped at 10000. Usage measurements are int64 or null. Counts above the exact range of binary floating point retain their integer value.
 
 `usage.Check` uses one exact `usageType`. `MAX` checks the peak hourly measurement. `SUM` adds selected measurements across hours and organizations, so choose units deliberately. `orgId` filters by `attributes.public_id` after all pages have been read. A negative budget is rejected. The gate always fails on truncated results. Missing or null selected measurements follow the same no-data policies as the metric gate. Values are exact decimal integers.
 

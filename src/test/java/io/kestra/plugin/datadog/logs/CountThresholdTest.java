@@ -10,6 +10,7 @@ import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -32,8 +33,8 @@ class CountThresholdTest extends AbstractDatadogTest {
         }
 
         boolean armed() throws Exception {
-            String key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
-            Object value = condition.getRunContext().namespaceKv(context.getNamespace()).getValue(key).orElseThrow().value();
+            var key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
+            var value = condition.getRunContext().namespaceKv(context.getNamespace()).getValue(key).orElseThrow().value();
             Map<?, ?> state = value instanceof byte[] bytes ? JacksonMapper.ofJson().readValue(bytes, Map.class)
                 : value instanceof String text ? JacksonMapper.ofJson().readValue(text, Map.class) : (Map<?, ?>) value;
             return (Boolean) state.get("armed");
@@ -52,7 +53,7 @@ class CountThresholdTest extends AbstractDatadogTest {
     @Test
     void firstSuccessfulPollRecordsStateAndDoesNotReplayExistingBreach() throws Exception {
         count(11);
-        Poll poll = poll(builder().window(Property.ofValue(Duration.ofMinutes(2))).indexes(Property.ofValue(List.of("main"))).build());
+        var poll = poll(builder().window(Property.ofValue(Duration.ofMinutes(2))).indexes(Property.ofValue(List.of("main"))).build());
         assertTrue(poll.run().isEmpty());
         assertFalse(poll.armed());
         assertTrue(poll.run().isEmpty());
@@ -62,7 +63,7 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void firesOnceAndRearmsOnlyAfterDroppingBelowThreshold() throws Exception {
-        Poll poll = poll(builder().build());
+        var poll = poll(builder().build());
         count(9);
         assertTrue(poll.run().isEmpty());
         assertTrue(poll.armed());
@@ -88,10 +89,10 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void transientFailuresPreserveArmedStateAndRetryNextPoll() throws Exception {
-        Poll poll = poll(builder().build());
+        var poll = poll(builder().build());
         count(0);
         poll.run();
-        for (int status : List.of(429, 500, 503)) {
+        for (var status : List.of(429, 500, 503)) {
             server.reply("POST", TelemetryAggregateTest.path("logs"), status, "{\"errors\":[\"unavailable\"]}");
             assertTrue(poll.run().isEmpty());
             assertTrue(poll.armed());
@@ -102,10 +103,10 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void clientErrorsAndIncompleteResponsesFailWithoutMovingState() throws Exception {
-        Poll poll = poll(builder().build());
+        var poll = poll(builder().build());
         count(0);
         poll.run();
-        for (int status : List.of(400, 403, 404)) {
+        for (var status : List.of(400, 403, 404)) {
             server.reply("POST", TelemetryAggregateTest.path("logs"), status, "{\"errors\":[\"request rejected\"]}");
             assertEquals(status, assertThrows(DatadogClient.DatadogException.class, poll::run).getStatus());
             assertTrue(poll.armed());
@@ -119,7 +120,7 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void firstPollOutageDoesNotCreateAFalseBaseline() throws Exception {
-        Poll poll = poll(builder().build());
+        var poll = poll(builder().build());
         server.reply("POST", TelemetryAggregateTest.path("logs"), 429, "{\"errors\":[\"rate limit\"]}");
         assertTrue(poll.run().isEmpty());
         count(11);
@@ -129,14 +130,14 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void validatesThresholdWindowAndIntervalBeforeCallingDatadog() {
-        assertThrows(jakarta.validation.ConstraintViolationException.class, () -> poll(builder().threshold(null).build()).run());
-        for (long boundary : List.of(-1L, 0L)) {
+        assertThrows(ConstraintViolationException.class, () -> poll(builder().threshold(null).build()).run());
+        for (var boundary : List.of(-1L, 0L)) {
             assertThrows(IllegalArgumentException.class, () -> poll(builder().threshold(Property.ofValue(boundary)).build()).run());
         }
-        for (Duration duration : List.of(Duration.ZERO, Duration.ofSeconds(-1), Duration.ofMillis(1))) {
+        for (var duration : List.of(Duration.ZERO, Duration.ofSeconds(-1), Duration.ofMillis(1))) {
             assertThrows(IllegalArgumentException.class, () -> poll(builder().window(Property.ofValue(duration)).build()).run());
         }
-        for (Duration duration : List.of(Duration.ZERO, Duration.ofSeconds(-1))) {
+        for (var duration : List.of(Duration.ZERO, Duration.ofSeconds(-1))) {
             assertThrows(IllegalArgumentException.class, () -> poll(builder().interval(duration).build()).run());
         }
         assertTrue(server.requests.isEmpty());
@@ -144,12 +145,12 @@ class CountThresholdTest extends AbstractDatadogTest {
 
     @Test
     void executionCreationFailureKeepsTheCrossingArmedForRetry() throws Exception {
-        Poll poll = poll(builder().build());
+        var poll = poll(builder().build());
         count(9);
         poll.run();
         count(11);
         // Missing flow makes execution creation fail after the aggregate request succeeds.
-        ConditionContext broken = ConditionContext.builder().runContext(poll.condition().getRunContext()).build();
+        var broken = ConditionContext.builder().runContext(poll.condition().getRunContext()).build();
         assertThrows(NullPointerException.class, () -> poll.trigger().evaluate(broken, poll.context()));
         assertTrue(poll.armed());
         assertTrue(poll.run().isPresent(), "retry still emits the crossing after execution creation failed");

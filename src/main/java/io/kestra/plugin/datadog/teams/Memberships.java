@@ -20,16 +20,16 @@ final class Memberships {
     }
 
     static Map<String, Member> read(DatadogClient client, String path, int max) throws Exception {
-        AccessApi.Page page = AccessApi.collect(client, path, Map.of("sort", "handle"), 100, max);
+        var page = AccessApi.collect(client, path, Map.of("sort", "handle"), 100, max);
         if (page.truncated()) {
             throw new IllegalStateException("Team membership inventory exceeds maxMembers; no writes were started for this snapshot");
         }
-        Map<String, Member> members = new LinkedHashMap<>();
-        for (Map<String, Object> row : page.rows()) {
-            Map<String, Object> relationships = AccessApi.object(row.get("relationships"));
-            Map<String, Object> user = AccessApi.object(AccessApi.object(relationships.get("user")).get("data"));
-            String id = AccessApi.required(user.get("id"), "membership user id");
-            Object role = AccessApi.object(row.get("attributes")).get("role");
+        var members = new LinkedHashMap<String, Member>();
+        for (var row : page.rows()) {
+            var relationships = AccessApi.object(row.get("relationships"));
+            var user = AccessApi.object(AccessApi.object(relationships.get("user")).get("data"));
+            var id = AccessApi.required(user.get("id"), "membership user id");
+            var role = AccessApi.object(row.get("attributes")).get("role");
             if (role != null && !"admin".equals(role)) {
                 throw new IllegalStateException("Datadog returned an unknown membership role");
             }
