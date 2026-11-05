@@ -10,6 +10,7 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -108,6 +109,10 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
     @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in log messages and attributes. False by default.")
+    @PluginProperty(group = "advanced")
+    private Property<Boolean> includeSecrets;
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var limit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
@@ -157,7 +162,9 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
         }
 
         runContext.logger().info("Datadog returned {} log event(s)", logs.size());
-        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), logs);
+        var rIncludeSecrets = runContext.render(includeSecrets).as(Boolean.class).orElse(false);
+        var safe = logs.stream().map(log -> MonitorIO.redactMap(log, rIncludeSecrets)).toList();
+        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);
         return Output.builder().logs(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
     }
 
