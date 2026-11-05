@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.catalog
+name: "catalog"
+title: "Datadog service catalog"
+description: "Maintain service definitions."
+body: "Apply one service definition with a field diff and dry run or delete a retired service definition."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

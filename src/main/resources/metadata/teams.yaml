@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.teams
+name: "teams"
+title: "Datadog teams"
+description: "Audit teams and reconcile membership."
+body: "Sync membership from explicit user handles with a dry run and a last-admin guard."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
