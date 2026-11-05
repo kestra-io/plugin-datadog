@@ -1,6 +1,6 @@
 @PluginSubGroup(
     title = "Datadog metrics",
-    description = "Tasks to submit custom metric points to Datadog and to query timeseries.",
+    description = "Submit metrics, query formulas, check thresholds and trigger flows on crossings.",
     categories = {
         PluginSubGroup.PluginCategory.DATA,
         PluginSubGroup.PluginCategory.INFRASTRUCTURE

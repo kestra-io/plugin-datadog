@@ -1,0 +1,134 @@
+{
+  "scope": "d06-metrics-infra-usage",
+  "typed": [
+    {"api": "v1", "operationId": "QueryMetrics", "component": "metrics.Query", "existing": true},
+    {"api": "v2", "operationId": "SubmitMetrics", "component": "metrics.Submit", "existing": true},
+    {"api": "v2", "operationId": "QueryScalarData", "component": "metrics.QueryScalar, metrics.Check, metrics.Threshold"},
+    {"api": "v2", "operationId": "QueryTimeseriesData", "component": "metrics.QueryTimeseries"},
+    {"api": "v1", "operationId": "ListHosts", "component": "hosts.List"},
+    {"api": "v1", "operationId": "GetHostTotals", "component": "hosts.Totals"},
+    {"api": "v1", "operationId": "MuteHost", "component": "hosts.Mute"},
+    {"api": "v1", "operationId": "UnmuteHost", "component": "hosts.Unmute"},
+    {"api": "v2", "operationId": "GetHourlyUsage", "component": "usage.Hourly, usage.Check"},
+    {"api": "v2", "operationId": "GetEstimatedCostByOrg", "component": "cost.Estimated"},
+    {"api": "v2", "operationId": "GetHistoricalCostByOrg", "component": "cost.Historical"},
+    {"api": "v2", "operationId": "ExecuteDdsqlTabularQuery", "component": "ddsql.Query"},
+    {"api": "v2", "operationId": "FetchDdsqlTabularQuery", "component": "ddsql.Query"}
+  ],
+  "generic": [
+    {
+      "api": "v1",
+      "reason": "Deprecated report or product-specific endpoint. Use the current hourly usage meter for typed product usage and api.Call for legacy requests.",
+      "operationIds": [
+        "GetDailyCustomReports", "GetSpecifiedDailyCustomReports", "GetMonthlyCustomReports", "GetSpecifiedMonthlyCustomReports",
+        "GetUsageAnalyzedLogs", "GetUsageAuditLogs", "GetUsageLambda", "GetUsageCIApp", "GetUsageCloudSecurityPostureManagement",
+        "GetUsageCWS", "GetUsageDBM", "GetUsageFargate", "GetUsageHosts", "GetIncidentManagement", "GetUsageIndexedSpans",
+        "GetIngestedSpans", "GetUsageInternetOfThings", "GetUsageLogs", "GetUsageLogsByRetention", "GetUsageNetworkFlows",
+        "GetUsageNetworkHosts", "GetUsageOnlineArchive", "GetUsageProfiling", "GetUsageRumUnits", "GetUsageRumSessions",
+        "GetUsageSDS", "GetUsageSNMP", "GetUsageSynthetics", "GetUsageSyntheticsAPI", "GetUsageSyntheticsBrowser", "GetUsageTimeseries"
+      ]
+    },
+    {
+      "api": "v1",
+      "reason": "Specialized usage attribution and billing summaries remain generic. Typed FinOps tasks focus on hourly measurements and organization cost totals.",
+      "operationIds": ["GetUsageBillableSummary", "GetHourlyUsageAttribution", "GetUsageLogsByIndex", "GetMonthlyUsageAttribution", "GetUsageSummary", "GetUsageTopAvgMetrics"]
+    },
+    {
+      "api": "v1",
+      "reason": "Metric metadata, distribution ingestion and discovery remain generic. This milestone prioritizes formula queries and threshold automation.",
+      "operationIds": ["SubmitDistributionPoints", "ListActiveMetrics", "GetMetricMetadata", "UpdateMetricMetadata"]
+    },
+    {
+      "api": "v1",
+      "reason": "Deprecated metric search remains on api.Call.",
+      "operationIds": ["ListMetrics"]
+    },
+    {
+      "api": "v1",
+      "reason": "The existing typed submitter uses v2. The legacy v1 payload remains generic.",
+      "operationIds": ["SubmitMetrics"]
+    },
+    {
+      "api": "v1",
+      "reason": "Host tag lifecycle remains generic. Typed host tasks focus on inventory and bounded maintenance.",
+      "operationIds": ["ListHostTags", "DeleteHostTags", "GetHostTags", "CreateHostTags", "UpdateHostTags"]
+    },
+    {
+      "api": "v2",
+      "reason": "Specialized infrastructure inventory remains generic. The typed inventory entry point is hosts.List and DDSQL covers tabular analysis.",
+      "operationIds": ["ListContainerImages", "ListContainers", "ListDevices", "GetDevice", "GetInterfaces", "ListDeviceUserTags", "UpdateDeviceUserTags", "ListInterfaceUserTags", "UpdateInterfaceUserTags", "GetAggregatedConnections", "GetAggregatedDns", "ListProcesses"]
+    },
+    {
+      "api": "v2",
+      "reason": "Cloud Cost Management account configuration and filtering are administrative workflows outside the typed usage and billing-read subset.",
+      "operationIds": [
+        "GetCostAccountFilters", "UpdateCostAccountFilters", "ListCostAWSCURConfigs", "CreateCostAWSCURConfig", "DeleteCostAWSCURConfig", "GetCostAWSCURConfig", "UpdateCostAWSCURConfig",
+        "ListCostAzureUCConfigs", "CreateCostAzureUCConfigs", "DeleteCostAzureUCConfig", "GetCostAzureUCConfig", "UpdateCostAzureUCConfigs",
+        "ListCostCloudAccountsV2", "ListCostGCPUsageCostConfigs", "CreateCostGCPUsageCostConfig", "DeleteCostGCPUsageCostConfig", "GetCostGCPUsageCostConfig", "UpdateCostGCPUsageCostConfig"
+      ]
+    },
+    {
+      "api": "v2",
+      "reason": "Deprecated Cloud Cost Management configuration remains generic.",
+      "operationIds": ["ListCostOCIConfigs"]
+    },
+    {
+      "api": "v2",
+      "reason": "Specialized cloud cost analytics, allocation, budgets and forecasts remain generic. The typed cost tasks read Datadog account charges.",
+      "operationIds": [
+        "ListCostAnomalies", "GetCostAnomaly", "ListCustomAllocationRules", "CreateCustomAllocationRule", "ReorderCustomAllocationRules", "ListCustomAllocationRulesStatus", "DeleteCustomAllocationRule", "GetCustomAllocationRule", "UpdateCustomAllocationRule",
+        "UpsertBudget", "ValidateCsvBudget", "UpsertCustomForecast", "ValidateBudget", "DeleteBudget", "GetBudget", "DeleteCustomForecast", "GetCustomForecast", "ListBudgets",
+        "GetCommitmentsCommitmentList", "GetCommitmentsCoverageScalar", "GetCommitmentsCoverageTimeseries", "GetCommitmentsOnDemandHotspotsScalar", "GetCommitmentsSavingsScalar", "GetCommitmentsSavingsTimeseries", "GetCommitmentsUtilizationScalar", "GetCommitmentsUtilizationTimeseries",
+        "ListCustomCostsFiles", "UploadCustomCostsFile", "DeleteCustomCostsFile", "GetCustomCostsFile", "SearchCostRecommendations", "ListUnitCosts", "CreateUnitCost", "DeleteUnitCost", "GetUnitCost", "UpdateUnitCost"
+      ]
+    },
+    {
+      "api": "v2",
+      "reason": "Cloud cost tag governance and enrichment remain generic administrative operations.",
+      "operationIds": [
+        "ListCostTagDescriptions", "DeleteCostTagDescriptionByKey", "GetCostTagDescriptionByKey", "UpsertCostTagDescriptionByKey", "GenerateCostTagDescriptionByKey", "ListCostTagKeys", "GetCostTagKey", "ListCostTagMetadata", "GetCostTagMetadataCurrency", "ListCostTagMetadataMetrics", "ListCostTagMetadataMonths", "ListCostTagMetadataOrchestrators", "ListCostTagKeySources", "ListCostTags",
+        "ListTagPipelinesRulesets", "CreateTagPipelinesRuleset", "ReorderTagPipelinesRulesets", "ListTagPipelinesRulesetsStatus", "ValidateQuery", "DeleteTagPipelinesRuleset", "GetTagPipelinesRuleset", "UpdateTagPipelinesRuleset"
+      ]
+    },
+    {
+      "api": "v2",
+      "reason": "Dataset and tag-rule administration remain generic. They do not add typed gate or inventory behavior in this milestone.",
+      "operationIds": ["GetAllDatasets", "CreateDataset", "DeleteDataset", "GetDataset", "UpdateDataset", "ListTagRules", "CreateTagRule", "DeleteTagRule", "GetTagRule", "UpdateTagRule", "GetTagRuleScore"]
+    },
+    {
+      "api": "v2",
+      "reason": "Metric tag configuration, indexing and cardinality administration remain generic. Typed metrics focus on formula queries and threshold state.",
+      "operationIds": [
+        "ListTagConfigurations", "CreateDerivedMetric", "DeleteDerivedMetric", "GetDerivedMetric", "UpdateDerivedMetric", "CreateHistoricalMetricsConfiguration", "DeleteHistoricalMetricsConfiguration", "GetHistoricalMetricsConfiguration",
+        "ListTagIndexingRuleExemptions", "ListTagIndexingRules", "CreateTagIndexingRule", "ReorderTagIndexingRules", "DeleteTagIndexingRule", "GetTagIndexingRule", "UpdateTagIndexingRule",
+        "ListActiveMetricConfigurations", "ListTagsByMetricName", "ListMetricAssets", "EstimateMetricsOutputSeries", "GetMetricTagCardinalityDetails",
+        "DeleteTagIndexingRuleExemption", "GetTagIndexingRuleExemption", "CreateTagIndexingRuleExemption", "UpdateTagIndexingRuleExemption", "ListTagIndexingRulesForMetric",
+        "DeleteTagConfiguration", "ListTagConfigurationByName", "UpdateTagConfiguration", "CreateTagConfiguration", "ListVolumesByMetricName"
+      ]
+    },
+    {
+      "api": "v2",
+      "reason": "Reference-table lifecycle and row writes remain generic. The typed DDSQL task handles read-query execution only.",
+      "operationIds": ["BatchRowsQuery", "ListTables", "CreateReferenceTable", "DeleteTable", "GetTable", "UpdateReferenceTable", "DeleteRows", "GetRowsByID", "UpsertRows", "ListReferenceTableRows", "CreateReferenceTableUpload"]
+    },
+    {
+      "api": "v2",
+      "reason": "Deprecated usage or cost operation. Use the current hourly meter or estimated and historical cost tasks.",
+      "operationIds": ["GetUsageApplicationSecurityMonitoring", "GetCostByOrg", "GetUsageLambdaTracedInvocations", "GetUsageObservabilityPipelines"]
+    },
+    {
+      "api": "v2",
+      "reason": "Usage attribution, billing metadata and projections remain generic. Typed FinOps reads prioritize measurements and realized or estimated charges.",
+      "operationIds": ["GetActiveBillingDimensions", "GetMonthlyCostAttribution", "GetBillingDimensionMapping", "GetProjectedCost", "GetUsageSummaryAvailableFields", "GetUsageAttributionTypes"]
+    },
+    {
+      "api": "v2",
+      "reason": "Quota and temporary grant administration remain generic identified-object operations.",
+      "operationIds": [
+        "ListTemporaryGrantRequests", "GetTemporaryGrantRequest", "UpdateTemporaryGrantRequest", "DeleteRequestedTemporaryGrant",
+        "ListQuotas", "CreateQuotas", "DeleteQuota", "UpdateQuota", "DeletePendingQuota",
+        "ListMyTemporaryGrantRequests", "CreateTemporaryGrantRequest", "DeleteTemporaryGrantRequest", "GetMyTemporaryGrantRequest"
+      ]
+    }
+  ]
+}

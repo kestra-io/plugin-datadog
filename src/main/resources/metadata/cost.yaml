@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.cost
+name: "cost"
+title: "Datadog cost"
+description: "Organization-level Datadog charges."
+body: "Read estimated or historical monthly costs with decimal outputs and ION storage."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

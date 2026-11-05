@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.ddsql
+name: "ddsql"
+title: "Datadog DDSQL"
+description: "Tabular DDSQL queries."
+body: "Execute a query and poll for column-major results with a bounded row count."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

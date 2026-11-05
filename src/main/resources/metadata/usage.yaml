@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.usage
+name: "usage"
+title: "Datadog usage"
+description: "Hourly product usage and budget checks."
+body: "Read paged usage measurements and compare exact counts with a budget."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
