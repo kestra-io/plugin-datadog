@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Datadog v2 operationId: CreateDowntime. */
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -61,11 +62,14 @@ import java.util.Map;
                     type: io.kestra.plugin.core.log.Log
                     message: Deploying the orders service
 
+                finally:
                   - id: unmute
                     type: io.kestra.plugin.datadog.downtimes.Cancel
                     apiKey: "{{ secret('DATADOG_API_KEY') }}"
                     appKey: "{{ secret('DATADOG_APP_KEY') }}"
+                    runIf: "{{ outputs.mute is defined }}"
                     downtimeId: "{{ outputs.mute.downtimeId }}"
+                    ignoreNotFound: true
                 """
         )
     }
