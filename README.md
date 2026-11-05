@@ -45,18 +45,126 @@
 
 ## What
 
-- Provides plugin components under `io.kestra.plugin.datadog`.
-- Tasks:
-  - `events.Create` posts an event to the event stream.
-  - `metrics.Submit` sends custom gauge, count and rate points.
-  - `metrics.Query` queries timeseries.
-  - `monitors.List` lists monitors.
-  - `downtimes.Create` and `downtimes.Cancel` mute monitors for a limited time and unmute them.
-  - `logs.Send` sends log entries.
-  - `logs.Search` searches the logs.
-- Trigger:
-  - `monitors.StateChange` polls the monitors and starts a flow when monitors go into alert.
-- The tasks use Kestra's HTTP client against the public Datadog API (v1 and v2), so the plugin has no dependency besides Kestra.
+<!-- datadog-tasks:start -->
+| Component | Purpose |
+|---|---|
+| `api.Call` | Call a Datadog API operation |
+| `api.Operations` | Find Datadog API operations |
+| `audit.Search` | Search the Datadog audit trail |
+| `cases.Assign` | Assign a Datadog case |
+| `cases.Comment` | Comment on a Datadog case |
+| `cases.Create` | Create a Datadog case |
+| `cases.Get` | Get a Datadog case |
+| `cases.Search` | Search Datadog cases |
+| `cases.SetPriority` | Set a Datadog case priority |
+| `cases.SetStatus` | Set a Datadog case status |
+| `catalog.Delete` | Delete one Datadog service definition |
+| `catalog.UpsertServiceDefinition` | Apply a Datadog service definition |
+| `civisibility.SearchPipelines` | Search Datadog CI pipelines |
+| `civisibility.SearchTests` | Search Datadog CI tests |
+| `cost.Estimated` | Read estimated organization costs |
+| `cost.Historical` | Read historical organization costs |
+| `dashboards.Create` | Create a Datadog dashboard |
+| `dashboards.Delete` | Delete one Datadog dashboard |
+| `dashboards.Export` | Export a Datadog dashboard |
+| `dashboards.Get` | Get a Datadog dashboard |
+| `dashboards.Import` | Apply a Datadog dashboard definition |
+| `dashboards.List` | List Datadog dashboards |
+| `dashboards.Update` | Update a Datadog dashboard |
+| `ddsql.Query` | Run a tabular DDSQL query |
+| `deployments.CreateGate` | Create a Datadog deployment gate |
+| `deployments.CreateMonitorRule` | Create a monitor-based Datadog gate rule |
+| `deployments.Evaluate` | Evaluate a Datadog deployment gate |
+| `deployments.GetRules` | Read Datadog deployment gate rules |
+| `deployments.Record` | Record a Datadog DORA deployment |
+| `downtimes.Cancel` | Cancel a Datadog downtime |
+| `downtimes.Create` | Schedule a Datadog downtime that mutes monitor notifications |
+| `downtimes.Get` | Get a Datadog downtime |
+| `downtimes.List` | List Datadog downtimes |
+| `downtimes.Update` | Update one Datadog downtime |
+| `events.Create` | Post an event to the Datadog event stream |
+| `events.Search` | Search Datadog events |
+| `hosts.List` | List Datadog hosts |
+| `hosts.Mute` | Mute one host for a bounded period |
+| `hosts.Totals` | Read active and up host totals |
+| `hosts.Unmute` | Unmute one host |
+| `incidents.Create` | Create a Datadog incident |
+| `incidents.Delete` | Delete one Datadog incident |
+| `incidents.Get` | Get a Datadog incident |
+| `incidents.List` | List Datadog incidents |
+| `incidents.Search` | Search Datadog incidents |
+| `incidents.Update` | Update one Datadog incident |
+| `keys.Create` | Create a Datadog key |
+| `keys.ListApiKeys` | List Datadog API keys |
+| `keys.ListApplicationKeys` | List Datadog application keys |
+| `keys.Revoke` | Revoke one Datadog key |
+| `keys.Rotate` | Create a replacement Datadog key |
+| `logs.Aggregate` | Aggregate Datadog logs |
+| `logs.Count` | Count Datadog logs against a threshold |
+| `logs.CountThreshold` | Start a flow when a log count crosses a threshold |
+| `logs.Search` | Search Datadog logs |
+| `logs.Send` | Send log entries to Datadog |
+| `metrics.Check` | Check a scalar metric threshold |
+| `metrics.Query` | Query timeseries metrics from Datadog |
+| `metrics.QueryScalar` | Query scalar metric formulas |
+| `metrics.QueryTimeseries` | Query metric timeseries formulas |
+| `metrics.Submit` | Submit a custom metric point to Datadog |
+| `metrics.Threshold` | Trigger on a metric threshold crossing |
+| `monitors.Apply` | Apply Datadog monitors from code |
+| `monitors.CanDelete` | Check whether Datadog monitors can be deleted |
+| `monitors.Configuration` | Read Datadog monitor configuration |
+| `monitors.Create` | Create a Datadog monitor |
+| `monitors.Delete` | Delete one Datadog monitor |
+| `monitors.Export` | Export Datadog monitor definitions |
+| `monitors.Get` | Get one Datadog monitor |
+| `monitors.List` | List Datadog monitors |
+| `monitors.Search` | Search Datadog monitors with facets |
+| `monitors.StateChange` | Start a flow when Datadog monitors change to an alerting state |
+| `monitors.Update` | Update one Datadog monitor |
+| `monitors.Validate` | Validate a Datadog monitor definition |
+| `oncall.Acknowledge` | Acknowledge a Datadog On-Call page |
+| `oncall.Escalate` | Escalate a Datadog On-Call page |
+| `oncall.Page` | Page a Datadog On-Call team or user |
+| `oncall.Resolve` | Resolve a Datadog On-Call page |
+| `oncall.WhoIsOnCall` | Read the current On-Call responders for a team |
+| `rum.Aggregate` | Aggregate Datadog RUM events |
+| `rum.Search` | Search Datadog RUM events |
+| `security.SignalsSearch` | Search Datadog security signals |
+| `security.TriageSignal` | Triage one Datadog security signal |
+| `slos.BudgetLow` | Start a flow when an SLO budget becomes low |
+| `slos.Check` | Gate a flow on a Datadog SLO error budget |
+| `slos.Create` | Create a Datadog SLO |
+| `slos.Delete` | Delete one Datadog SLO |
+| `slos.Get` | Get a Datadog SLO |
+| `slos.History` | Read Datadog SLO history |
+| `slos.List` | List Datadog SLOs |
+| `slos.Update` | Update a Datadog SLO |
+| `spans.Aggregate` | Aggregate Datadog spans |
+| `spans.Count` | Count Datadog spans against a threshold |
+| `spans.Search` | Search Datadog spans |
+| `statuspages.CreateDegradation` | Create a status page degradation |
+| `statuspages.Get` | Get a Datadog status page |
+| `statuspages.List` | List Datadog status pages |
+| `statuspages.UpdateDegradation` | Update or resolve a status page degradation |
+| `synthetics.Create` | Create a Datadog synthetic test |
+| `synthetics.Delete` | Delete one Datadog synthetic test |
+| `synthetics.Get` | Get a Datadog synthetic test |
+| `synthetics.List` | List Datadog synthetic tests |
+| `synthetics.Locations` | List Datadog synthetic locations |
+| `synthetics.Results` | Read Datadog synthetic test results |
+| `synthetics.Run` | Run Datadog synthetic tests as a quality gate |
+| `synthetics.SetStatus` | Pause or resume a Datadog synthetic test |
+| `synthetics.Trigger` | Trigger Datadog synthetic CI tests |
+| `synthetics.Update` | Replace a Datadog synthetic test |
+| `teams.List` | List Datadog teams |
+| `teams.RemoveMember` | Remove one Datadog team member |
+| `teams.SyncMembers` | Sync one Datadog team's members |
+| `usage.Check` | Check product usage against a budget |
+| `usage.Hourly` | Read hourly product usage |
+| `users.Disable` | Disable one Datadog user |
+| `users.Get` | Get a Datadog user |
+| `users.List` | List Datadog users |
+<!-- datadog-tasks:end -->
 
 ## Authentication
 
