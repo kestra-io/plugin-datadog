@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.users;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -34,17 +35,19 @@ import java.util.Map;
 public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output> {
     @NotNull
     @Schema(title = "User identifier")
+    @PluginProperty(group = "main")
     private Property<String> userId;
     @Schema(title = "Include secrets", description = "Include credential and URL fields in the response.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     @SuppressWarnings("unchecked")
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
-            boolean include = AccessApi.flag(context, includeSecrets);
-            Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of(), null)).get("data"));
+            var path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
+            var include = AccessApi.flag(context, includeSecrets);
+            var data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of(), null)).get("data"));
             return Output.builder().user((Map<String, Object>) AccessApi.redact(data, include)).build();
         }
     }

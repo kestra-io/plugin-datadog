@@ -63,24 +63,24 @@ public class Cancel extends AbstractDatadogTask implements RunnableTask<Cancel.O
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var id = runContext.render(this.downtimeId).as(String.class).orElse("").trim();
-        if (id.isEmpty()) {
+        var rId = runContext.render(this.downtimeId).as(String.class).orElse("").trim();
+        if (rId.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `downtimeId` must not be blank");
         }
 
-        var ignore = runContext.render(this.ignoreNotFound).as(Boolean.class).orElse(false);
-        try (DatadogClient client = client(runContext, true)) {
-            client.delete("/api/v2/downtime/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
+        var rIgnore = runContext.render(this.ignoreNotFound).as(Boolean.class).orElse(false);
+        try (var client = client(runContext, true)) {
+            client.delete("/api/v2/downtime/" + URLEncoder.encode(rId, StandardCharsets.UTF_8));
         } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 404 && ignore) {
-                runContext.logger().info("Datadog downtime {} was not found, nothing to cancel", id);
-                return Output.builder().downtimeId(id).cancelled(false).build();
+            if (e.getStatus() == 404 && rIgnore) {
+                runContext.logger().info("Datadog downtime {} was not found, nothing to cancel", rId);
+                return Output.builder().downtimeId(rId).cancelled(false).build();
             }
             throw e;
         }
 
-        runContext.logger().info("Datadog downtime {} cancelled", id);
-        return Output.builder().downtimeId(id).cancelled(true).build();
+        runContext.logger().info("Datadog downtime {} cancelled", rId);
+        return Output.builder().downtimeId(rId).cancelled(true).build();
     }
 
     @Builder

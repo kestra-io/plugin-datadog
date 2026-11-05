@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -31,20 +32,23 @@ import lombok.experimental.SuperBuilder;
 public class Get extends AbstractMonitorTask implements RunnableTask<MonitorOutput> {
     @NotNull
     @Schema(title = "Monitor id")
+    @PluginProperty(group = "main")
     private Property<Long> monitorId;
     @Schema(title = "Include matching downtimes")
+    @PluginProperty(group = "main")
     private Property<Boolean> withDowntimes;
     @Schema(title = "Include monitor assets")
+    @PluginProperty(group = "main")
     private Property<Boolean> withAssets;
 
     @Override
     public MonitorOutput run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
+            var rId = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
             var params = DatadogClient.query();
             context.render(withDowntimes).as(Boolean.class).ifPresent(value -> params.put("with_downtimes", value));
             context.render(withAssets).as(Boolean.class).ifPresent(value -> params.put("with_assets", value));
-            return MonitorOutput.of(client.get("/api/v1/monitor/" + id, params).map(), includeSecrets(context));
+            return MonitorOutput.of(client.get("/api/v1/monitor/" + rId, params).map(), includeSecrets(context));
         }
     }
 }

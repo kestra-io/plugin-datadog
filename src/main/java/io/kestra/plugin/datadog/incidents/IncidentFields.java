@@ -1,6 +1,7 @@
 package io.kestra.plugin.datadog.incidents;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,17 +33,17 @@ public final class IncidentFields {
     }
 
     static Map<String, Object> fields(Map<String, Object> extra, Severity severity, State state) {
-        Map<String, Object> result = new LinkedHashMap<>(extra);
-        for (Map.Entry<String, Object> entry : extra.entrySet()) {
+        var result = new LinkedHashMap<String, Object>(extra);
+        for (var entry : extra.entrySet()) {
             if (!(entry.getValue() instanceof Map<?, ?> field)) {
                 throw new IllegalArgumentException("Incident field `" + entry.getKey() + "` must contain type and value");
             }
-            String type = String.valueOf(field.get("type"));
-            Object value = field.get("value");
-            boolean single = Set.of("dropdown", "textbox").contains(type);
-            boolean multiple = Set.of("multiselect", "textarray", "metrictag", "autocomplete").contains(type);
+            var type = String.valueOf(field.get("type"));
+            var value = field.get("value");
+            var single = Set.of("dropdown", "textbox").contains(type);
+            var multiple = Set.of("multiselect", "textarray", "metrictag", "autocomplete").contains(type);
             if ((!single && !multiple) || (single && value != null && !(value instanceof String))
-                || (multiple && value != null && (!(value instanceof java.util.List<?> list) || list.stream().anyMatch(v -> !(v instanceof String))))) {
+                || (multiple && value != null && (!(value instanceof List<?> list) || list.stream().anyMatch(v -> !(v instanceof String))))) {
                 throw new IllegalArgumentException("Incident field `" + entry.getKey() + "` has an invalid type or value");
             }
         }

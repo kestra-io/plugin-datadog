@@ -1,13 +1,5 @@
 package io.kestra.plugin.datadog.logs;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
-
-import java.io.BufferedOutputStream;
-import java.io.OutputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -69,8 +61,8 @@ public final class Telemetry {
         if (!(value instanceof List<?> list)) {
             throw new IllegalStateException("Datadog returned an unexpected telemetry response: an array was expected");
         }
-        List<Map<String, Object>> rows = new ArrayList<>();
-        for (Object row : list) {
+        var rows = new ArrayList<Map<String, Object>>();
+        for (var row : list) {
             if (!(row instanceof Map<?, ?>)) {
                 throw new IllegalStateException("Datadog returned a telemetry row that is not an object");
             }
@@ -81,11 +73,11 @@ public final class Telemetry {
 
     public static List<Map<String, Object>> buckets(Map<String, Object> answer, boolean spans) {
         if (spans) {
-            return rows(answer.get("data")).stream().map(row -> {
+            return rows(answer.get("data")).stream().<Map<String, Object>>map(row -> {
                 if (!(row.get("attributes") instanceof Map<?, ?> attributes)) {
                     throw new IllegalStateException("Datadog returned a span bucket without attributes");
                 }
-                Map<String, Object> out = new LinkedHashMap<>();
+                var out = new LinkedHashMap<String, Object>();
                 attributes.forEach((k, v) -> out.put(String.valueOf(k), v));
                 return out;
             }).toList();
@@ -98,7 +90,7 @@ public final class Telemetry {
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> merge(Map<String, Object> base, Map<String, Object> extra) {
-        Map<String, Object> out = new LinkedHashMap<>(base);
+        var out = new LinkedHashMap<String, Object>(base);
         extra.forEach((key, value) -> {
             if (out.get(key) instanceof Map<?, ?> left && value instanceof Map<?, ?> right) {
                 out.put(key, merge((Map<String, Object>) left, (Map<String, Object>) right));
@@ -117,11 +109,11 @@ public final class Telemetry {
 
     private static Object redactValue(Object value) {
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> out = new LinkedHashMap<>();
+            var out = new LinkedHashMap<String, Object>();
             map.forEach((key, item) -> {
-                String name = String.valueOf(key);
-                String normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                boolean sensitive = normalized.endsWith("apikey") || normalized.endsWith("appkey") || normalized.endsWith("applicationkey")
+                var name = String.valueOf(key);
+                var normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+                var sensitive = normalized.endsWith("apikey") || normalized.endsWith("appkey") || normalized.endsWith("applicationkey")
                     || normalized.endsWith("password") || normalized.endsWith("secret") || normalized.endsWith("token")
                     || normalized.endsWith("webhookurl") || normalized.equals("webhook") || normalized.endsWith("privatekey");
                 out.put(name, sensitive ? "[REDACTED]" : redactValue(item));

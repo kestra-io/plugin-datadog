@@ -1,19 +1,19 @@
 package io.kestra.plugin.datadog.ddsql;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -23,13 +23,12 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 
 /** Datadog operationIds: ExecuteDdsqlTabularQuery and FetchDdsqlTabularQuery. */
 @ValidDatadogLimits
@@ -55,22 +54,31 @@ import java.util.Locale;
 public class Query extends AbstractDatadogTask implements RunnableTask<Query.Output> {
     @NotNull
     @Schema(title = "DDSQL statement", description = "Query in Datadog's SQL dialect, such as SELECT cloud_provider, count(*) FROM dd.hosts GROUP BY cloud_provider.")
+    @PluginProperty(group = "main")
     private Property<String> query;
     @Schema(title = "Window start", description = "Inclusive instant. Defaults to lookback before to. Static tables still require a window in the API request.")
+    @PluginProperty(group = "processing")
     private Property<Instant> from;
     @Schema(title = "Window end", description = "Exclusive instant. Defaults to now.")
+    @PluginProperty(group = "processing")
     private Property<Instant> to;
     @Schema(title = "Lookback", description = "Positive duration used when from is absent. Defaults to PT1H.")
+    @PluginProperty(group = "processing")
     private Property<Duration> lookback;
     @Schema(title = "Row limit", description = "Maximum returned rows, from 1 to 10000. Defaults to 1000. Check warnings for server truncation.")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> rowLimit;
     @Schema(title = "Maximum fetch polls", description = "Number of fetch requests allowed, from 1 to 1000. Defaults to 30.")
+    @PluginProperty(group = "reliability")
     private Property<@Min(1) @Max(1000) Integer> maxPolls;
     @Schema(title = "Poll delay", description = "Delay between fetch requests, from one millisecond to one minute. Defaults to PT1S.")
+    @PluginProperty(group = "reliability")
     private Property<Duration> pollDelay;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
     @Schema(title = "Include sensitive columns", description = "Return values for columns named as API keys, application keys, tokens, passwords or webhook URLs. Defaults to false. Detection uses column names; alias sensitive source fields with their original names.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
@@ -79,36 +87,36 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
             throw new IllegalArgumentException("`lookback` cannot be used with `from`");
         }
         try (var client = client(context, true)) {
-            String statement = context.render(query).as(String.class).orElse("").trim();
-            int limit = context.render(rowLimit).as(Integer.class).orElse(1000);
-            int polls = context.render(maxPolls).as(Integer.class).orElse(30);
-            Duration delay = context.render(pollDelay).as(Duration.class).orElse(Duration.ofSeconds(1));
-            Duration window = context.render(lookback).as(Duration.class).orElse(Duration.ofHours(1));
-            Instant end = context.render(to).as(Instant.class).orElseGet(Instant::now);
-            Instant start = context.render(from).as(Instant.class).orElseGet(() -> end.minus(window));
-            boolean includeSensitive = context.render(includeSecrets).as(Boolean.class).orElse(false);
-            if (statement.isBlank()) {
+            var rStatement = context.render(query).as(String.class).orElse("").trim();
+            var rLimit = context.render(rowLimit).as(Integer.class).orElse(1000);
+            var rPolls = context.render(maxPolls).as(Integer.class).orElse(30);
+            var rDelay = context.render(pollDelay).as(Duration.class).orElse(Duration.ofSeconds(1));
+            var rWindow = context.render(lookback).as(Duration.class).orElse(Duration.ofHours(1));
+            var rEnd = context.render(to).as(Instant.class).orElseGet(Instant::now);
+            var rStart = context.render(from).as(Instant.class).orElseGet(() -> rEnd.minus(rWindow));
+            var rIncludeSensitive = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            if (rStatement.isBlank()) {
                 throw new IllegalArgumentException("`query` must not be blank");
             }
-            if (limit < 1 || limit > 10000 || polls < 1 || polls > 1000) {
+            if (rLimit < 1 || rLimit > 10000 || rPolls < 1 || rPolls > 1000) {
                 throw new IllegalArgumentException("`rowLimit` must be 1..10000 and `maxPolls` must be 1..1000");
             }
-            if (delay.compareTo(Duration.ofMillis(1)) < 0 || delay.compareTo(Duration.ofMinutes(1)) > 0) {
+            if (rDelay.compareTo(Duration.ofMillis(1)) < 0 || rDelay.compareTo(Duration.ofMinutes(1)) > 0) {
                 throw new IllegalArgumentException("`pollDelay` must be between one millisecond and one minute");
             }
-            if (window.isZero() || window.isNegative() || start.toEpochMilli() >= end.toEpochMilli()) {
+            if (rWindow.isZero() || rWindow.isNegative() || rStart.toEpochMilli() >= rEnd.toEpochMilli()) {
                 throw new IllegalArgumentException("`lookback` must be positive and `from` must precede `to` at millisecond precision");
             }
-            var attributes = Map.of("query", statement, "row_limit", limit,
-                "time", Map.of("from_timestamp", start.toEpochMilli(), "to_timestamp", end.toEpochMilli()));
-            Map<String, Object> answer = client.post("/api/v2/ddsql/query/tabular", body("ddsql_query_request", attributes)).map();
-            List<String> warnings = new ArrayList<>();
-            for (int fetched = 0; ; fetched++) {
+            var attributes = Map.of("query", rStatement, "row_limit", rLimit,
+                "time", Map.of("from_timestamp", rStart.toEpochMilli(), "to_timestamp", rEnd.toEpochMilli()));
+            var answer = client.post("/api/v2/ddsql/query/tabular", body("ddsql_query_request", attributes)).map();
+            var warnings = new ArrayList<String>();
+            for (var fetched = 0; ; fetched++) {
                 if (!(answer.get("data") instanceof Map<?, ?> data) || !(data.get("attributes") instanceof Map<?, ?> result)) {
                     throw new IllegalStateException("Datadog DDSQL response has no data.attributes");
                 }
                 if (result.get("warnings") instanceof List<?> messages) {
-                    for (Object message : messages) {
+                    for (var message : messages) {
                         if (!(message instanceof String text)) {
                             throw new IllegalStateException("DDSQL warnings must be strings");
                         }
@@ -117,24 +125,24 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
                         }
                     }
                 }
-                State state = State.fromApi(result.get("state"));
+                var state = State.fromApi(result.get("state"));
                 if (state == State.COMPLETED) {
                     if (!(result.get("columns") instanceof List<?> columns)) {
                         throw new IllegalStateException("Completed DDSQL response has no columns");
                     }
-                    List<Column> parsed = new ArrayList<>();
+                    var parsed = new ArrayList<Column>();
                     Integer rowCount = null;
-                    for (Object column : columns) {
+                    for (var column : columns) {
                         if (!(column instanceof Map<?, ?> map) || !(map.get("name") instanceof String name)
                             || !(map.get("type") instanceof String dataType) || !(map.get("values") instanceof List<?> values)) {
                             throw new IllegalStateException("DDSQL columns need name, type and values");
                         }
-                        if ((rowCount != null && rowCount != values.size()) || values.size() > limit) {
+                        if ((rowCount != null && rowCount != values.size()) || values.size() > rLimit) {
                             throw new IllegalStateException("DDSQL column lengths are inconsistent or exceed rowLimit");
                         }
                         rowCount = values.size();
-                    List<?> safeValues = includeSensitive ? values : values.stream().map(value -> value == null ? null
-                        : sensitive(name) ? "[REDACTED]" : io.kestra.plugin.datadog.monitors.MonitorIO.redact(value, false)).toList();
+                        List<?> safeValues = rIncludeSensitive ? values : values.stream().map(value -> value == null ? null
+                            : sensitive(name) ? "[REDACTED]" : MonitorIO.redact(value, false)).toList();
                         parsed.add(Column.builder().name(name).dataType(dataType).values(safeValues).build());
                     }
                     var fetchedResult = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), parsed);
@@ -144,10 +152,10 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
                 if (!(result.get("query_id") instanceof String queryId) || queryId.isBlank()) {
                     throw new IllegalStateException("Running DDSQL response has no query_id");
                 }
-                if (fetched >= polls) {
+                if (fetched >= rPolls) {
                     throw new IllegalStateException("DDSQL query is still running after maxPolls fetch requests");
                 }
-                Thread.sleep(delay.toMillis());
+                Thread.sleep(rDelay.toMillis());
                 answer = client.post("/api/v2/ddsql/query/tabular/fetch", body("ddsql_query_fetch_request", Map.of("query_id", queryId))).map();
             }
         }
@@ -158,7 +166,7 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
     }
 
     private static boolean sensitive(String name) {
-        String normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+        var normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         return normalized.contains("apikey") || normalized.contains("appkey") || normalized.contains("applicationkey")
             || normalized.contains("password") || normalized.contains("passwd") || normalized.contains("secret")
             || normalized.contains("webhookurl") || normalized.contains("token");

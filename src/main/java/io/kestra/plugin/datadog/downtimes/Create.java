@@ -7,7 +7,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -158,7 +157,7 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
 
         var body = Map.of("data", Map.of("type", "downtime", "attributes", attributes));
         Map<String, Object> answer;
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             answer = client.post("/api/v2/downtime", body).map();
         }
 

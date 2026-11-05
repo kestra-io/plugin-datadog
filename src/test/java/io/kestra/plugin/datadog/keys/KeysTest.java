@@ -1,9 +1,11 @@
 package io.kestra.plugin.datadog.keys;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -15,9 +17,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 class KeysTest extends OrganizationTestSupport {
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void requestsMatchPinnedContracts() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+        OpenApiContract.assertRequests(server.requests,
             "v2:CreateAPIKey", "v2:CreateCurrentUserApplicationKey", "v2:GetAPIKey", "v2:GetApplicationKey",
             "v2:DeleteAPIKey", "v2:DeleteApplicationKey", "v2:ListAPIKeys", "v2:ListApplicationKeys");
     }
@@ -29,8 +31,8 @@ class KeysTest extends OrganizationTestSupport {
     @Test
     void createRedactsByDefaultAndCanExplicitlyReturnTheValue() throws Exception {
         server.reply("POST", "/api/v2/api_keys", 201, keyResponse());
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:CreateAPIKey").assertResponse(201, keyResponse());
-        KeyOutput output = connection(Create.builder()).name(Property.ofValue("pipeline")).build().run(runContext());
+        OpenApiContract.of("v2:CreateAPIKey").assertResponse(201, keyResponse());
+        var output = connection(Create.builder()).name(Property.ofValue("pipeline")).build().run(runContext());
         assertEquals("new-id", output.getKeyId());
         assertEquals("[REDACTED]", output.getKey());
         assertEquals("****1234", output.getPreview());
@@ -38,14 +40,14 @@ class KeysTest extends OrganizationTestSupport {
         assertEquals(Map.of("data", Map.of("type", "api_keys", "attributes", Map.of("name", "pipeline"))), server.only().json());
         assertEquals(API_KEY, server.only().header("DD-API-KEY"));
         assertEquals(APP_KEY, server.only().header("DD-APPLICATION-KEY"));
-        KeyOutput included = connection(Create.builder()).name(Property.ofValue("pipeline")).includeSecrets(Property.ofValue(true)).build().run(runContext());
+        var included = connection(Create.builder()).name(Property.ofValue("pipeline")).includeSecrets(Property.ofValue(true)).build().run(runContext());
         assertEquals(VALUE, included.getKey());
     }
 
     @Test
     void applicationKeyCreationRequiresExplicitScopesAndUsesCurrentUser() throws Exception {
         server.reply("POST", "/api/v2/current_user/application_keys", 201, json(Map.of("data", resource("new-id", "application_keys", Map.of("key", VALUE, "scopes", List.of("user_access_read"))))));
-        KeyOutput output = connection(Create.builder()).name(Property.ofValue("reader")).keyKind(Property.ofValue(KeyKind.APPLICATION))
+        var output = connection(Create.builder()).name(Property.ofValue("reader")).keyKind(Property.ofValue(KeyKind.APPLICATION))
             .scopes(Property.ofValue(List.of("user_access_read"))).build().run(runContext());
         noCredential(output);
         assertEquals(List.of("user_access_read"), output.getScopes());
@@ -56,11 +58,11 @@ class KeysTest extends OrganizationTestSupport {
     void rotateChecksTheOldIdCreatesReplacementAndNeverRevokesIt() throws Exception {
         server.reply("GET", "/api/v2/api_keys/old-id", 200, keyResponse());
         server.reply("POST", "/api/v2/api_keys", 201, keyResponse());
-        KeyOutput output = connection(Rotate.builder()).oldKeyId(Property.ofValue("old-id")).name(Property.ofValue("replacement")).build().run(runContext());
+        var output = connection(Rotate.builder()).oldKeyId(Property.ofValue("old-id")).name(Property.ofValue("replacement")).build().run(runContext());
         noCredential(output);
         assertEquals("new-id", output.getKeyId());
         assertEquals(List.of("GET", "POST"), server.requests.stream().map(request -> request.method()).toList());
-        KeyOutput included = connection(Rotate.builder()).oldKeyId(Property.ofValue("old-id")).name(Property.ofValue("replacement"))
+        var included = connection(Rotate.builder()).oldKeyId(Property.ofValue("old-id")).name(Property.ofValue("replacement"))
             .includeSecrets(Property.ofValue(true)).build().run(runContext());
         assertEquals(VALUE, included.getKey());
     }
@@ -104,9 +106,9 @@ class KeysTest extends OrganizationTestSupport {
 
     @Test
     void bothInventoriesPageAndRedactWithExplicitOptIn() throws Exception {
-        for (String path : List.of("/api/v2/api_keys", "/api/v2/application_keys")) {
+        for (var path : List.of("/api/v2/api_keys", "/api/v2/application_keys")) {
             server.requests.clear();
-            String type = path.endsWith("api_keys") ? "api_keys" : "application_keys";
+            var type = path.endsWith("api_keys") ? "api_keys" : "application_keys";
             server.reply("GET", path, 200, page(List.of(resource("a", type, Map.of("name", "a", "key", VALUE))), 2));
             server.reply("GET", path, 200, page(List.of(resource("b", type, Map.of("name", "b"))), 2));
             var task = path.endsWith("api_keys")
@@ -134,8 +136,8 @@ class KeysTest extends OrganizationTestSupport {
         assertNull(output.getRows());
         assertEquals(1, output.getSize());
         assertNotNull(output.getUri());
-        List<Object> rows = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(context.storage().getFile(output.getUri())))) {
+        var rows = new ArrayList<Object>();
+        try (var reader = new BufferedReader(new InputStreamReader(context.storage().getFile(output.getUri())))) {
             FileSerde.reader(reader, rows::add);
         }
         assertEquals(1, rows.size());
@@ -149,7 +151,7 @@ class KeysTest extends OrganizationTestSupport {
         assertThrows(IllegalArgumentException.class, () -> connection(ListApiKeys.builder()).maxResults(Property.ofValue(10001)).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> connection(ListApplicationKeys.builder()).maxResults(Property.ofValue(0)).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
-        String page = page(List.of(resource("a", "api_keys", Map.of())), 2);
+        var page = page(List.of(resource("a", "api_keys", Map.of())), 2);
         server.reply("GET", "/api/v2/api_keys", 200, page);
         var limited = connection(ListApiKeys.builder()).maxResults(Property.ofValue(1)).pageSize(Property.ofValue(1)).build().run(runContext());
         assertTrue(limited.getTruncated());
@@ -160,7 +162,7 @@ class KeysTest extends OrganizationTestSupport {
 
     @Test
     void responseAndParsingErrorsNeverEchoCredentials() throws Exception {
-        for (int status : List.of(400, 403, 404, 429, 500)) {
+        for (var status : List.of(400, 403, 404, 429, 500)) {
             server.reply("POST", "/api/v2/api_keys", status, json(Map.of("errors", List.of(VALUE))));
             var error = assertThrows(DatadogClient.DatadogException.class, () -> connection(Create.builder()).name(Property.ofValue("x")).build().run(runContext()));
             assertEquals(status, error.getStatus());
@@ -175,8 +177,8 @@ class KeysTest extends OrganizationTestSupport {
 
     @Test
     void nestedRedactionDoesNotMutateTheResponse() throws Exception {
-        Map<String, Object> raw = Map.of("key", VALUE, "nested", List.of(Map.of("api_key", VALUE, "password", VALUE, "access_token", VALUE, "webhookUrl", VALUE)), "name", "safe");
-        Object safe = AccessApi.redact(raw, false);
+        var raw = Map.<String, Object>of("key", VALUE, "nested", List.of(Map.of("api_key", VALUE, "password", VALUE, "access_token", VALUE, "webhookUrl", VALUE)), "name", "safe");
+        var safe = AccessApi.redact(raw, false);
         noCredential(safe);
         assertEquals("safe", AccessApi.object(safe).get("name"));
         assertTrue(json(raw).contains(VALUE));

@@ -7,7 +7,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -103,7 +102,7 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
     private Property<String> intakeUrl;
 
     private static void rejectReserved(Map<String, Object> attributes) {
-        for (String reserved : RESERVED) {
+        for (var reserved : RESERVED) {
             if (attributes.containsKey(reserved)) {
                 throw new IllegalArgumentException("`attributes` cannot set '" + reserved + "': use the property of the task with the matching name (`message`, `service`, `source`, `host` or `tags`)");
             }
@@ -111,12 +110,12 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
     }
 
     private Map<String, Object> defaults(RunContext runContext) throws Exception {
-        var defaults = new LinkedHashMap<String, Object>(runContext.render(this.attributes).asMap(String.class, Object.class));
-        rejectReserved(defaults);
-        runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("service", v));
-        runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("ddsource", v));
-        runContext.render(this.host).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("hostname", v));
-        return defaults;
+        var rDefaults = new LinkedHashMap<String, Object>(runContext.render(this.attributes).asMap(String.class, Object.class));
+        rejectReserved(rDefaults);
+        runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rDefaults.put("service", v));
+        runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rDefaults.put("ddsource", v));
+        runContext.render(this.host).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rDefaults.put("hostname", v));
+        return rDefaults;
     }
 
     @Override
@@ -129,17 +128,17 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
         if (this.logs != null) {
             // service, source, host, tags and attributes are defaults for the entries that do not set them
             var defaults = defaults(runContext);
-            var defaultTags = runContext.render(this.tags).asList(String.class).stream().filter(t -> t != null && !t.isBlank()).toList();
-            for (Map<?, ?> raw : runContext.render(this.logs).asList(Map.class)) {
+            var rDefaultTags = runContext.render(this.tags).asList(String.class).stream().filter(t -> t != null && !t.isBlank()).toList();
+            for (var raw : runContext.render(this.logs).asList(Map.class)) {
                 var entry = new LinkedHashMap<String, Object>();
                 raw.forEach((key, value) -> entry.put(String.valueOf(key), value));
                 if (entry.get("message") == null || String.valueOf(entry.get("message")).isBlank()) {
                     throw new IllegalArgumentException("Every entry of `logs` needs a `message`");
                 }
                 defaults.forEach(entry::putIfAbsent);
-                if (!defaultTags.isEmpty()) {
+                if (!rDefaultTags.isEmpty()) {
                     var own = entry.get("ddtags") == null ? "" : String.valueOf(entry.get("ddtags"));
-                    entry.put("ddtags", own.isBlank() ? String.join(",", defaultTags) : own + "," + String.join(",", defaultTags));
+                    entry.put("ddtags", own.isBlank() ? String.join(",", rDefaultTags) : own + "," + String.join(",", rDefaultTags));
                 }
                 entries.add(entry);
             }
@@ -151,25 +150,25 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
             if (rMessage.isBlank()) {
                 throw new IllegalArgumentException("The Datadog log `message` must not be blank");
             }
-            var entry = new LinkedHashMap<String, Object>(runContext.render(this.attributes).asMap(String.class, Object.class));
-            rejectReserved(entry);
-            entry.put("message", rMessage);
-            runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> entry.put("service", v));
-            runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> entry.put("ddsource", v));
-            runContext.render(this.host).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> entry.put("hostname", v));
+            var rEntry = new LinkedHashMap<String, Object>(runContext.render(this.attributes).asMap(String.class, Object.class));
+            rejectReserved(rEntry);
+            rEntry.put("message", rMessage);
+            runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rEntry.put("service", v));
+            runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rEntry.put("ddsource", v));
+            runContext.render(this.host).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> rEntry.put("hostname", v));
             var rTags = runContext.render(this.tags).asList(String.class).stream().filter(t -> t != null && !t.isBlank()).toList();
             if (!rTags.isEmpty()) {
-                entry.put("ddtags", String.join(",", rTags));
+                rEntry.put("ddtags", String.join(",", rTags));
             }
-            entries.add(entry);
+            entries.add(rEntry);
         }
         if (entries.size() > MAX_ENTRIES) {
             throw new IllegalArgumentException("Datadog accepts at most " + MAX_ENTRIES + " log entries per request but " + entries.size() + " were given: split them over several tasks");
         }
 
-        try (DatadogClient client = client(runContext, false)) {
-            var base = client.logsIntakeBase(runContext.render(this.intakeUrl).as(String.class).orElse(""));
-            client.exchange("POST", base, "/api/v2/logs", Map.of(), entries, true);
+        try (var client = client(runContext, false)) {
+            var rBase = client.logsIntakeBase(runContext.render(this.intakeUrl).as(String.class).orElse(""));
+            client.exchange("POST", rBase, "/api/v2/logs", Map.of(), entries, true);
         }
 
         runContext.logger().info("Datadog accepted {} log entr{}", entries.size(), entries.size() == 1 ? "y" : "ies");

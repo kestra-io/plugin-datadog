@@ -29,10 +29,10 @@ final class ServiceDefinitions {
             } else if (key.equals("extensions")) {
                 object(value, key);
             } else if (key.equals("contacts") || key.equals("links")) {
-                for (Object item : array(value, key)) {
-                    Map<String, Object> entry = object(item, key);
-                    Set<String> required = key.equals("contacts") ? Set.of("type", "contact") : Set.of("name", "type", "url");
-                    Set<String> allowed = key.equals("contacts") ? Set.of("type", "contact", "name") : Set.of("name", "type", "url", "provider");
+                for (var item : array(value, key)) {
+                    var entry = object(item, key);
+                    var required = key.equals("contacts") ? Set.of("type", "contact") : Set.of("name", "type", "url");
+                    var allowed = key.equals("contacts") ? Set.of("type", "contact", "name") : Set.of("name", "type", "url", "provider");
                     required.forEach(field -> string(entry.get(field), key + "." + field));
                     entry.forEach((field, val) -> {
                         if (!allowed.contains(field)) { throw new IllegalArgumentException("Unknown field in definition." + key); }
@@ -44,7 +44,7 @@ final class ServiceDefinitions {
                     if (!Set.of("opsgenie", "pagerduty").contains(provider)) {
                         throw new IllegalArgumentException("Unsupported service definition integration");
                     }
-                    Map<String, Object> integration = object(item, provider);
+                    var integration = object(item, provider);
                     if (provider.equals("opsgenie")) { string(integration.get("service-url"), "opsgenie.service-url"); }
                     integration.forEach((field, val) -> {
                         if (field.equals("service-url")) { string(val, field); }
@@ -73,7 +73,7 @@ final class ServiceDefinitions {
     }
 
     static Map<String, Object> merge(Map<String, Object> current, Map<String, Object> desired) {
-        Map<String, Object> merged = new LinkedHashMap<>(current);
+        var merged = new LinkedHashMap<String, Object>(current);
         desired.forEach((key, value) -> merged.put(key,
             value instanceof Map<?, ?> && current.get(key) instanceof Map<?, ?>
                 ? merge(AccessApi.object(current.get(key)), AccessApi.object(value)) : value));
@@ -82,22 +82,22 @@ final class ServiceDefinitions {
 
     static void diff(String path, Map<String, Object> before, Map<String, Object> after, List<UpsertServiceDefinition.Change> changes, boolean include) {
         after.forEach((key, value) -> {
-            Object old = before.get(key);
-            String field = path + "/" + key.replace("~", "~0").replace("/", "~1");
+            var old = before.get(key);
+            var field = path + "/" + key.replace("~", "~0").replace("/", "~1");
             if (old instanceof Map<?, ?> && value instanceof Map<?, ?>) {
                 diff(field, AccessApi.object(old), AccessApi.object(value), changes, include);
             } else if (!Objects.equals(old, value)) {
-                Map<String, Object> oldWrapper = new LinkedHashMap<>();
-                Map<String, Object> newWrapper = new LinkedHashMap<>();
+                var oldWrapper = new LinkedHashMap<String, Object>();
+                var newWrapper = new LinkedHashMap<String, Object>();
                 oldWrapper.put(key, old);
                 newWrapper.put(key, value);
                 // Include the full path so a credential nested below an arbitrary map name stays redacted.
-                Map<String, Object> wrappedBefore = new LinkedHashMap<>();
-                Map<String, Object> wrappedAfter = new LinkedHashMap<>();
+                var wrappedBefore = new LinkedHashMap<String, Object>();
+                var wrappedAfter = new LinkedHashMap<String, Object>();
                 wrappedBefore.put(field, oldWrapper);
                 wrappedAfter.put(field, newWrapper);
-                Object safeBefore = AccessApi.object(AccessApi.redact(wrappedBefore, include)).get(field);
-                Object safeAfter = AccessApi.object(AccessApi.redact(wrappedAfter, include)).get(field);
+                var safeBefore = AccessApi.object(AccessApi.redact(wrappedBefore, include)).get(field);
+                var safeAfter = AccessApi.object(AccessApi.redact(wrappedAfter, include)).get(field);
                 changes.add(UpsertServiceDefinition.Change.builder().field(field)
                     .before(safeBefore instanceof Map<?, ?> map ? map.get(key) : safeBefore)
                     .after(safeAfter instanceof Map<?, ?> map ? map.get(key) : safeAfter).build());

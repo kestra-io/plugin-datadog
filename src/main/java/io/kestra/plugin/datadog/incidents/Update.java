@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.incidents;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -34,45 +35,53 @@ import java.util.Map;
 public class Update extends ResponseSupport implements RunnableTask<ResponseOutput> {
     @NotNull
     @Schema(title = "Incident id")
+    @PluginProperty(group = "main")
     private Property<String> incidentId;
 
     @Schema(title = "Incident title", description = "Nonblank when supplied.")
+    @PluginProperty(group = "main")
     private Property<String> title;
 
     @Schema(title = "Customers impacted")
+    @PluginProperty(group = "main")
     private Property<Boolean> customerImpacted;
 
     @Schema(title = "Customer impact scope")
+    @PluginProperty(group = "main")
     private Property<String> customerImpactScope;
 
     @Schema(title = "Severity")
+    @PluginProperty(group = "main")
     private Property<IncidentFields.Severity> severity;
 
     @Schema(title = "Incident state", description = "Common state values mapped to the state dropdown field. Custom values can use fields.")
+    @PluginProperty(group = "main")
     private Property<IncidentFields.State> state;
 
     @Schema(title = "Incident fields", description = "Additional field name to type/value objects. Unset fields are omitted.")
+    @PluginProperty(group = "main")
     private Property<Map<String, Object>> fields;
 
     @Schema(title = "Commander user id", description = "Assigns this user when supplied.")
+    @PluginProperty(group = "main")
     private Property<String> commanderUserId;
 
     @Override
     public ResponseOutput run(RunContext context) throws Exception {
-        String id = identifier(context, incidentId, "incidentId");
-        Map<String, Object> attributes = new LinkedHashMap<>();
+        var id = identifier(context, incidentId, "incidentId");
+        var attributes = new LinkedHashMap<String, Object>();
         if (title != null) {
             attributes.put("title", required(context, title, "title"));
         }
         context.render(customerImpacted).as(Boolean.class).ifPresent(v -> attributes.put("customer_impacted", v));
         context.render(customerImpactScope).as(String.class).ifPresent(v -> attributes.put("customer_impact_scope", v));
-        Map<String, Object> renderedFields = IncidentFields.fields(context.render(fields).asMap(String.class, Object.class),
+        var rFields = IncidentFields.fields(context.render(fields).asMap(String.class, Object.class),
             context.render(severity).as(IncidentFields.Severity.class).orElse(null),
             context.render(state).as(IncidentFields.State.class).orElse(null));
-        if (!renderedFields.isEmpty()) {
-            attributes.put("fields", renderedFields);
+        if (!rFields.isEmpty()) {
+            attributes.put("fields", rFields);
         }
-        Map<String, Object> data = resource("incidents", id, attributes.isEmpty() ? null : attributes);
+        var data = resource("incidents", id, attributes.isEmpty() ? null : attributes);
         if (commanderUserId != null) {
             data.put("relationships", Map.of("commander_user", Map.of("data",
                 Map.of("type", "users", "id", identifier(context, commanderUserId, "commanderUserId")))));

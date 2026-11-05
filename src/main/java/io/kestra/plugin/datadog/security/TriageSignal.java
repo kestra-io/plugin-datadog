@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.security;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -37,14 +38,19 @@ import java.util.Map;
 public class TriageSignal extends AbstractDatadogTask implements RunnableTask<TriageSignal.Output> {
     @NotNull
     @Schema(title = "Signal identifier")
+    @PluginProperty(group = "main")
     private Property<String> signalId;
     @Schema(title = "Signal state", description = "OPEN, UNDER_REVIEW or ARCHIVED.")
+    @PluginProperty(group = "main")
     private Property<State> state;
     @Schema(title = "Assignee user UUID", description = "Datadog UUID of the user to assign.")
+    @PluginProperty(group = "main")
     private Property<String> assigneeId;
     @Schema(title = "Archive reason", description = "Reason for archiving. Requires state ARCHIVED.")
+    @PluginProperty(group = "main")
     private Property<ArchiveReason> archiveReason;
     @Schema(title = "Archive comment", description = "Comment attached to archiving. Requires state ARCHIVED.")
+    @PluginProperty(group = "main")
     private Property<String> archiveComment;
 
     public enum State { OPEN, UNDER_REVIEW, ARCHIVED }
@@ -53,20 +59,20 @@ public class TriageSignal extends AbstractDatadogTask implements RunnableTask<Tr
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = AccessApi.required(context, signalId, "signalId");
-            String path = "/api/v2/security_monitoring/signals/" + AccessApi.segment(id) + "/update";
-            State state = context.render(this.state).as(State.class).orElse(null);
-            ArchiveReason reason = context.render(archiveReason).as(ArchiveReason.class).orElse(null);
-            String comment = context.render(archiveComment).as(String.class).orElse(null);
-            String assignee = context.render(assigneeId).as(String.class).orElse(null);
-            Map<String, Object> attributes = new LinkedHashMap<>();
-            if (state != null) { attributes.put("state", state.name().toLowerCase(Locale.ROOT)); }
-            if ((reason != null || comment != null) && state != State.ARCHIVED) {
+            var id = AccessApi.required(context, signalId, "signalId");
+            var path = "/api/v2/security_monitoring/signals/" + AccessApi.segment(id) + "/update";
+            var rState = context.render(this.state).as(State.class).orElse(null);
+            var rReason = context.render(archiveReason).as(ArchiveReason.class).orElse(null);
+            var rComment = context.render(archiveComment).as(String.class).orElse(null);
+            var rAssignee = context.render(assigneeId).as(String.class).orElse(null);
+            var attributes = new LinkedHashMap<String, Object>();
+            if (rState != null) { attributes.put("state", rState.name().toLowerCase(Locale.ROOT)); }
+            if ((rReason != null || rComment != null) && rState != State.ARCHIVED) {
                 throw new IllegalArgumentException("Archive fields require state ARCHIVED");
             }
-            if (reason != null) { attributes.put("archive_reason", reason.name().toLowerCase(Locale.ROOT)); }
-            if (comment != null) { attributes.put("archive_comment", comment); }
-            if (assignee != null) { attributes.put("assignee", Map.of("uuid", AccessApi.required(assignee, "assigneeId"))); }
+            if (rReason != null) { attributes.put("archive_reason", rReason.name().toLowerCase(Locale.ROOT)); }
+            if (rComment != null) { attributes.put("archive_comment", rComment); }
+            if (rAssignee != null) { attributes.put("assignee", Map.of("uuid", AccessApi.required(rAssignee, "assigneeId"))); }
             if (attributes.isEmpty()) {
                 throw new IllegalArgumentException("Set state, assigneeId or archive fields");
             }

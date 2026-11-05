@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.logs;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -37,14 +38,15 @@ import java.util.Map;
     """))
 public class Count extends AbstractCount implements RunnableTask<AbstractCount.Output> {
     @Schema(title = "Indexes", description = "Log indexes to count. All indexes when omitted.")
+    @PluginProperty(group = "processing")
     private Property<List<String>> indexes;
 
     @Override
     protected Map<String, Object> filter(RunContext context) throws Exception {
-        Map<String, Object> filter = super.filter(context);
-        List<String> values = context.render(indexes).asList(String.class);
-        if (!values.isEmpty()) {
-            filter.put("indexes", values);
+        var filter = super.filter(context);
+        var rValues = context.render(indexes).asList(String.class);
+        if (!rValues.isEmpty()) {
+            filter.put("indexes", rValues);
         }
         return filter;
     }

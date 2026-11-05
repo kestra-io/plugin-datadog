@@ -9,12 +9,14 @@ import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -49,7 +51,7 @@ class ThresholdTest extends AbstractDatadogTest {
 
     @Test
     void firstPollRecordsExistingBreachWithoutExecution() throws Exception {
-        Poll poll = poll(trigger().build());
+        var poll = poll(trigger().build());
         reply("90");
         assertTrue(poll.run().isEmpty());
         assertTrue(poll.state().length > 0);
@@ -58,7 +60,7 @@ class ThresholdTest extends AbstractDatadogTest {
 
     @Test
     void crossingFiresOnceAndRecoveryRearms() throws Exception {
-        Poll poll = poll(trigger().build());
+        var poll = poll(trigger().build());
         reply("70");
         assertTrue(poll.run().isEmpty());
         reply("90");
@@ -74,18 +76,18 @@ class ThresholdTest extends AbstractDatadogTest {
 
     @Test
     void noDataPreservesArmedAndBreachedStates() throws Exception {
-        Poll poll = poll(trigger().build());
+        var poll = poll(trigger().build());
         reply("null");
         assertTrue(poll.run().isEmpty());
         reply("70");
         assertTrue(poll.run().isEmpty());
-        byte[] armed = poll.state();
+        var armed = poll.state();
         reply("null");
         assertTrue(poll.run().isEmpty());
         assertArrayEquals(armed, poll.state());
         reply("90");
         assertTrue(poll.run().isPresent());
-        byte[] breached = poll.state();
+        var breached = poll.state();
         reply("null");
         assertTrue(poll.run().isEmpty());
         assertArrayEquals(breached, poll.state());
@@ -96,10 +98,10 @@ class ThresholdTest extends AbstractDatadogTest {
     @TestFactory
     Stream<DynamicTest> httpErrorsKeepStateAndTransientErrorsSkip() {
         return Stream.of(400, 403, 404, 429, 503).map(status -> DynamicTest.dynamicTest("HTTP " + status, () -> {
-            Poll poll = poll(trigger().build());
+            var poll = poll(trigger().build());
             reply("70");
             poll.run();
-            byte[] before = poll.state();
+            var before = poll.state();
             server.reply("POST", FormulaQueriesTest.SCALAR, status, "{\"errors\":[\"request failed\"]}");
             if (status == 429 || status >= 500) {
                 assertTrue(poll.run().isEmpty());
@@ -114,12 +116,12 @@ class ThresholdTest extends AbstractDatadogTest {
 
     @Test
     void executionCreationFailureKeepsTheCrossingArmed() throws Exception {
-        Poll poll = poll(trigger().build());
+        var poll = poll(trigger().build());
         reply("70");
         poll.run();
-        byte[] before = poll.state();
+        var before = poll.state();
         reply("90");
-        ConditionContext broken = ConditionContext.builder().runContext(poll.condition().getRunContext()).build();
+        var broken = ConditionContext.builder().runContext(poll.condition().getRunContext()).build();
         assertThrows(Exception.class, () -> poll.trigger().evaluate(broken, poll.context()));
         assertArrayEquals(before, poll.state());
         assertTrue(poll.run().isPresent());
@@ -127,23 +129,23 @@ class ThresholdTest extends AbstractDatadogTest {
 
     @Test
     void aChangedThresholdStartsANewBaseline() throws Exception {
-        Threshold original = trigger().build();
-        Poll poll = poll(original);
+        var original = trigger().build();
+        var poll = poll(original);
         reply("70");
         poll.run();
-        Threshold changed = trigger().id(original.getId()).threshold(Property.ofValue(new BigDecimal("60"))).build();
+        var changed = trigger().id(IdUtils.create()).threshold(Property.ofValue(new BigDecimal("60"))).build();
         assertTrue(changed.evaluate(poll.condition(), poll.context()).isEmpty());
         assertTrue(changed.evaluate(poll.condition(), poll.context()).isEmpty());
     }
 
     @Test
     void validatesQueryThresholdAndDurationsBeforeCalling() {
-        for (Threshold invalid : java.util.List.of(trigger().query(Property.ofValue(" ")).build(),
+        for (var invalid : List.of(trigger().query(Property.ofValue(" ")).build(),
             trigger().lookback(Property.ofValue(Duration.ZERO)).build(), trigger().interval(Duration.ZERO).build())) {
             assertThrows(IllegalArgumentException.class, () -> poll(invalid).run());
             assertTrue(server.requests.isEmpty());
         }
-        assertThrows(jakarta.validation.ConstraintViolationException.class, () -> poll(trigger().threshold(null).build()).run());
+        assertThrows(ConstraintViolationException.class, () -> poll(trigger().threshold(null).build()).run());
         assertTrue(server.requests.isEmpty());
     }
 }

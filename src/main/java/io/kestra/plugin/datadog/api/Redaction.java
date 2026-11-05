@@ -19,14 +19,14 @@ final class Redaction {
     }
 
     static JsonNode apply(JsonNode input, List<JsonPointer> pointers) {
-        JsonNode result = input.deepCopy();
-        for (JsonPointer pointer : pointers) {
+        var result = input.deepCopy();
+        for (var pointer : pointers) {
             if (pointer.matches()) { result = TextNode.valueOf("[REDACTED]"); continue; }
-            JsonNode parent = result.at(pointer.head());
-            String key = pointer.last().getMatchingProperty();
+            var parent = result.at(pointer.head());
+            var key = pointer.last().getMatchingProperty();
             if (parent instanceof ObjectNode map && map.has(key)) { map.put(key, "[REDACTED]"); }
             if (parent instanceof ArrayNode array) {
-                int index = pointer.last().getMatchingIndex();
+                var index = pointer.last().getMatchingIndex();
                 if (index >= 0 && index < array.size()) { array.set(index, TextNode.valueOf("[REDACTED]")); }
             }
         }

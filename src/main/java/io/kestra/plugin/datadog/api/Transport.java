@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.api;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
 import io.kestra.core.http.client.configurations.HttpConfiguration;
@@ -10,7 +11,8 @@ import io.kestra.plugin.datadog.DatadogClient;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -25,19 +27,19 @@ final class Transport {
     record Answer(int status, byte[] bytes, String contentType, String reset) { }
 
     static Body body(RunContext context, Catalog.Operation op, RequestPlan plan, Object body) throws Exception {
-        String type = plan.contentType();
+        var type = plan.contentType();
         byte[] bytes;
         if (body == null) {
             return new Body(new byte[0], "application/octet-stream");
         } else if (body instanceof String text && text.startsWith("kestra://")) {
-            try (InputStream stream = context.storage().getFile(URI.create(text))) { bytes = stream.readAllBytes(); }
+            try (var stream = context.storage().getFile(URI.create(text))) { bytes = stream.readAllBytes(); }
         } else if (type.startsWith("multipart/form-data")) {
             if (!(body instanceof Map<?, ?> map)) { throw op.invalid("multipart body must be a map of fields and file URIs"); }
-            Map<String, Object> parts = new LinkedHashMap<>();
+            var parts = new LinkedHashMap<String, Object>();
             for (var entry : map.entrySet()) {
-                Object value = entry.getValue();
+                var value = entry.getValue();
                 if (value instanceof String text && text.startsWith("kestra://")) {
-                    try (InputStream stream = context.storage().getFile(URI.create(text))) {
+                    try (var stream = context.storage().getFile(URI.create(text))) {
                         var path = context.workingDir().createTempFile(stream.readAllBytes(), ".upload");
                         value = path.toFile();
                     }
@@ -45,7 +47,7 @@ final class Transport {
                 parts.put(String.valueOf(entry.getKey()), value);
             }
             var entity = HttpRequest.MultipartRequestBody.of(parts).to();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            var out = new ByteArrayOutputStream();
             entity.writeTo(out);
             bytes = out.toByteArray();
             type = entity.getContentType();
@@ -58,16 +60,16 @@ final class Transport {
             try {
                 var parsed = JacksonMapper.ofJson().readTree(bytes);
                 if (op.bodyRequired() && (parsed == null || parsed.isNull())) { throw op.invalid("missing required body"); }
-            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            } catch (JsonProcessingException e) {
                 throw op.invalid("body is not valid JSON");
             }
         }
-        String encoding = plan.headers().get("content-encoding");
+        var encoding = plan.headers().get("content-encoding");
         if (encoding != null && !encoding.equals("identity")) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            var out = new ByteArrayOutputStream();
             switch (encoding) {
-                case "gzip" -> { try (GZIPOutputStream compressed = new GZIPOutputStream(out)) { compressed.write(bytes); } }
-                case "deflate" -> { try (DeflaterOutputStream compressed = new DeflaterOutputStream(out)) { compressed.write(bytes); } }
+                case "gzip" -> { try (var compressed = new GZIPOutputStream(out)) { compressed.write(bytes); } }
+                case "deflate" -> { try (var compressed = new DeflaterOutputStream(out)) { compressed.write(bytes); } }
                 default -> throw op.invalid("unsupported Content-Encoding");
             }
             bytes = out.toByteArray();
@@ -82,8 +84,8 @@ final class Transport {
 
     static Answer send(HttpClient client, RunContext context, Catalog.Operation op, RequestPlan plan, Body body,
                        String apiKey, String appKey, int maxRetries, int maxRetryDelay) throws Exception {
-            for (int attempt = 0; ; attempt++) {
-                HttpRequest.HttpRequestBuilder request = HttpRequest.builder().uri(plan.uri()).method(plan.method());
+            for (var attempt = 0; ; attempt++) {
+                var request = HttpRequest.builder().uri(plan.uri()).method(plan.method());
                 plan.headers().forEach((name, value) -> { if (!name.equals("content-type")) { request.addHeader(name, value); } });
                 request.addHeader("DD-API-KEY", apiKey);
                 if (!appKey.isBlank()) { request.addHeader("DD-APPLICATION-KEY", appKey); }
@@ -93,23 +95,23 @@ final class Transport {
                 request.addHeader("Content-Type", body.contentType());
                 request.body(HttpRequest.InputStreamRequestBody.builder().contentType(body.contentType().split(";", 2)[0])
                     .content(new ByteArrayInputStream(body.bytes())).build());
-                Answer[] answer = new Answer[1];
+                var answer = new Answer[1];
                 try {
                     client.request(request.build(), response -> {
                         try {
                             answer[0] = new Answer(response.getStatus().getCode(), response.getBody() == null ? new byte[0] : response.getBody().readAllBytes(),
                                 response.getHeaders().firstValue("Content-Type").orElse("application/octet-stream"),
                                 response.getHeaders().firstValue("X-RateLimit-Reset").orElse(null));
-                        } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+                        } catch (IOException e) { throw new UncheckedIOException(e); }
                     });
                 } catch (Exception e) {
                     // Do not propagate a cause that can contain a query, header or body value.
                     throw new DatadogClient.DatadogException(-1, "Datadog " + op.key() + ": transport failed (" + e.getClass().getSimpleName() + ")");
                 }
-                Answer received = answer[0];
+                var received = answer[0];
                 if (received.status() >= 200 && received.status() < 300) { return received; }
                 if (attempt < maxRetries && retryable(plan.method(), received.status())) {
-                    long delay = retryDelay(received.reset(), attempt);
+                    var delay = retryDelay(received.reset(), attempt);
                     if (delay <= maxRetryDelay) {
                         context.logger().warn("Datadog {} returned HTTP {}; retrying in {} seconds", op.key(), received.status(), delay);
                         Thread.sleep(delay * 1000);

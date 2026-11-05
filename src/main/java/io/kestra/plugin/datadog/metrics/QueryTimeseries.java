@@ -1,10 +1,11 @@
 package io.kestra.plugin.datadog.metrics;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -44,16 +45,18 @@ import java.util.Map;
     """))
 public class QueryTimeseries extends AbstractFormulaTask implements RunnableTask<QueryTimeseries.Output> {
     @Schema(title = "Query interval", description = "Positive interval in milliseconds. Datadog chooses it when omitted.")
+    @PluginProperty(group = "processing")
     private Property<Long> queryInterval;
 
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            var body = requestBody(context, null, context.render(queryInterval).as(Long.class).orElse(null));
-            var attributes = FormulaQueries.attributes(client.post("/api/v2/query/timeseries", body));
+            var rBody = requestBody(context, null, context.render(queryInterval).as(Long.class).orElse(null));
+            var attributes = FormulaQueries.attributes(client.post("/api/v2/query/timeseries", rBody));
             if (!(attributes.get("series") instanceof List<?> series) || !(attributes.get("times") instanceof List<?>) || !(attributes.get("values") instanceof List<?>)) {
                 throw new IllegalStateException("Datadog timeseries response needs series, times and values arrays");
             }

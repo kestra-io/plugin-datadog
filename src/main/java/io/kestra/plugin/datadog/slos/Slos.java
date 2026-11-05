@@ -1,14 +1,11 @@
 package io.kestra.plugin.datadog.slos;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.DatadogClient;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.net.URI;
-import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /** Helpers for GetSLO, ListSLOs and GetSLOHistory. */
@@ -54,14 +51,14 @@ final class Slos {
     }
 
     static void noErrors(Map<String, Object> response) {
-        Object errors = response.get("errors");
-        if (errors != null && !(errors instanceof java.util.List<?> list && list.isEmpty())) {
+        var errors = response.get("errors");
+        if (errors != null && !(errors instanceof List<?> list && list.isEmpty())) {
             throw new IllegalStateException("Datadog reported SLO query errors; no valid result is available");
         }
     }
 
     static Map<String, Object> history(DatadogClient client, String id, long from, long to, Double target, boolean corrections) throws Exception {
-        Map<String, Object> params = DatadogClient.query();
+        var params = DatadogClient.query();
         params.put("from_ts", from);
         params.put("to_ts", to);
         if (target != null) {
@@ -84,9 +81,9 @@ final class Slos {
             throw new IllegalStateException("Datadog did not return a finite data.overall.sli_value between 0 and 100");
         }
         // Datadog's documented percent-of-budget formula. Decimal math keeps exact threshold equality stable.
-        BigDecimal hundred = BigDecimal.valueOf(100);
-        BigDecimal objective = BigDecimal.valueOf(target);
-        double remaining = hundred.multiply(new BigDecimal(value.toString()).subtract(objective))
+        var hundred = BigDecimal.valueOf(100);
+        var objective = BigDecimal.valueOf(target);
+        var remaining = hundred.multiply(new BigDecimal(value.toString()).subtract(objective))
             .divide(hundred.subtract(objective), MathContext.DECIMAL128).doubleValue();
         return new Budget(value.doubleValue(), remaining);
     }
@@ -101,18 +98,18 @@ final class Slos {
         return limit;
     }
 
-    static java.util.List<Map<String, Object>> collect(DatadogClient client, Map<String, Object> query, int limit) throws Exception {
-        java.util.List<Map<String, Object>> rows = new ArrayList<>();
+    static List<Map<String, Object>> collect(DatadogClient client, Map<String, Object> query, int limit) throws Exception {
+        List<Map<String, Object>> rows = new ArrayList<>();
         while (rows.size() < limit) {
-            int size = Math.min(1000, limit - rows.size());
+            var size = Math.min(1000, limit - rows.size());
             query.put("limit", size);
             query.put("offset", rows.size());
             var response = client.get(PATH, query).map();
             noErrors(response);
-            if (!(response.get("data") instanceof java.util.List<?> page)) {
+            if (!(response.get("data") instanceof List<?> page)) {
                 throw new IllegalStateException("Datadog did not return an SLO data array");
             }
-            for (Object row : page) {
+            for (var row : page) {
                 if (rows.size() < limit) {
                     rows.add(object(row, "data[]"));
                 }

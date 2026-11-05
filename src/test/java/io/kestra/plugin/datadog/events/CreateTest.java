@@ -3,9 +3,11 @@ package io.kestra.plugin.datadog.events;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
-import io.kestra.plugin.datadog.AbstractDatadogTest;
-import io.kestra.plugin.datadog.MockDatadogServer;
 import io.kestra.core.utils.IdUtils;
+import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -19,9 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CreateTest extends AbstractDatadogTest {
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void assertContracts() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v1:CreateEvent");
+        OpenApiContract.assertRequests(server.requests, "v1:CreateEvent");
     }
 
     private Create.CreateBuilder<?, ?> task() {
@@ -36,11 +38,11 @@ class CreateTest extends AbstractDatadogTest {
 
     @Test
     void postsTheEventWithTheApiKeyOnly() throws Exception {
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:CreateEvent").assertResponse(202,
+        OpenApiContract.of("v1:CreateEvent").assertResponse(202,
             "{\"status\":\"ok\",\"event\":{\"id\":123,\"id_str\":\"123\",\"url\":\"https://app.datadoghq.com/event/event?id=123\"}}");
         server.reply("POST", "/api/v1/events", 202, "{\"status\":\"ok\",\"event\":{\"id\":123,\"id_str\":\"123\",\"url\":\"https://app.datadoghq.com/event/event?id=123\"}}");
 
-        Create.Output output = task()
+        var output = task()
             .alertType(Property.ofValue(Create.AlertType.SUCCESS))
             .priority(Property.ofValue(Create.Priority.LOW))
             .tags(Property.ofValue(List.of("env:prod", "source:kestra")))
@@ -50,13 +52,13 @@ class CreateTest extends AbstractDatadogTest {
             .dateHappened(Property.ofValue(Instant.parse("2026-01-01T00:00:00Z")))
             .build().run(runContext());
 
-        MockDatadogServer.Received request = server.only();
+        var request = server.only();
         assertEquals("POST", request.method());
         assertEquals("/api/v1/events", request.path());
         assertEquals(API_KEY, request.header("DD-API-KEY"));
         assertNull(request.header("DD-APPLICATION-KEY"), "an event needs no application key");
 
-        Map<String, Object> body = request.json();
+        var body = request.json();
         assertEquals("Orders finished", body.get("title"));
         assertEquals("Loaded 1250 rows", body.get("text"));
         assertEquals("success", body.get("alert_type"));
@@ -76,16 +78,16 @@ class CreateTest extends AbstractDatadogTest {
     void sendsOnlyTitleAndTextWhenNothingElseIsSet() throws Exception {
         server.reply("POST", "/api/v1/events", 202, "{\"status\":\"ok\"}");
 
-        Create.Output output = task().build().run(runContext());
+        var output = task().build().run(runContext());
 
-        Map<String, Object> body = server.only().json();
+        var body = server.only().json();
         assertEquals(Map.of("title", "Orders finished", "text", "Loaded 1250 rows"), body);
         assertNull(output.getEventId());
     }
 
     @Test
     void rendersTemplatedFields() throws Exception {
-        Property<String> title = JacksonMapper.ofJson().readValue("\"Run {{ execution.id }}\"", new TypeReference<Property<String>>() {
+        var title = JacksonMapper.ofJson().readValue("\"Run {{ execution.id }}\"", new TypeReference<Property<String>>() {
         });
 
         task().title(title).build().run(runContextFactory.of(Map.of("execution", Map.of("id", "exec123"))));
@@ -126,7 +128,7 @@ class CreateTest extends AbstractDatadogTest {
     @Test
     void siteSelectsTheRegionalHost() throws Exception {
         // a task with a site and no apiUrl must call the regional API: only the URL it builds is checked, so use the client
-        var client = io.kestra.plugin.datadog.DatadogClient.create(runContext(), Property.ofValue("k"), null, Property.ofValue("datadoghq.eu"), null, false);
+        var client = DatadogClient.create(runContext(), Property.ofValue("k"), null, Property.ofValue("datadoghq.eu"), null, false);
         assertEquals("https://api.datadoghq.eu", client.apiBase());
     }
 }

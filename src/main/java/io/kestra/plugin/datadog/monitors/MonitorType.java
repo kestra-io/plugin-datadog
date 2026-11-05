@@ -23,7 +23,7 @@ public enum MonitorType {
     }
 
     static MonitorType fromValue(Object value) {
-        for (MonitorType type : values()) {
+        for (var type : values()) {
             if (type.value.equals(value)) {
                 return type;
             }

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.TestFactory;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
@@ -154,7 +155,7 @@ class DeploymentsTest extends AbstractDatadogTest {
             var output = record().env(Property.ofValue("production")).deploymentVersion(Property.ofValue("v1.2.3"))
                 .deploymentId(Property.ofValue("checkout-release-123"))
                 .repositoryUrl(Property.ofValue("https://github.com/example/checkout")).commitSha(Property.ofValue("66adc9350f2cc9b250b69abddab733dd55e1a588"))
-                .customTags(Property.ofValue(java.util.List.of("team:delivery"))).build().run(runContext());
+                .customTags(Property.ofValue(List.of("team:delivery"))).build().run(runContext());
             assertEquals("4242fcdd31586083", output.getDeploymentId());
             assertEquals(status, output.getHttpStatus());
             var request = server.only();
@@ -162,7 +163,7 @@ class DeploymentsTest extends AbstractDatadogTest {
             var data = Deployments.object(request.json().get("data"), "data");
             assertFalse(data.containsKey("type"), "DORA request has attributes without a resource type");
             var attributes = Deployments.object(data.get("attributes"), "attributes");
-            Instant start = Instant.parse("2026-11-05T10:00:00.123456789Z");
+            var start = Instant.parse("2026-11-05T10:00:00.123456789Z");
             assertEquals(start.getEpochSecond() * 1_000_000_000L + 123456789, attributes.get("started_at"));
             assertEquals("checkout-release-123", attributes.get("id"));
             assertEquals("production", attributes.get("env"));
@@ -171,11 +172,11 @@ class DeploymentsTest extends AbstractDatadogTest {
 
     @Test
     void createsGateAndMonitorRuleAndReadsRules() throws Exception {
-        String gateAttributes = "\"created_at\":\"2026-11-05T10:00:00Z\",\"created_by\":{\"id\":\"user-1\"},\"dry_run\":false,\"service\":\"checkout\",\"env\":\"production\",\"identifier\":\"default\"";
+        var gateAttributes = "\"created_at\":\"2026-11-05T10:00:00Z\",\"created_by\":{\"id\":\"user-1\"},\"dry_run\":false,\"service\":\"checkout\",\"env\":\"production\",\"identifier\":\"default\"";
         server.reply("POST", "/api/v2/deployment_gates", 200, "{\"data\":{\"id\":\"" + ID + "\",\"type\":\"deployment_gate\",\"attributes\":{" + gateAttributes + "}}}");
         assertEquals(ID, gate().build().run(runContext()).getGateId());
         assertEquals("deployment_gate", Deployments.object(server.requests.getFirst().json().get("data"), "data").get("type"));
-        String ruleAttributes = "{\"created_at\":\"2026-11-05T10:00:00Z\",\"created_by\":{\"id\":\"user-1\"},\"dry_run\":false,\"gate_id\":\"" + ID + "\",\"name\":\"Health\",\"type\":\"monitor\",\"options\":{\"query\":\"service:checkout env:production\"}}";
+        var ruleAttributes = "{\"created_at\":\"2026-11-05T10:00:00Z\",\"created_by\":{\"id\":\"user-1\"},\"dry_run\":false,\"gate_id\":\"" + ID + "\",\"name\":\"Health\",\"type\":\"monitor\",\"options\":{\"query\":\"service:checkout env:production\"}}";
         server.reply("POST", "/api/v2/deployment_gates/" + ID + "/rules", 200, "{\"data\":{\"id\":\"rule-1\",\"type\":\"deployment_rule\",\"attributes\":" + ruleAttributes + "}}");
         assertEquals("rule-1", rule().healthySeconds(Property.ofValue(60L)).build().run(runContext()).getRuleId());
         var ruleData = Deployments.object(server.requests.getLast().json().get("data"), "data");

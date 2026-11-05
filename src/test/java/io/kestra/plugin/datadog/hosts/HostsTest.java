@@ -1,14 +1,16 @@
 package io.kestra.plugin.datadog.hosts;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.function.Executable;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +45,7 @@ class HostsTest extends AbstractDatadogTest {
 
     @Test
     void muteRequiresAFutureEndAndDoesNotOverrideByDefault() throws Exception {
-        Instant stop = Instant.parse("2099-01-01T00:00:00Z");
+        var stop = Instant.parse("2099-01-01T00:00:00Z");
         server.reply("POST", "/api/v1/host/worker-01/mute", 200, "{\"action\":\"Muted\",\"hostname\":\"worker-01\",\"end\":4070908800,\"message\":\"maintenance\"}");
         var output = mute().duration(null).end(Property.ofValue(stop)).message(Property.ofValue("maintenance")).build().run(runContext());
         assertEquals(stop.getEpochSecond(), ((Number) server.only().json().get("end")).longValue());
@@ -54,16 +56,16 @@ class HostsTest extends AbstractDatadogTest {
         assertTrue(output.getFound());
         assertEquals("Muted", output.getAction());
         assertEquals(stop.getEpochSecond(), output.getEnd());
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:MuteHost").assertRequest(server.only());
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:MuteHost").assertResponse(200,
+        OpenApiContract.of("v1:MuteHost").assertRequest(server.only());
+        OpenApiContract.of("v1:MuteHost").assertResponse(200,
             "{\"action\":\"Muted\",\"hostname\":\"worker-01\",\"end\":4070908800,\"message\":\"maintenance\"}");
     }
 
     @Test
     void durationUsesNowAndOverrideIsExplicit() throws Exception {
-        long before = Instant.now().getEpochSecond();
+        var before = Instant.now().getEpochSecond();
         mute().override(Property.ofValue(true)).build().run(runContext());
-        long end = ((Number) server.only().json().get("end")).longValue();
+        var end = ((Number) server.only().json().get("end")).longValue();
         assertTrue(end >= before + 1800 && end <= Instant.now().getEpochSecond() + 1800);
         assertEquals(true, server.only().json().get("override"));
     }
@@ -101,7 +103,7 @@ class HostsTest extends AbstractDatadogTest {
         assertEquals("worker-02", output.getHosts().get(1).get("host_name"));
         assertTrue(server.requests.get(0).query().contains("start=0"));
         assertTrue(server.requests.get(1).query().contains("start=1"));
-        String query = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
+        var query = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
         assertTrue(query.contains("filter=env:prod"));
         assertTrue(query.contains("sort_dir=desc"));
         assertTrue(query.contains("sort_field=host_name"));
@@ -149,7 +151,7 @@ class HostsTest extends AbstractDatadogTest {
 
     @TestFactory
     Stream<DynamicTest> rejectsInvalidPropertiesBeforeRequests() {
-        return Stream.<Map.Entry<String, org.junit.jupiter.api.function.Executable>>of(
+        return Stream.<Map.Entry<String, Executable>>of(
             Map.entry("mute without end", () -> mute().duration(null).build().run(runContext())),
             Map.entry("mute with both bounds", () -> mute().end(Property.ofValue(Instant.now().plusSeconds(300))).build().run(runContext())),
             Map.entry("zero duration", () -> mute().duration(Property.ofValue(Duration.ZERO)).build().run(runContext())),
@@ -172,7 +174,7 @@ class HostsTest extends AbstractDatadogTest {
     Stream<DynamicTest> everyHostTaskPropagatesHttpErrorClasses() {
         return Stream.of(400, 403, 404, 429, 503).flatMap(status -> Stream.of("mute", "unmute", "list", "totals").map(task ->
             DynamicTest.dynamicTest(task + " HTTP " + status, () -> {
-                String path = switch (task) {
+                var path = switch (task) {
                     case "mute", "unmute" -> "/api/v1/host/worker-01/" + task;
                     case "list" -> "/api/v1/hosts";
                     default -> "/api/v1/hosts/totals";

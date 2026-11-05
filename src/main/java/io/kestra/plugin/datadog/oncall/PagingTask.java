@@ -16,8 +16,8 @@ public abstract class PagingTask extends ResponseSupport {
         if (context.render(getApiUrl()).as(String.class).filter(v -> !v.isBlank()).isPresent()) {
             return client.apiBase();
         }
-        String site = context.render(getSite()).as(String.class).orElse(DatadogClient.DEFAULT_SITE).trim();
-        return baseForSite(site.isEmpty() ? DatadogClient.DEFAULT_SITE : site);
+        var rSite = context.render(getSite()).as(String.class).orElse(DatadogClient.DEFAULT_SITE).trim();
+        return baseForSite(rSite.isEmpty() ? DatadogClient.DEFAULT_SITE : rSite);
     }
 
     static String baseForSite(String site) {

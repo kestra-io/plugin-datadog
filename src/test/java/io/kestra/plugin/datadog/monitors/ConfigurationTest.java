@@ -1,13 +1,15 @@
 package io.kestra.plugin.datadog.monitors;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
@@ -23,17 +25,17 @@ class ConfigurationTest extends AbstractDatadogTest {
     void readsEachConfigurationResourceAsListAndById() throws Exception {
         var resources = Map.of(Configuration.Resource.NOTIFICATION_RULES, "notification_rule", Configuration.Resource.POLICIES, "policy", Configuration.Resource.TEMPLATES, "template");
         for (var resource : resources.entrySet()) {
-            String type = switch (resource.getKey()) {
+            var type = switch (resource.getKey()) {
                 case NOTIFICATION_RULES -> "monitor-notification-rule";
                 case POLICIES -> "monitor-config-policy";
                 case TEMPLATES -> "monitor-user-template";
             };
             var row = Map.of("id", "example", "type", type, "attributes", Map.of());
-            String path = "/api/v2/monitor/" + resource.getValue();
-            server.reply("GET", path, 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", java.util.List.of(row))));
+            var path = "/api/v2/monitor/" + resource.getValue();
+            server.reply("GET", path, 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(row))));
             server.reply("GET", path + "/example", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", row)));
-            assertEquals(java.util.List.of(row), task().resource(Property.ofValue(resource.getKey())).build().run(runContext()).getData());
-            assertEquals(java.util.List.of(row), task().resource(Property.ofValue(resource.getKey())).resourceId(Property.ofValue("example")).build().run(runContext()).getData());
+            assertEquals(List.of(row), task().resource(Property.ofValue(resource.getKey())).build().run(runContext()).getData());
+            assertEquals(List.of(row), task().resource(Property.ofValue(resource.getKey())).resourceId(Property.ofValue("example")).build().run(runContext()).getData());
             if (resource.getKey() != Configuration.Resource.NOTIFICATION_RULES) {
                 assertNull(server.requests.get(server.requests.size() - 2).query());
             }
@@ -44,7 +46,7 @@ class ConfigurationTest extends AbstractDatadogTest {
     @Test
     void notificationRulesPageAndStore() throws Exception {
         var context = runContext();
-        var row = Map.of("id", "rule", "type", "monitor-notification-rule", "attributes", Map.of("name", "Route alerts", "recipients", java.util.List.of("@team-platform")));
+        var row = Map.of("id", "rule", "type", "monitor-notification-rule", "attributes", Map.of("name", "Route alerts", "recipients", List.of("@team-platform")));
         server.reply("GET", "/api/v2/monitor/notification_rule", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", IntStream.range(0, 100).mapToObj(i -> row).toList())));
         server.reply("GET", "/api/v2/monitor/notification_rule", 200, "{\"data\":[]}");
         var output = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
@@ -71,10 +73,10 @@ class ConfigurationTest extends AbstractDatadogTest {
     @Test
     void propagatesErrorClassesForAllOperations() {
         var resources = Map.of(Configuration.Resource.NOTIFICATION_RULES, "notification_rule", Configuration.Resource.POLICIES, "policy", Configuration.Resource.TEMPLATES, "template");
-        for (int status : new int[]{400, 403, 404, 429, 500}) {
+        for (var status : new int[]{400, 403, 404, 429, 500}) {
             for (var resource : resources.entrySet()) {
-                for (String id : java.util.Arrays.asList(null, "example")) {
-                    String path = "/api/v2/monitor/" + resource.getValue() + (id == null ? "" : "/" + id);
+                for (var id : Arrays.asList(null, "example")) {
+                    var path = "/api/v2/monitor/" + resource.getValue() + (id == null ? "" : "/" + id);
                     server.reply("GET", path, status, "{\"errors\":[\"Request failed\"]}");
                     var error = assertThrows(DatadogClient.DatadogException.class, () -> task().resource(Property.ofValue(resource.getKey())).resourceId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
                     assertEquals(status, error.getStatus());

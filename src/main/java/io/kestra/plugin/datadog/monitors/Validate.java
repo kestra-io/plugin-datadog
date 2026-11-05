@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -30,17 +31,18 @@ import lombok.experimental.SuperBuilder;
     """))
 public class Validate extends AbstractDefinitionTask implements RunnableTask<Validate.Output> {
     @Schema(title = "Existing monitor id", description = "Optional positive id for ValidateExistingMonitor.")
+    @PluginProperty(group = "main")
     private Property<Long> monitorId;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            Long id = context.render(monitorId).as(Long.class).orElse(null);
-            if (id != null) {
-                MonitorIO.positiveId(id);
+            var rId = context.render(monitorId).as(Long.class).orElse(null);
+            if (rId != null) {
+                MonitorIO.positiveId(rId);
             }
             var body = definition(context, true);
-            client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
+            client.post(rId == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + rId + "/validate", body);
             return Output.builder().valid(true).build();
         }
     }

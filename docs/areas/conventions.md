@@ -47,3 +47,11 @@ Initial state uses the Datadog `Date` header. A missing header skips the poll.
 Monitor events retain timestamp and seen ids. Aggregate triggers retain their threshold state.
 Aggregate APIs expose no event ids. They must still process changed values in the same clock second.
 `TriggerConventionsTest` uses a fixed server clock for same-second late changes and stops its mock server to test network failures.
+
+## Property groups and source style
+
+Every task and trigger property declares a group.
+`PropertyGroupsTest` walks plugin classes and their area base classes.
+`SourceConventionsTest` checks rendered-local prefixes, random test builder ids, client ownership, shared ION output, icon bytes and punctuation.
+Area icons match `plugin-icon.svg`.
+Explicit local types remain where Java needs a target type or a declaration has no initializer.

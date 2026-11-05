@@ -1,13 +1,8 @@
 package io.kestra.plugin.datadog.synthetics;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.monitors.MonitorIO;
 
-import java.io.BufferedOutputStream;
-import java.nio.file.Files;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,11 +43,11 @@ final class Synthetics {
     }
 
     static List<Map<String, Object>> collect(DatadogClient client, String search, int limit) throws Exception {
-        List<Map<String, Object>> result = new ArrayList<>();
-        int pageSize = Math.min(100, limit);
-        for (int page = 0; result.size() < limit; page++) {
-            boolean searching = search != null && !search.isBlank();
-            Map<String, Object> query = searching
+        var result = new ArrayList<Map<String, Object>>();
+        var pageSize = Math.min(100, limit);
+        for (var page = 0; result.size() < limit; page++) {
+            var searching = search != null && !search.isBlank();
+            var query = searching
                 ? Map.of("text", search, "count", pageSize, "start", page * pageSize, "include_full_config", false)
                 : Map.of("page_size", pageSize, "page_number", page);
             var body = client.get("/api/v1/synthetics/tests" + (searching ? "/search" : ""), query).map();
@@ -74,8 +69,8 @@ final class Synthetics {
         if (includeSecrets) {
             return raw;
         }
-        Map<String, Object> safe = new LinkedHashMap<>();
-        for (String key : List.of("public_id", "name", "type", "subtype", "status", "tags", "locations", "monitor_id")) {
+        var safe = new LinkedHashMap<String, Object>();
+        for (var key : List.of("public_id", "name", "type", "subtype", "status", "tags", "locations", "monitor_id")) {
             if (raw.containsKey(key)) {
                 safe.put(key, raw.get(key));
             }

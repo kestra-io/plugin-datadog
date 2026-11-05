@@ -1,10 +1,11 @@
 package io.kestra.plugin.datadog.synthetics;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogFetch;
@@ -42,35 +43,40 @@ import java.util.Map;
 public class Results extends AbstractDatadogTask implements RunnableTask<Results.Output> {
     @NotNull
     @Schema(title = "Public test ID")
+    @PluginProperty(group = "main")
     private Property<String> publicId;
     @Schema(title = "Test kind", defaultValue = "API")
+    @PluginProperty(group = "main")
     private Property<TestKind> testKind;
     @Schema(title = "Result ID", description = "Read one full result when set. Otherwise read the latest results.")
+    @PluginProperty(group = "main")
     private Property<String> resultId;
     @Schema(title = "Include secrets", description = "Return full records including request data and response bodies. False keeps check_time, probe_dc, result_id and status only.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
-            String result = context.render(resultId).as(String.class).orElse(null);
-            if (result != null) {
-                Synthetics.id(result, "resultId");
+            var rId = Synthetics.id(context.render(publicId).as(String.class).orElse(null), "publicId");
+            var rResult = context.render(resultId).as(String.class).orElse(null);
+            if (rResult != null) {
+                Synthetics.id(rResult, "resultId");
             }
-            var kind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
-            String path = "/api/v1/synthetics/tests/" + (kind == TestKind.BROWSER ? "browser/" : "") + id + "/results";
-            var response = client.get(path + (result == null ? "" : "/" + result), Map.of()).map();
-            List<Map<String, Object>> rows = result == null ? Synthetics.rows(response.get("results"), "results") : List.of(response);
-            boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var rKind = context.render(testKind).as(TestKind.class).orElse(TestKind.API);
+            var path = "/api/v1/synthetics/tests/" + (rKind == TestKind.BROWSER ? "browser/" : "") + rId + "/results";
+            var response = client.get(path + (rResult == null ? "" : "/" + rResult), Map.of()).map();
+            var rows = rResult == null ? Synthetics.rows(response.get("results"), "results") : List.of(response);
+            var rReveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
             var safe = rows.stream().map(row -> {
-                if (reveal) {
+                if (rReveal) {
                     return row;
                 }
-                Map<String, Object> summary = new LinkedHashMap<>();
-                for (String key : List.of("check_time", "probe_dc", "result_id", "status")) {
+                var summary = new LinkedHashMap<String, Object>();
+                for (var key : List.of("check_time", "probe_dc", "result_id", "status")) {
                     if (row.containsKey(key)) {
                         summary.put(key, row.get(key));
                     }
@@ -78,7 +84,7 @@ public class Results extends AbstractDatadogTask implements RunnableTask<Results
                 return summary;
             }).toList();
             var fetched = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);
-            Object timestamp = response.get("last_timestamp_fetched");
+            var timestamp = response.get("last_timestamp_fetched");
             return Output.builder().results(fetched.rows()).row(fetched.row()).size(fetched.size())
                 .uri(fetched.uri())
                 .lastTimestampFetched(timestamp instanceof Number n ? n.longValue() : null).build();

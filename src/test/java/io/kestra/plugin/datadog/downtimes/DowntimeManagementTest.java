@@ -1,8 +1,8 @@
 package io.kestra.plugin.datadog.downtimes;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
@@ -11,7 +11,11 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
@@ -32,8 +36,8 @@ class DowntimeManagementTest extends AbstractDatadogTest {
             .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).downtimeId(Property.ofValue(ID)).message(Property.ofValue("Maintenance"));
     }
 
-    private List.ListBuilder<?, ?> list() {
-        return List.builder().id(IdUtils.create()).type(List.class.getName()).apiKey(Property.ofValue(API_KEY))
+    private io.kestra.plugin.datadog.downtimes.List.ListBuilder<?, ?> list() {
+        return io.kestra.plugin.datadog.downtimes.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.downtimes.List.class.getName()).apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()));
     }
 
@@ -50,12 +54,12 @@ class DowntimeManagementTest extends AbstractDatadogTest {
     void listPagesWithOffsetAndStopsAtLimit() throws Exception {
         var rows = IntStream.range(0, 100).mapToObj(i -> ROW).toList();
         server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", rows)));
-        server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", java.util.List.of(ROW))));
+        server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(ROW))));
         var output = list().currentOnly(Property.ofValue(true)).build().run(runContext());
         assertEquals(101, output.getSize());
         assertEquals(2, server.requests.size());
-        String first = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
-        String second = URLDecoder.decode(server.requests.getLast().query(), StandardCharsets.UTF_8);
+        var first = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
+        var second = URLDecoder.decode(server.requests.getLast().query(), StandardCharsets.UTF_8);
         assertTrue(first.contains("current_only=true"));
         assertTrue(first.contains("page[offset]=0"));
         assertTrue(second.contains("page[offset]=100"));
@@ -66,7 +70,7 @@ class DowntimeManagementTest extends AbstractDatadogTest {
     @Test
     void listStoresIon() throws Exception {
         var context = runContext();
-        server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", java.util.List.of(ROW))));
+        server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(ROW))));
         var output = list().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getDowntimes());
         try (var input = context.storage().getFile(output.getUri())) {
@@ -102,7 +106,7 @@ class DowntimeManagementTest extends AbstractDatadogTest {
 
     @Test
     void validatesEveryLocalRuleBeforeRequests() {
-        for (String id : java.util.Arrays.asList(null, "", " ", ".", "..")) {
+        for (var id : Arrays.asList(null, "", " ", ".", "..")) {
             assertThrows(IllegalArgumentException.class, () -> get().downtimeId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> update().downtimeId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
         }
@@ -110,8 +114,8 @@ class DowntimeManagementTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> update().scope(Property.ofValue(" ")).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> update().start(Property.ofValue(Instant.EPOCH)).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> update().start(Property.ofValue(Instant.EPOCH)).end(Property.ofValue(Instant.EPOCH)).build().run(runContext()));
-        assertThrows(java.time.DateTimeException.class, () -> update().displayTimezone(Property.ofValue("invalid")).build().run(runContext()));
-        for (int limit : new int[]{0, 10001}) {
+        assertThrows(DateTimeException.class, () -> update().displayTimezone(Property.ofValue("invalid")).build().run(runContext()));
+        for (var limit : new int[]{0, 10001}) {
             assertThrows(IllegalArgumentException.class, () -> list().maxResults(Property.ofValue(limit)).build().run(runContext()));
         }
         assertTrue(server.requests.isEmpty());
@@ -127,10 +131,10 @@ class DowntimeManagementTest extends AbstractDatadogTest {
     @Test
     void allDowntimeTasksPropagateErrorClasses() {
         record Case(String method, String path, RunnableTask<?> task) { }
-        for (int status : new int[]{400, 403, 404, 429, 500}) {
-            var cases = java.util.List.of(new Case("GET", PATH, get().build()), new Case("GET", "/api/v2/downtime", list().build()), new Case("PATCH", PATH, update().build()),
+        for (var status : new int[]{400, 403, 404, 429, 500}) {
+            var cases = List.of(new Case("GET", PATH, get().build()), new Case("GET", "/api/v2/downtime", list().build()), new Case("PATCH", PATH, update().build()),
                 new Case("POST", "/api/v2/downtime", Create.builder().id(IdUtils.create()).type(Create.class.getName()).apiKey(Property.ofValue(API_KEY))
-                    .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).scope(Property.ofValue("env:prod")).monitorId(Property.ofValue(123L)).duration(Property.ofValue(java.time.Duration.ofMinutes(30))).build()),
+                    .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).scope(Property.ofValue("env:prod")).monitorId(Property.ofValue(123L)).duration(Property.ofValue(Duration.ofMinutes(30))).build()),
                 new Case("DELETE", PATH, Cancel.builder().id(IdUtils.create()).type(Cancel.class.getName()).apiKey(Property.ofValue(API_KEY))
                     .appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).downtimeId(Property.ofValue(ID)).build()));
             for (var c : cases) {

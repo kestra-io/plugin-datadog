@@ -2,11 +2,13 @@ package io.kestra.plugin.datadog.slos;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -38,22 +40,25 @@ import java.util.Map;
 public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output> {
     @NotNull
     @Schema(title = "SLO identifier")
+    @PluginProperty(group = "main")
     private Property<String> sloId;
     @Schema(title = "Include configured alert identifiers")
+    @PluginProperty(group = "main")
     private Property<Boolean> withConfiguredAlertIds;
 
     @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in the SLO definition. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
-            Map<String, Object> query = DatadogClient.query();
+            var rPath = Slos.path(context.render(sloId).as(String.class).orElse(null));
+            var query = DatadogClient.query();
             context.render(withConfiguredAlertIds).as(Boolean.class).ifPresent(value -> query.put("with_configured_alert_ids", value));
-            var response = client.get(path, query).map();
+            var response = client.get(rPath, query).map();
             Slos.noErrors(response);
-            return Output.builder().slo(io.kestra.plugin.datadog.monitors.MonitorIO.redactMap(Slos.object(response.get("data"), "data"), context.render(includeSecrets).as(Boolean.class).orElse(false))).build();
+            return Output.builder().slo(MonitorIO.redactMap(Slos.object(response.get("data"), "data"), context.render(includeSecrets).as(Boolean.class).orElse(false))).build();
         }
     }
 

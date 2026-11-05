@@ -58,6 +58,7 @@ import java.util.Optional;
 public class BudgetLow extends AbstractTrigger implements PollingTriggerInterface, TriggerOutput<BudgetLow.Output> {
     @Builder.Default
     @Schema(title = "Polling interval", description = "Positive duration, default five minutes.")
+    @PluginProperty(group = "reliability")
     private final Duration interval = Duration.ofMinutes(5);
     @NotNull
     @PluginProperty(secret = true, group = "connection")
@@ -70,84 +71,91 @@ public class BudgetLow extends AbstractTrigger implements PollingTriggerInterfac
     @Schema(title = "Datadog application key", description = "Needs slos_read.")
     private Property<String> appKey;
     @Schema(title = "Datadog site", description = "Defaults to datadoghq.com.")
+    @PluginProperty(group = "connection")
     private Property<String> site;
     @Schema(title = "API base URL", description = "Overrides the regional base URL for a proxy or test server.")
+    @PluginProperty(group = "advanced")
     private Property<String> apiUrl;
     @NotNull
     @Schema(title = "SLO identifier")
+    @PluginProperty(group = "main")
     private Property<String> sloId;
     @NotNull
     @Schema(title = "Target percentage", description = "Strictly between 0 and 100. Must match the target you intend to evaluate over window.")
+    @PluginProperty(group = "main")
     private Property<Double> target;
     @Schema(title = "Rolling window", description = "Positive whole-second duration, default P7D. Datadog enforces retention limits.")
+    @PluginProperty(group = "processing")
     private Property<Duration> window;
     @Schema(title = "Minimum remaining budget", description = "Finite percentage at most 100, default 20. Equality is healthy.")
+    @PluginProperty(group = "main")
     private Property<Double> minRemainingBudget;
     @Schema(title = "Apply status corrections", description = "True by default.")
+    @PluginProperty(group = "main")
     private Property<Boolean> applyCorrections;
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
-        String id = runContext.render(sloId).as(String.class).orElse(null);
-        Slos.path(id);
-        double target = Slos.target(runContext.render(this.target).as(Double.class).orElse(null));
-        double minimum = Slos.minimum(runContext.render(minRemainingBudget).as(Double.class).orElse(20.0));
-        Duration window = runContext.render(this.window).as(Duration.class).orElse(Duration.ofDays(7));
+        var rId = runContext.render(sloId).as(String.class).orElse(null);
+        Slos.path(rId);
+        var rTarget = Slos.target(runContext.render(this.target).as(Double.class).orElse(null));
+        var rMinimum = Slos.minimum(runContext.render(minRemainingBudget).as(Double.class).orElse(20.0));
+        var rWindow = runContext.render(this.window).as(Duration.class).orElse(Duration.ofDays(7));
         if (interval == null || interval.isNegative() || interval.isZero()) {
             throw new IllegalArgumentException("`interval` must be positive");
         }
-        if (window.isNegative() || window.isZero() || window.getNano() != 0) {
+        if (rWindow.isNegative() || rWindow.isZero() || rWindow.getNano() != 0) {
             throw new IllegalArgumentException("`window` must be a positive whole-second duration");
         }
-        boolean corrections = runContext.render(applyCorrections).as(Boolean.class).orElse(true);
-        long to = Instant.now().getEpochSecond();
-        long from = Math.subtractExact(to, window.getSeconds());
+        var rCorrections = runContext.render(applyCorrections).as(Boolean.class).orElse(true);
+        var to = Instant.now().getEpochSecond();
+        var from = Math.subtractExact(to, rWindow.getSeconds());
         Slos.window(from, to);
         try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
-        Slos.Budget budget;
-        try {
-            budget = Slos.budget(Slos.history(client, id, from, to, target, corrections), target);
-        } catch (DatadogClient.DatadogException e) {
-            if (e.isTransient()) {
-                runContext.logger().warn("Datadog SLO poll skipped after HTTP {}", e.getStatus());
+            Slos.Budget budget;
+            try {
+                budget = Slos.budget(Slos.history(client, rId, from, to, rTarget, rCorrections), rTarget);
+            } catch (DatadogClient.DatadogException e) {
+                if (e.isTransient()) {
+                    runContext.logger().warn("Datadog SLO poll skipped after HTTP {}", e.getStatus());
+                    return Optional.empty();
+                }
+                throw e;
+            }
+            var sampledAt = client.serverTime().orElse(null);
+            if (sampledAt == null) {
+                runContext.logger().warn("Datadog SLO poll skipped because the Date header is missing");
                 return Optional.empty();
             }
-            throw e;
-        }
-        var sampledAt = client.serverTime().orElse(null);
-        if (sampledAt == null) {
-            runContext.logger().warn("Datadog SLO poll skipped because the Date header is missing");
-            return Optional.empty();
-        }
-        var kv = runContext.namespaceKv(context.getNamespace());
-        String key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
-        String configuration = client.apiBase() + ":" + id + ":" + target + ":" + minimum + ":" + window + ":" + corrections;
-        var previous = kv.getValue(key);
-        Map<String, Object> cursor = null;
-        if (previous.isPresent()) {
-            Object stored = previous.get().value();
-            cursor = switch (stored) {
-                case byte[] bytes -> Slos.object(JacksonMapper.ofJson().readValue(bytes, Object.class), "cursor");
-                case String text -> Slos.object(JacksonMapper.ofJson().readValue(text, Object.class), "cursor");
-                case Map<?, ?> map -> Slos.object(map, "cursor");
-                default -> throw new IllegalStateException("Unexpected SLO budget cursor type");
-            };
-            if (!(cursor.get("below") instanceof Boolean) || !(cursor.get("configuration") instanceof String)) {
-                throw new IllegalStateException("Invalid SLO budget cursor");
+            var kv = runContext.namespaceKv(context.getNamespace());
+            var key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
+            var configuration = client.apiBase() + ":" + rId + ":" + rTarget + ":" + rMinimum + ":" + rWindow + ":" + rCorrections;
+            var previous = kv.getValue(key);
+            Map<String, Object> cursor = null;
+            if (previous.isPresent()) {
+                var stored = previous.get().value();
+                cursor = switch (stored) {
+                    case byte[] bytes -> Slos.object(JacksonMapper.ofJson().readValue(bytes, Object.class), "cursor");
+                    case String text -> Slos.object(JacksonMapper.ofJson().readValue(text, Object.class), "cursor");
+                    case Map<?, ?> map -> Slos.object(map, "cursor");
+                    default -> throw new IllegalStateException("Unexpected SLO budget cursor type");
+                };
+                if (!(cursor.get("below") instanceof Boolean) || !(cursor.get("configuration") instanceof String)) {
+                    throw new IllegalStateException("Invalid SLO budget cursor");
+                }
             }
-        }
-        boolean below = budget.remaining() < minimum;
-        Execution execution = null;
-        if (cursor != null && configuration.equals(cursor.get("configuration")) && Boolean.FALSE.equals(cursor.get("below")) && below) {
-            var output = Output.builder().sloId(id).sli(budget.sli()).remainingBudget(budget.remaining()).target(target)
-                .minRemainingBudget(minimum).from(from).to(to).build();
-            // At least once: if execution creation fails, the previous healthy cursor remains available for a retry.
-            execution = TriggerService.generateExecution(this, conditionContext, context, output);
-        }
-        byte[] state = JacksonMapper.ofJson().writeValueAsBytes(Map.of("configuration", configuration, "below", below, "sampledAt", sampledAt.toString()));
-        kv.put(key, new KVValueAndMetadata(new KVMetadata("Datadog SLO budget transition cursor", (Duration) null), state));
-        return Optional.ofNullable(execution);
+            var below = budget.remaining() < rMinimum;
+            Execution execution = null;
+            if (cursor != null && configuration.equals(cursor.get("configuration")) && Boolean.FALSE.equals(cursor.get("below")) && below) {
+                var output = Output.builder().sloId(rId).sli(budget.sli()).remainingBudget(budget.remaining()).target(rTarget)
+                    .minRemainingBudget(rMinimum).from(from).to(to).build();
+                // At least once: if execution creation fails, the previous healthy cursor remains available for a retry.
+                execution = TriggerService.generateExecution(this, conditionContext, context, output);
+            }
+            var state = JacksonMapper.ofJson().writeValueAsBytes(Map.of("configuration", configuration, "below", below, "sampledAt", sampledAt.toString()));
+            kv.put(key, new KVValueAndMetadata(new KVMetadata("Datadog SLO budget transition cursor", (Duration) null), state));
+            return Optional.ofNullable(execution);
         }
     }
 

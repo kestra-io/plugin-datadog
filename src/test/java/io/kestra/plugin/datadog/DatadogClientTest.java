@@ -2,12 +2,12 @@ package io.kestra.plugin.datadog;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,7 +21,7 @@ class DatadogClientTest {
     private RunContextFactory runContextFactory;
 
     private DatadogClient client(String site, String apiUrl, String appKey, boolean needsAppKey) throws Exception {
-        RunContext runContext = runContextFactory.of(Map.of());
+        var runContext = runContextFactory.of(Map.of());
         return DatadogClient.create(runContext, Property.ofValue("api"), appKey == null ? null : Property.ofValue(appKey),
             site == null ? null : Property.ofValue(site), apiUrl == null ? null : Property.ofValue(apiUrl), needsAppKey);
     }
@@ -37,7 +37,7 @@ class DatadogClientTest {
 
     @Test
     void siteCannotAddAPathAPortOrCredentials() {
-        for (String bad : new String[]{"evil.com/path", "evil.com:8080", "user@evil.com", "a b", "evil.com?x=1", "-bad.com"}) {
+        for (var bad : new String[]{"evil.com/path", "evil.com:8080", "user@evil.com", "a b", "evil.com?x=1", "-bad.com"}) {
             assertThrows(IllegalArgumentException.class, () -> client(bad, null, null, false), bad);
         }
     }
@@ -58,7 +58,7 @@ class DatadogClientTest {
 
     @Test
     void blankApiKeyIsRefused() {
-        RunContext runContext = runContextFactory.of(Map.of());
+        var runContext = runContextFactory.of(Map.of());
         assertThrows(IllegalArgumentException.class, () -> DatadogClient.create(runContext, Property.ofValue("  "), null, null, null, false));
     }
 
@@ -89,11 +89,11 @@ class DatadogClientTest {
 
     @Test
     void queryStringIsEncodedAndSkipsNulls() {
-        Map<String, Object> params = new LinkedHashMap<>();
+        var params = new LinkedHashMap<String, Object>();
         params.put("query", "avg:system.cpu{env:prod} by {host}");
         params.put("skip", null);
         params.put("page", 2);
-        String query = DatadogClient.queryString(params);
+        var query = DatadogClient.queryString(params);
         assertEquals("?query=avg%3Asystem.cpu%7Benv%3Aprod%7D+by+%7Bhost%7D&page=2", query);
         assertFalse(query.contains("skip"));
         assertEquals("", DatadogClient.queryString(Map.of()));
@@ -101,13 +101,13 @@ class DatadogClientTest {
 
     @Test
     void sendsPutPatchAndDeleteWithABody() throws Exception {
-        MockDatadogServer server = new MockDatadogServer();
+        var server = new MockDatadogServer();
         try {
             server.reply("PUT", "/x", 200, "{\"ok\":true}").reply("PATCH", "/x", 200, "[1,2]").reply("DELETE", "/x", 200, "{}");
-            DatadogClient client = DatadogClient.create(runContextFactory.of(Map.of()), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true);
+            var client = DatadogClient.create(runContextFactory.of(Map.of()), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true);
 
             assertEquals(Map.of("ok", true), client.put("/x", Map.of("a", 1)).map());
-            assertEquals(java.util.List.of(1, 2), client.patch("/x", Map.of("b", 2)).list());
+            assertEquals(List.of(1, 2), client.patch("/x", Map.of("b", 2)).list());
             client.request("DELETE", "/x", Map.of("force", "true"), Map.of("c", 3));
 
             assertEquals(3, server.requests.size());

@@ -2,10 +2,10 @@ package io.kestra.plugin.datadog.oncall;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.incidents.ResponseOutput;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +13,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -41,24 +42,30 @@ import java.util.Map;
 public class Page extends PagingTask implements RunnableTask<ResponseOutput> {
     @NotNull
     @Schema(title = "Page title", description = "Explicit nonblank title.")
+    @PluginProperty(group = "main")
     private Property<String> title;
 
     @NotNull
     @Schema(title = "Target kind", description = "A team id, team handle or user id.")
+    @PluginProperty(group = "main")
     private Property<TargetType> targetType;
 
     @NotNull
     @Schema(title = "Target identifier", description = "Nonblank identifier for the selected target kind.")
+    @PluginProperty(group = "main")
     private Property<String> target;
 
     @NotNull
     @Schema(title = "Urgency", description = "Explicit HIGH or LOW urgency.")
+    @PluginProperty(group = "main")
     private Property<Urgency> urgency;
 
     @Schema(title = "Tags")
-    private Property<java.util.List<String>> tags;
+    @PluginProperty(group = "processing")
+    private Property<List<String>> tags;
 
     @Schema(title = "Dry run", description = "Render the exact request without paging anyone. True by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> dryRun;
 
     public enum TargetType {

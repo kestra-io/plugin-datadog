@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.cases;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -10,9 +11,9 @@ import io.kestra.plugin.datadog.incidents.PaginatedResponseTask;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+
 import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 
 /** Datadog operationId: SearchCases. */
 @SuperBuilder
@@ -34,12 +35,15 @@ import java.util.Map;
     """))
 public class Search extends PaginatedResponseTask implements RunnableTask<CollectionOutput> {
     @Schema(title = "Case search filter")
+    @PluginProperty(group = "processing")
     private Property<String> filter;
 
     @Schema(title = "Sort field")
+    @PluginProperty(group = "processing")
     private Property<SortField> sortField;
 
     @Schema(title = "Sort ascending")
+    @PluginProperty(group = "main")
     private Property<Boolean> ascending;
 
     public enum SortField {
@@ -48,7 +52,7 @@ public class Search extends PaginatedResponseTask implements RunnableTask<Collec
 
     @Override
     public CollectionOutput run(RunContext context) throws Exception {
-        Map<String, Object> params = new LinkedHashMap<>();
+        var params = new LinkedHashMap<String, Object>();
         context.render(filter).as(String.class).ifPresent(v -> params.put("filter", v));
         context.render(sortField).as(SortField.class).ifPresent(v -> params.put("sort[field]", v.name().toLowerCase(Locale.ROOT)));
         context.render(ascending).as(Boolean.class).ifPresent(v -> params.put("sort[asc]", v));

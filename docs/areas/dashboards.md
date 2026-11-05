@@ -82,7 +82,7 @@ tasks:
 | `slos.Create` | `CreateSLO` | Creates a metric or monitor SLO. Every run creates a new SLO. |
 | `slos.Update` | `UpdateSLO` | Replaces the configuration of one identified metric or monitor SLO. |
 | `slos.Delete` | `DeleteSLO` | Deletes one SLO without force. Confirms that the API returned its id. Supports `ignoreNotFound`. |
-| `slos.History` | `GetSLOHistory` | Reads SLI history for a window. Returns the `data` object or a JSON storage URI. |
+| `slos.History` | `GetSLOHistory` | Reads SLI history for a window. Fetch modes return `history`, `row`, an ION `uri` or only `size`. |
 | `slos.Check` | `GetSLOHistory` | Computes the remaining budget for an explicit target and fails or returns a flag. |
 | `slos.BudgetLow` | `GetSLOHistory` | Polls a rolling window and starts an execution on a healthy-to-low transition. |
 
@@ -137,7 +137,7 @@ HTTP 429 and 5xx skip the poll without changing the cursor. Authentication error
 
 ## Storage and limits
 
-Dashboard and SLO lists default to `maxResults: 1000` and accept 1 through 10000. `truncated` tells whether more results exist. `fetchType: STORE` writes an ION file and omits inline rows. A task still buffers at most its bounded result set in worker memory. Export and History write JSON. History is one API response and follows Datadog's retention and rate limits.
+Dashboard and SLO lists default to `maxResults: 1000` and accept 1 through 10000. `truncated` tells whether more results exist. `fetchType: STORE` writes an ION file and omits inline rows. A task still buffers at most its bounded result set in worker memory. Dashboard Export retains import-compatible JSON. History stores one ION response and follows Datadog's retention and rate limits.
 
 ## Operations left to the generic API layer
 

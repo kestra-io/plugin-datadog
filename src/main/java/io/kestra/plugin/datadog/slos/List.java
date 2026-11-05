@@ -1,19 +1,20 @@
 package io.kestra.plugin.datadog.slos;
 
-import io.kestra.plugin.datadog.ValidDatadogLimits;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -45,36 +46,44 @@ import java.util.Map;
     """))
 public class List extends AbstractDatadogTask implements RunnableTask<List.Output> {
     @Schema(title = "SLO identifiers", description = "Comma-separated ids, sent as ids.")
+    @PluginProperty(group = "main")
     private Property<String> ids;
     @Schema(title = "SLO text query")
+    @PluginProperty(group = "main")
     private Property<String> query;
     @Schema(title = "Tags query")
+    @PluginProperty(group = "main")
     private Property<String> tagsQuery;
     @Schema(title = "Metrics query")
+    @PluginProperty(group = "main")
     private Property<String> metricsQuery;
     @Schema(title = "Deleted SLOs filter")
+    @PluginProperty(group = "main")
     private Property<Boolean> deleted;
     @Schema(title = "Maximum results", description = "Between 1 and 10000, default 1000. Reads one extra row to detect truncation.")
+    @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxResults;
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Schema(title = "Include sensitive values", description = "Return credential fields and URLs without redaction. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            int limit = Slos.limit(context.render(maxResults).as(Integer.class).orElse(1000));
-            Map<String, Object> params = DatadogClient.query();
+            var rLimit = Slos.limit(context.render(maxResults).as(Integer.class).orElse(1000));
+            var params = DatadogClient.query();
             context.render(ids).as(String.class).ifPresent(value -> params.put("ids", value));
             context.render(query).as(String.class).ifPresent(value -> params.put("query", value));
             context.render(tagsQuery).as(String.class).ifPresent(value -> params.put("tags_query", value));
             context.render(metricsQuery).as(String.class).ifPresent(value -> params.put("metrics_query", value));
             context.render(deleted).as(Boolean.class).ifPresent(value -> params.put("is_deleted", value));
-            var rows = Slos.collect(client, params, limit + 1);
-            boolean truncated = rows.size() > limit;
-            rows = rows.subList(0, Math.min(rows.size(), limit));
+            var rows = Slos.collect(client, params, rLimit + 1);
+            var truncated = rows.size() > rLimit;
+            rows = rows.subList(0, Math.min(rows.size(), rLimit));
             var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
             var safe = rows.stream().map(row -> MonitorIO.redactMap(row, rIncludeSecrets)).toList();
             var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);

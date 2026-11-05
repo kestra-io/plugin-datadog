@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.keys;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -32,19 +33,22 @@ import lombok.experimental.SuperBuilder;
 public class Revoke extends AbstractDatadogTask implements RunnableTask<Revoke.Output> {
     @NotNull
     @Schema(title = "Key identifier", description = "Resource ID of the key to revoke. Never supply the key value.")
+    @PluginProperty(group = "main")
     private Property<String> keyId;
     @Schema(title = "Key kind", description = "API or APPLICATION.", defaultValue = "API")
+    @PluginProperty(group = "main")
     private Property<KeyKind> keyKind;
     @Schema(title = "Ignore missing key", description = "Treat HTTP 404 as already revoked. Other errors fail.", defaultValue = "false")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = AccessApi.required(context, keyId, "keyId");
-            KeyKind kind = context.render(keyKind).as(KeyKind.class).orElse(KeyKind.API);
-            String path = kind.resourcePath(id);
-            boolean ignore = AccessApi.flag(context, ignoreNotFound);
+            var id = AccessApi.required(context, keyId, "keyId");
+            var rKind = context.render(keyKind).as(KeyKind.class).orElse(KeyKind.API);
+            var path = rKind.resourcePath(id);
+            var ignore = AccessApi.flag(context, ignoreNotFound);
             return Output.builder().keyId(id).revoked(AccessApi.delete(client, path, ignore)).build();
         }
     }

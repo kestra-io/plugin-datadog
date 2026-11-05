@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.deployments;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -46,45 +47,54 @@ import java.util.concurrent.TimeoutException;
 public class Evaluate extends AbstractDatadogTask implements RunnableTask<Evaluate.Output> {
     @NotNull
     @Schema(title = "Service")
+    @PluginProperty(group = "main")
     private Property<String> service;
     @NotNull
     @Schema(title = "Environment")
+    @PluginProperty(group = "main")
     private Property<String> env;
     @Schema(title = "Gate identifier", description = "Identifier of the configured gate. Datadog uses default when omitted.")
+    @PluginProperty(group = "main")
     private Property<String> identifier;
     @Schema(title = "Deployment version", description = "Required by Datadog for faulty deployment detection rules.")
+    @PluginProperty(group = "main")
     private Property<String> deploymentVersion;
     @Schema(title = "Primary tag", description = "Scopes APM faulty deployment detection, for example region:us-east-1.")
+    @PluginProperty(group = "main")
     private Property<String> primaryTag;
     @Schema(title = "Maximum wait", description = "Total trigger and polling budget, between PT0.001S and P1D.", defaultValue = "PT10M")
+    @PluginProperty(group = "reliability")
     private Property<Duration> maxWait;
     @Schema(title = "Poll interval", description = "Clamped to the remaining deadline.", defaultValue = "PT5S")
+    @PluginProperty(group = "reliability")
     private Property<Duration> pollInterval;
     @Schema(title = "Fail on gate failure", defaultValue = "true")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnFailure;
     @Schema(title = "Fail on timeout", defaultValue = "true")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnTimeout;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            Map<String, Object> attributes = new LinkedHashMap<>();
+            var attributes = new LinkedHashMap<String, Object>();
             attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
             attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
             context.render(identifier).as(String.class).ifPresent(value -> attributes.put("identifier", value));
             context.render(deploymentVersion).as(String.class).ifPresent(value -> attributes.put("version", value));
             context.render(primaryTag).as(String.class).ifPresent(value -> attributes.put("primary_tag", value));
-            Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
-            Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
-            Deadline.validate(wait, "maxWait");
-            Deadline.validate(interval, "pollInterval");
-            boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
-            boolean failTimeout = context.render(failOnTimeout).as(Boolean.class).orElse(true);
+            var rWait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
+            var rInterval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
+            Deadline.validate(rWait, "maxWait");
+            Deadline.validate(rInterval, "pollInterval");
+            var rFail = context.render(failOnFailure).as(Boolean.class).orElse(true);
+            var rFailTimeout = context.render(failOnTimeout).as(Boolean.class).orElse(true);
             String id = null;
-            Status status = Status.IN_PROGRESS;
+            var status = Status.IN_PROGRESS;
             Boolean dryRun = null;
-            List<RuleResult> rules = List.of();
-            try (var deadline = new Deadline(wait)) {
+            var rules = List.<RuleResult>of();
+            try (var deadline = new Deadline(rWait)) {
                 try {
                     var answer = deadline.call(() -> client.post("/api/v2/deployments/gates/evaluation",
                         Deployments.body("deployment_gates_evaluation_request", attributes)).map());
@@ -94,7 +104,7 @@ public class Evaluate extends AbstractDatadogTask implements RunnableTask<Evalua
                     if (!UUID.fromString(id).toString().equalsIgnoreCase(id)) {
                         throw new IllegalStateException("Datadog evaluation_id is not a UUID");
                     }
-                    final String path = "/api/v2/deployments/gates/evaluation/" + id;
+                    final var path = "/api/v2/deployments/gates/evaluation/" + id;
                     while (!deadline.expired()) {
                         try {
                             var response = deadline.call(() -> client.get(path, Map.of()).map());
@@ -118,17 +128,17 @@ public class Evaluate extends AbstractDatadogTask implements RunnableTask<Evalua
                                 throw e;
                             }
                         }
-                        deadline.pause(interval);
+                        deadline.pause(rInterval);
                     }
                 } catch (TimeoutException ignored) {
                     // Return the last known state when failOnTimeout is false.
                 }
             }
-            boolean timedOut = status == Status.IN_PROGRESS;
-            if (timedOut && failTimeout) {
-                throw new IllegalStateException("Deployment gate evaluation " + id + " did not finish within " + wait);
+            var timedOut = status == Status.IN_PROGRESS;
+            if (timedOut && rFailTimeout) {
+                throw new IllegalStateException("Deployment gate evaluation " + id + " did not finish within " + rWait);
             }
-            if (status == Status.FAIL && fail) {
+            if (status == Status.FAIL && rFail) {
                 throw new IllegalStateException("Deployment gate evaluation " + id + " failed: " + String.join("; ", rules.stream()
                     .filter(rule -> rule.status == Status.FAIL).map(rule -> rule.name + ": " + rule.reason).toList()));
             }

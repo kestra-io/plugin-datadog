@@ -1,15 +1,17 @@
 package io.kestra.plugin.datadog.usage;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
 import io.kestra.plugin.datadog.metrics.Check.OnNoData;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
+import org.junit.jupiter.api.function.Executable;
 
 import java.math.BigDecimal;
 import java.net.URLDecoder;
@@ -55,10 +57,10 @@ class UsageTest extends AbstractDatadogTest {
         assertFalse(output.getTruncated());
         assertNull(output.getNextRecordId());
         Map<?, ?> attributes = (Map<?, ?>) output.getRows().getFirst().get("attributes");
-        Object count = ((Map<?, ?>) ((List<?>) attributes.get("measurements")).getFirst()).get("value");
+        var count = ((Map<?, ?>) ((List<?>) attributes.get("measurements")).getFirst()).get("value");
         assertEquals(9007199254740993L, count);
-        String first = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
-        String second = URLDecoder.decode(server.requests.get(1).query(), StandardCharsets.UTF_8);
+        var first = URLDecoder.decode(server.requests.getFirst().query(), StandardCharsets.UTF_8);
+        var second = URLDecoder.decode(server.requests.get(1).query(), StandardCharsets.UTF_8);
         assertTrue(first.contains("filter[timestamp][start]=2026-01-01T00:00:00Z&"));
         assertTrue(first.contains("filter[timestamp][end]=2026-01-01T02:00:00Z&"));
         assertTrue(first.contains("filter[product_families]=infra_hosts"));
@@ -66,7 +68,7 @@ class UsageTest extends AbstractDatadogTest {
         assertTrue(second.contains("page[next_record_id]=next +/=&"));
         assertEquals(API_KEY, server.requests.getFirst().header("DD-API-KEY"));
         assertEquals(APP_KEY, server.requests.getFirst().header("DD-APPLICATION-KEY"));
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:GetHourlyUsage");
+        OpenApiContract.assertRequests(server.requests, "v2:GetHourlyUsage");
     }
 
     @Test
@@ -146,7 +148,7 @@ class UsageTest extends AbstractDatadogTest {
 
     @TestFactory
     Stream<DynamicTest> rejectsInvalidPropertiesBeforeRequests() {
-        return Stream.<Map.Entry<String, org.junit.jupiter.api.function.Executable>>of(
+        return Stream.<Map.Entry<String, Executable>>of(
             Map.entry("missing start", () -> hourly().from(null).build().run(runContext())),
             Map.entry("partial hour start", () -> hourly().from(Property.ofValue(FROM.plusSeconds(1))).build().run(runContext())),
             Map.entry("partial hour end", () -> hourly().to(Property.ofValue(FROM.plusSeconds(1))).build().run(runContext())),

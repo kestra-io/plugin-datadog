@@ -2,7 +2,7 @@ package io.kestra.plugin.datadog.catalog;
 
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.DatadogClient;
-import io.kestra.plugin.datadog.keys.AccessApi;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
 import io.kestra.plugin.datadog.keys.OrganizationTestSupport;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ class CatalogTest extends OrganizationTestSupport {
 
     @Test
     void createThenRepeatIsUnchanged() throws Exception {
-        Map<String, Object> desired = definition("payments");
+        var desired = definition("payments");
         server.reply("GET", PATH, 404, "{}").reply("GET", PATH, 200, response(desired));
         server.reply("POST", "/api/v2/services/definitions", 200, json(Map.of("data", List.of(resource("checkout", "service-definition", Map.of("schema", desired))))));
         var task = connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(desired)).build();
@@ -34,24 +34,24 @@ class CatalogTest extends OrganizationTestSupport {
         assertEquals(UpsertServiceDefinition.Status.CREATED, first.getStatus());
         assertEquals(desired, server.requests.get(1).json());
         assertTrue(server.requests.get(0).query().contains("schema_version=v2.2"));
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+        OpenApiContract.assertRequests(server.requests,
             "v2:GetServiceDefinition", "v2:CreateOrUpdateServiceDefinitions");
         server.requests.clear();
         var second = task.run(runContext());
         assertEquals(UpsertServiceDefinition.Status.UNCHANGED, second.getStatus());
         assertTrue(second.getDiff().isEmpty());
         assertEquals("GET", server.only().method());
-        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:GetServiceDefinition").assertRequest(server.only());
+        OpenApiContract.of("v2:GetServiceDefinition").assertRequest(server.only());
     }
 
     @Test
     void updatePreservesOmittedFieldsAndHasFieldDiff() throws Exception {
-        Map<String, Object> current = new LinkedHashMap<>(definition("old-team"));
+        var current = new LinkedHashMap<String, Object>(definition("old-team"));
         current.put("tags", List.of("env:prod"));
         current.put("extensions", Map.of("keep", true, "password", VALUE));
-        Map<String, Object> desired = new LinkedHashMap<>(definition("payments"));
+        var desired = new LinkedHashMap<String, Object>(definition("payments"));
         desired.put("extensions", Map.of("added", true));
-        Map<String, Object> expected = new LinkedHashMap<>(definition("payments"));
+        var expected = new LinkedHashMap<String, Object>(definition("payments"));
         expected.put("tags", List.of("env:prod"));
         expected.put("extensions", Map.of("keep", true, "password", VALUE, "added", true));
         server.reply("GET", PATH, 200, response(current)).reply("GET", PATH, 200, response(expected));
@@ -72,7 +72,7 @@ class CatalogTest extends OrganizationTestSupport {
     @Test
     void planRedactsDiffValuesUnlessExplicitlyIncluded() throws Exception {
         server.reply("GET", PATH, 200, response(definition("payments")));
-        Map<String, Object> desired = new LinkedHashMap<>(definition("payments"));
+        var desired = new LinkedHashMap<String, Object>(definition("payments"));
         desired.put("extensions", Map.of("password", VALUE, "nested", List.of(Map.of("token", VALUE))));
         desired.put("links", List.of(Map.of("name", "hook", "type", "other", "url", VALUE)));
         var builder = connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(desired)).plan(Property.ofValue(true));
@@ -88,7 +88,7 @@ class CatalogTest extends OrganizationTestSupport {
 
     @Test
     void nestedCredentialContainerPathsStayRedacted() {
-        List<UpsertServiceDefinition.Change> changes = new ArrayList<>();
+        var changes = new ArrayList<UpsertServiceDefinition.Change>();
         ServiceDefinitions.diff("/extensions/password", Map.of("value", "old"), Map.of("value", VALUE), changes, false);
         assertEquals("[REDACTED]", changes.get(0).getAfter());
     }
@@ -96,12 +96,12 @@ class CatalogTest extends OrganizationTestSupport {
     @Test
     void invalidDefinitionsFailBeforeRequests() {
         assertThrows(IllegalArgumentException.class, () -> connection(UpsertServiceDefinition.builder()).build().run(runContext()));
-        List<Map<String, Object>> invalid = new ArrayList<>();
+        var invalid = new ArrayList<Map<String, Object>>();
         invalid.add(Map.of());
         invalid.add(Map.of("schema-version", "v2.1", "dd-service", "checkout"));
         invalid.add(Map.of("schema-version", "v2.2", "dd-service", " "));
         invalid.add(Map.of("schema-version", "v2.2", "dd-service", ".."));
-        for (Map<String, Object> invalidField : List.of(
+        for (var invalidField : List.of(
             Map.<String, Object>of("tags", "wrong"), Map.<String, Object>of("tags", List.of(42)),
             Map.<String, Object>of("team", 42), Map.<String, Object>of("extensions", "wrong"), Map.<String, Object>of("typo", "wrong"),
             Map.<String, Object>of("contacts", List.of(Map.of("type", "email"))),
@@ -110,11 +110,11 @@ class CatalogTest extends OrganizationTestSupport {
             Map.<String, Object>of("integrations", Map.of("unknown", Map.of())),
             Map.<String, Object>of("integrations", Map.of("opsgenie", Map.of("region", "US"))),
             Map.<String, Object>of("integrations", Map.of("opsgenie", Map.of("service-url", "https://example.com", "region", "INVALID"))))) {
-            Map<String, Object> value = new LinkedHashMap<>(definition("payments"));
+            var value = new LinkedHashMap<String, Object>(definition("payments"));
             value.putAll(invalidField);
             invalid.add(value);
         }
-        for (Map<String, Object> value : invalid) {
+        for (var value : invalid) {
             assertThrows(IllegalArgumentException.class, () -> connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(value)).build().run(runContext()));
         }
         assertTrue(server.requests.isEmpty());
@@ -122,7 +122,7 @@ class CatalogTest extends OrganizationTestSupport {
 
     @Test
     void validComplexV22DefinitionIsAccepted() {
-        Map<String, Object> desired = new LinkedHashMap<>(definition("payments"));
+        var desired = new LinkedHashMap<String, Object>(definition("payments"));
         desired.put("contacts", List.of(Map.of("type", "email", "contact", "team@example.com", "name", "team")));
         desired.put("integrations", Map.of("opsgenie", Map.of("service-url", "https://example.com", "region", "EU"), "pagerduty", Map.of("service-url", "https://example.com")));
         desired.put("links", List.of(Map.of("name", "docs", "type", "doc", "url", "https://example.com", "provider", "wiki")));

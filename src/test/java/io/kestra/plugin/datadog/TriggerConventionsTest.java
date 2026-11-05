@@ -1,9 +1,10 @@
 package io.kestra.plugin.datadog;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.StatefulTriggerService;
+import io.kestra.core.models.triggers.Trigger;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.TestFactory;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
@@ -40,7 +42,7 @@ class TriggerConventionsTest extends AbstractDatadogTest {
         return JacksonMapper.ofJson().convertValue(properties, AbstractTrigger.class);
     }
 
-    private Map.Entry<io.kestra.core.models.conditions.ConditionContext, io.kestra.core.models.triggers.Trigger> poll(AbstractTrigger trigger) {
+    private Map.Entry<ConditionContext, Trigger> poll(AbstractTrigger trigger) {
         return TestsUtils.mockTrigger(runContextFactory, trigger);
     }
 
@@ -148,7 +150,7 @@ class TriggerConventionsTest extends AbstractDatadogTest {
             var bytes = new ByteArrayOutputStream();
             int value;
             while ((value = input.read()) != -1 && value != '\n') if (value != '\r') bytes.write(value);
-            if (value == -1) throw new java.io.EOFException();
+            if (value == -1) throw new EOFException();
             return bytes.toString(StandardCharsets.US_ASCII);
         }
 

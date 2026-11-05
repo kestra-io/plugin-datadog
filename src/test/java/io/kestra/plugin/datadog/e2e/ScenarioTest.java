@@ -26,8 +26,8 @@ public class ScenarioTest extends AbstractDatadogTest {
     }
 
     protected RunnableTask<?> task(JsonNode scenario, boolean dry) {
-        Map<String, Object> config = new LinkedHashMap<>(JacksonMapper.ofJson().convertValue(scenario.path("properties"), Map.class));
-        String name = scenario.path("task").asText();
+        var config = new LinkedHashMap<String, Object>(JacksonMapper.ofJson().convertValue(scenario.path("properties"), Map.class));
+        var name = scenario.path("task").asText();
         config.put("id", IdUtils.create());
         config.put("type", "io.kestra.plugin.datadog." + name);
         if (!name.equals("api.Operations")) {
@@ -42,7 +42,7 @@ public class ScenarioTest extends AbstractDatadogTest {
     }
 
     protected void replies(JsonNode scenario) throws Exception {
-        for (JsonNode reply : scenario.path("replies")) {
+        for (var reply : scenario.path("replies")) {
             server.reply(reply.path("method").asText(), reply.path("path").asText(), reply.path("status").asInt(),
                 reply.path("body").isNull() ? "" : JacksonMapper.ofJson().writeValueAsString(reply.path("body")));
         }
@@ -53,9 +53,9 @@ public class ScenarioTest extends AbstractDatadogTest {
         return StreamSupport.stream(fixtures().spliterator(), false).map(scenario -> DynamicTest.dynamicTest(scenario.path("task").asText(), () -> {
             server.requests.clear();
             replies(scenario);
-            JsonNode output = JacksonMapper.ofJson().valueToTree(task(scenario, false).run(runContext()));
+            var output = JacksonMapper.ofJson().valueToTree(task(scenario, false).run(runContext()));
             for (var expected : scenario.path("expected").properties()) {
-                JsonNode value = output.at("/" + expected.getKey().replace(".", "/"));
+                var value = output.at("/" + expected.getKey().replace(".", "/"));
                 if (expected.getValue().asText().equals("$defined")) assertFalse(value.isMissingNode() || value.isNull(), expected.getKey());
                 else if (expected.getValue().isNumber()) {
                     assertTrue(value.isNumber(), expected.getKey() + " missing numeric output: " + output);

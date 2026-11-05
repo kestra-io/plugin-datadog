@@ -1,25 +1,27 @@
 package io.kestra.plugin.datadog.dashboards;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.runners.RunContext;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.contract.OpenApiContract;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class DashboardsTest extends AbstractDatadogTest {
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void requestsMatchPinnedContracts() {
-        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests,
+        OpenApiContract.assertRequests(server.requests,
             "v1:GetDashboard", "v1:ListDashboards", "v1:CreateDashboard", "v1:UpdateDashboard", "v1:DeleteDashboard");
     }
 
@@ -55,8 +57,8 @@ class DashboardsTest extends AbstractDatadogTest {
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url())).dashboardId(Property.ofValue("abc-def-ghi"));
     }
 
-    private List.ListBuilder<?, ?> lister() {
-        return List.builder().id(IdUtils.create()).type(List.class.getName())
+    private io.kestra.plugin.datadog.dashboards.List.ListBuilder<?, ?> lister() {
+        return io.kestra.plugin.datadog.dashboards.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.dashboards.List.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()));
     }
 
@@ -101,12 +103,12 @@ class DashboardsTest extends AbstractDatadogTest {
     @Test
     void validatesEveryRequiredDefinitionFieldBeforeCalling() throws Exception {
         assertThrows(IllegalArgumentException.class, () -> creator().definition(null).build().run(runContext()));
-        for (String field : java.util.List.of("title", "layout_type", "widgets")) {
+        for (var field : List.of("title", "layout_type", "widgets")) {
             var missing = definition();
             missing.remove(field);
             assertThrows(IllegalArgumentException.class, () -> creator().definition(missing).build().run(runContext()), field);
         }
-        for (var invalid : java.util.List.of(Map.of("title", ""), Map.of("title", 1), Map.of("layout_type", "grid"), Map.of("widgets", "invalid"))) {
+        for (var invalid : List.of(Map.of("title", ""), Map.of("title", 1), Map.of("layout_type", "grid"), Map.of("widgets", "invalid"))) {
             var body = definition();
             body.putAll(invalid);
             assertThrows(IllegalArgumentException.class, () -> creator().definition(body).build().run(runContext()));
@@ -116,7 +118,7 @@ class DashboardsTest extends AbstractDatadogTest {
 
     @Test
     void validatesIdsBeforeAnyRequest() {
-        for (String id : java.util.List.of("", " ", "../dashboard", "a?b", "a/b")) {
+        for (var id : List.of("", " ", "../dashboard", "a?b", "a/b")) {
             assertThrows(IllegalArgumentException.class, () -> getter().dashboardId(Property.ofValue(id)).build().run(runContext()));
             assertThrows(IllegalArgumentException.class, () -> deleter().dashboardId(Property.ofValue(id)).build().run(runContext()));
         }
@@ -126,7 +128,7 @@ class DashboardsTest extends AbstractDatadogTest {
 
     @Test
     void propagatesEachHttpErrorClassWithoutCredentials() {
-        for (int status : new int[]{400, 403, 404, 429, 503}) {
+        for (var status : new int[]{400, 403, 404, 429, 503}) {
             server.reply("GET", "/api/v1/dashboard/abc-def-ghi", status, "{\"errors\":[\"request failed\"]}");
             var error = assertThrows(DatadogClient.DatadogException.class, () -> getter().build().run(runContext()));
             assertEquals(status, error.getStatus());
@@ -137,7 +139,7 @@ class DashboardsTest extends AbstractDatadogTest {
 
     @Test
     void propagatesHttpErrorsForEveryDashboardTask() throws Exception {
-        for (int status : new int[]{400, 403, 404, 429, 503}) {
+        for (var status : new int[]{400, 403, 404, 429, 503}) {
             server.reply("POST", "/api/v1/dashboard", status, "{\"errors\":[\"failed\"]}");
             assertEquals(status, assertThrows(DatadogClient.DatadogException.class, () -> creator().build().run(runContext())).getStatus());
             server.reply("PUT", "/api/v1/dashboard/abc-def-ghi", status, "{\"errors\":[\"failed\"]}");
@@ -158,7 +160,7 @@ class DashboardsTest extends AbstractDatadogTest {
 
     @Test
     void malformedListsAndMissingImportIdsFailBeforeWriting() throws Exception {
-        for (String response : java.util.List.of("{}", "{\"dashboards\":[1]}")) {
+        for (var response : List.of("{}", "{\"dashboards\":[1]}")) {
             server.reply("GET", "/api/v1/dashboard", 200, response);
             assertThrows(IllegalStateException.class, () -> lister().build().run(runContext()));
         }
@@ -169,7 +171,7 @@ class DashboardsTest extends AbstractDatadogTest {
 
     private String summaries(int count) throws Exception {
         var rows = new ArrayList<Map<String, Object>>();
-        for (int index = 0; index < count; index++) {
+        for (var index = 0; index < count; index++) {
             rows.add(Map.of("id", "dashboard-" + index, "title", "Dashboard " + index, "layout_type", "ordered"));
         }
         return JacksonMapper.ofJson().writeValueAsString(Map.of("dashboards", rows));
@@ -191,7 +193,7 @@ class DashboardsTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/dashboard", 200, summaries(3)).reply("GET", "/api/v1/dashboard", 200, summaries(2));
         assertTrue(lister().maxResults(Property.ofValue(2)).build().run(runContext()).getTruncated());
         assertFalse(lister().maxResults(Property.ofValue(2)).build().run(runContext()).getTruncated());
-        for (int limit : new int[]{0, -1, 10001}) {
+        for (var limit : new int[]{0, -1, 10001}) {
             assertThrows(IllegalArgumentException.class, () -> lister().maxResults(Property.ofValue(limit)).build().run(runContext()));
         }
         assertEquals(2, server.requests.size());
@@ -201,7 +203,7 @@ class DashboardsTest extends AbstractDatadogTest {
     void storesInventoryAsIonWithoutInlineRows() throws Exception {
         server.reply("GET", "/api/v1/dashboard", 200, summaries(2));
         var task = lister().fetchType(Property.ofValue(FetchType.STORE)).build();
-        RunContext context = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
+        var context = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
         var output = task.run(context);
         assertNull(output.getDashboards());
         assertEquals("kestra", output.getUri().getScheme());
@@ -216,7 +218,7 @@ class DashboardsTest extends AbstractDatadogTest {
         var export = Export.builder().id(IdUtils.create()).type(Export.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
             .dashboardId(Property.ofValue("abc-def-ghi")).build();
-        RunContext context = TestsUtils.mockRunContext(runContextFactory, export, Map.of());
+        var context = TestsUtils.mockRunContext(runContextFactory, export, Map.of());
         var exported = export.run(context);
         try (var input = context.storage().getFile(exported.getUri())) {
             var body = JacksonMapper.ofJson().readValue(input, Map.class);
@@ -238,7 +240,7 @@ class DashboardsTest extends AbstractDatadogTest {
             .reply("PUT", "/api/v1/dashboard/abc-def-ghi", 200, DASHBOARD.replace("Orders runbook", "Updated runbook"));
         var body = definition();
         body.remove("tags");
-        body.put("widgets", java.util.List.of(Map.of("definition", Map.of("type", "note", "content", "Updated runbook"))));
+        body.put("widgets", List.of(Map.of("definition", Map.of("type", "note", "content", "Updated runbook"))));
         var task = importer().definition(body).build();
         var first = task.run(runContext());
         assertEquals(Import.Action.UPDATED, first.getAction());
@@ -246,7 +248,7 @@ class DashboardsTest extends AbstractDatadogTest {
         assertEquals("/widgets/0/definition/content", first.getDiff().getFirst().getPath());
         assertEquals("Orders runbook", first.getDiff().getFirst().getBefore());
         assertEquals("Updated runbook", first.getDiff().getFirst().getAfter());
-        assertEquals(java.util.List.of("team:platform"), server.requests.get(1).json().get("tags"));
+        assertEquals(List.of("team:platform"), server.requests.get(1).json().get("tags"));
         assertEquals(Import.Action.UNCHANGED, task.run(runContext()).getAction());
         assertEquals(1, server.requests.stream().filter(request -> request.method().equals("PUT")).count());
     }
@@ -295,7 +297,7 @@ class DashboardsTest extends AbstractDatadogTest {
     void importValidatesIdentityAndSourceBeforeAnyHttpCall() throws Exception {
         assertThrows(IllegalArgumentException.class, () -> importer().dashboardId(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> importer().managingTag(Property.ofValue("team:platform")).build().run(runContext()));
-        for (String tag : java.util.List.of("env:prod", "team:missing", "team:", "")) {
+        for (var tag : List.of("env:prod", "team:missing", "team:", "")) {
             assertThrows(IllegalArgumentException.class, () -> importer().dashboardId(null).managingTag(Property.ofValue(tag)).build().run(runContext()));
         }
         assertThrows(IllegalArgumentException.class, () -> importer().definition(null).build().run(runContext()));
@@ -310,17 +312,17 @@ class DashboardsTest extends AbstractDatadogTest {
 
     @Test
     void ignoresNumericRepresentationButKeepsMeaningfulNestedIdsAndArrayOrder() {
-        var before = Map.<String, Object>of("widgets", java.util.List.of(Map.of("id", 1, "definition", Map.of("id", 7, "value", 1))));
-        var same = Map.<String, Object>of("widgets", java.util.List.of(Map.of("id", 2L, "definition", Map.of("id", 7L, "value", 1.0))));
+        var before = Map.<String, Object>of("widgets", List.of(Map.of("id", 1, "definition", Map.of("id", 7, "value", 1))));
+        var same = Map.<String, Object>of("widgets", List.of(Map.of("id", 2L, "definition", Map.of("id", 7L, "value", 1.0))));
         assertTrue(Dashboards.diff(before, same, false).isEmpty());
-        var changed = Map.<String, Object>of("widgets", java.util.List.of(Map.of("definition", Map.of("id", 8, "value", 1))));
+        var changed = Map.<String, Object>of("widgets", List.of(Map.of("definition", Map.of("id", 8, "value", 1))));
         assertEquals("/widgets/0/definition/id", Dashboards.diff(before, changed, false).getFirst().getPath());
         var tabsBefore = new LinkedHashMap<>(before);
-        tabsBefore.put("tabs", java.util.List.of(Map.of("id", "tab", "widget_ids", java.util.List.of(1))));
+        tabsBefore.put("tabs", List.of(Map.of("id", "tab", "widget_ids", List.of(1))));
         var tabsAfter = new LinkedHashMap<>(same);
         tabsAfter.put("tabs", tabsBefore.get("tabs"));
         assertFalse(Dashboards.diff(tabsBefore, tabsAfter, false).isEmpty());
-        assertFalse(Dashboards.diff(Map.of("tags", java.util.List.of("a", "b")), Map.of("tags", java.util.List.of("b", "a")), false).isEmpty());
+        assertFalse(Dashboards.diff(Map.of("tags", List.of("a", "b")), Map.of("tags", List.of("b", "a")), false).isEmpty());
     }
 
     @Test
@@ -339,7 +341,7 @@ class DashboardsTest extends AbstractDatadogTest {
         assertEquals(Dashboards.REDACTED, Dashboards.redact("https://hooks.slack.com/services/test/value", false));
         assertEquals(Dashboards.REDACTED, Dashboards.redact("https://username:password@example.com/image", false));
         server.reply("GET", "/api/v1/dashboard/abc-def-ghi", 200, DASHBOARD.replace("Orders runbook", "https://example.com/webhook/private"));
-        String output = JacksonMapper.ofJson().writeValueAsString(getter().build().run(runContext()));
+        var output = JacksonMapper.ofJson().writeValueAsString(getter().build().run(runContext()));
         assertFalse(output.contains("/webhook/private"));
         assertTrue(JacksonMapper.ofJson().writeValueAsString(getter().includeSecrets(Property.ofValue(true)).build().run(runContext())).contains("/webhook/private"));
     }

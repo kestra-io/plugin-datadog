@@ -68,7 +68,7 @@ class SecurityTest extends OrganizationTestSupport {
             .archiveReason(Property.ofValue(TriageSignal.ArchiveReason.FALSE_POSITIVE)).archiveComment(Property.ofValue(VALUE)).build().run(runContext());
         assertTrue(output.getUpdated());
         noCredential(output);
-        Map<String, Object> data = AccessApi.object(server.only().json().get("data"));
+        var data = AccessApi.object(server.only().json().get("data"));
         assertEquals("signal_metadata", data.get("type"));
         assertEquals(Map.of("state", "archived", "assignee", Map.of("uuid", "user-id"), "archive_reason", "false_positive", "archive_comment", VALUE), data.get("attributes"));
     }

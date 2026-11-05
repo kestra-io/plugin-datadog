@@ -1,10 +1,11 @@
 package io.kestra.plugin.datadog.metrics;
 
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -43,16 +44,18 @@ import java.util.Map;
     """))
 public class QueryScalar extends AbstractFormulaTask implements RunnableTask<QueryScalar.Output> {
     @Schema(title = "Time aggregation", description = "Aggregation applied to each metric query. Defaults to AVG.")
+    @PluginProperty(group = "processing")
     private Property<Aggregator> aggregator;
 
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            var body = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
-            var columns = FormulaQueries.columns(FormulaQueries.attributes(client.post("/api/v2/query/scalar", body)));
+            var rBody = requestBody(context, context.render(aggregator).as(Aggregator.class).orElse(Aggregator.AVG), null);
+            var columns = FormulaQueries.columns(FormulaQueries.attributes(client.post("/api/v2/query/scalar", rBody)));
             var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), columns);
             return Output.builder().columns(result.rows()).row(result.row()).columnCount(result.size()).uri(result.uri()).build();
         }

@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -39,74 +40,83 @@ import java.util.Map;
 public class Update extends AbstractDatadogTask implements RunnableTask<Update.Output> {
     @NotNull
     @Schema(title = "Downtime id")
+    @PluginProperty(group = "main")
     private Property<String> downtimeId;
     @Schema(title = "Message", description = "Replaces the downtime note. An empty string clears it.")
+    @PluginProperty(group = "main")
     private Property<String> message;
     @Schema(title = "Scope", description = "Replaces the monitor group scope for this downtime.")
+    @PluginProperty(group = "main")
     private Property<String> scope;
     @Schema(title = "Start", description = "ISO-8601 instant for a one-time schedule. Requires end.")
+    @PluginProperty(group = "main")
     private Property<Instant> start;
     @Schema(title = "End", description = "Finite ISO-8601 end of a one-time schedule.")
+    @PluginProperty(group = "main")
     private Property<Instant> end;
     @Schema(title = "Display time zone")
+    @PluginProperty(group = "main")
     private Property<String> displayTimezone;
     @Schema(title = "Mute the first recovery notification")
+    @PluginProperty(group = "main")
     private Property<Boolean> muteFirstRecoveryNotification;
     @Schema(title = "Ignore a missing downtime", description = "False by default. Only HTTP 404 is ignored.")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
     @Schema(title = "Include sensitive output values", description = "False by default. Filters credential-like keys and HTTP URLs.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = context.render(downtimeId).as(String.class).orElse(null);
-            String path = DowntimeSupport.path(id);
+            var rId = context.render(downtimeId).as(String.class).orElse(null);
+            var path = DowntimeSupport.path(rId);
             var attributes = new LinkedHashMap<String, Object>();
             context.render(message).as(String.class).ifPresent(value -> attributes.put("message", value));
-            String renderedScope = context.render(scope).as(String.class).orElse(null);
-            if (renderedScope != null) {
-                if (renderedScope.isBlank()) {
+            var rScope = context.render(scope).as(String.class).orElse(null);
+            if (rScope != null) {
+                if (rScope.isBlank()) {
                     throw new IllegalArgumentException("scope must not be blank");
                 }
-                attributes.put("scope", renderedScope);
+                attributes.put("scope", rScope);
             }
-            Instant renderedStart = context.render(start).as(Instant.class).orElse(null);
-            Instant renderedEnd = context.render(end).as(Instant.class).orElse(null);
-            if (renderedStart != null && renderedEnd == null) {
+            var rStart = context.render(start).as(Instant.class).orElse(null);
+            var rEnd = context.render(end).as(Instant.class).orElse(null);
+            if (rStart != null && rEnd == null) {
                 throw new IllegalArgumentException("A schedule update with start requires end");
             }
-            if (renderedEnd != null) {
-                if (renderedStart != null && !renderedEnd.isAfter(renderedStart)) {
+            if (rEnd != null) {
+                if (rStart != null && !rEnd.isAfter(rStart)) {
                     throw new IllegalArgumentException("end must be after start");
                 }
                 var schedule = new LinkedHashMap<String, Object>();
-                schedule.put("end", renderedEnd.toString());
-                if (renderedStart != null) {
-                    schedule.put("start", renderedStart.toString());
+                schedule.put("end", rEnd.toString());
+                if (rStart != null) {
+                    schedule.put("start", rStart.toString());
                 }
                 attributes.put("schedule", schedule);
             }
-            String timezone = context.render(displayTimezone).as(String.class).orElse(null);
-            if (timezone != null) {
-                ZoneId.of(timezone);
-                attributes.put("display_timezone", timezone);
+            var rTimezone = context.render(displayTimezone).as(String.class).orElse(null);
+            if (rTimezone != null) {
+                ZoneId.of(rTimezone);
+                attributes.put("display_timezone", rTimezone);
             }
             context.render(muteFirstRecoveryNotification).as(Boolean.class).ifPresent(value -> attributes.put("mute_first_recovery_notification", value));
             if (attributes.isEmpty()) {
                 throw new IllegalArgumentException("Supply at least one downtime attribute to update");
             }
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-            boolean include = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rInclude = context.render(includeSecrets).as(Boolean.class).orElse(false);
             try {
-                var response = client.patch(path, Map.of("data", Map.of("id", id, "type", "downtime", "attributes", attributes))).map();
+                var response = client.patch(path, Map.of("data", Map.of("id", rId, "type", "downtime", "attributes", attributes))).map();
                 if (!(response.get("data") instanceof Map<?, ?>)) {
                     throw new IllegalStateException("Datadog downtime response must contain a data object");
                 }
-                return Output.builder().downtimeId(id).updated(true).downtime(MonitorIO.redactMap(response, include)).build();
+                return Output.builder().downtimeId(rId).updated(true).downtime(MonitorIO.redactMap(response, rInclude)).build();
             } catch (DatadogClient.DatadogException e) {
-                if (e.getStatus() == 404 && ignore) {
-                    return Output.builder().downtimeId(id).updated(false).build();
+                if (e.getStatus() == 404 && rIgnore) {
+                    return Output.builder().downtimeId(rId).updated(false).build();
                 }
                 throw e;
             }

@@ -17,12 +17,12 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
     public static RequestPlan prepare(Catalog.Operation op, String site, String apiUrl,
                                       Map<String, Object> pathParams, Map<String, Object> query,
                                       Map<String, String> headers, Object body) {
-        Map<String, String> normalized = new LinkedHashMap<>();
+        var normalized = new LinkedHashMap<String, String>();
         headers.forEach((name, value) -> {
             if (!name.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+") || value == null || value.contains("\r") || value.contains("\n")) {
                 throw op.invalid("invalid header " + name);
             }
-            String lower = name.toLowerCase(Locale.ROOT);
+            var lower = name.toLowerCase(Locale.ROOT);
             if (List.of("dd-api-key", "dd-application-key", "host", "content-length", "transfer-encoding").contains(lower)) {
                 throw op.invalid("header " + name + " is managed by the connection");
             }
@@ -30,18 +30,18 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
                 throw op.invalid("duplicate header " + name);
             }
         });
-        for (String name : pathParams.keySet()) {
+        for (var name : pathParams.keySet()) {
             if (op.parameter("path", name) == null) { throw op.invalid("unknown path parameter " + name); }
         }
-        for (String name : query.keySet()) {
+        for (var name : query.keySet()) {
             if (op.parameter("query", name) == null) { throw op.invalid("unknown query parameter " + name); }
         }
-        String path = op.path();
-        List<String> pairs = new ArrayList<>();
-        for (JsonNode p : op.parameters()) {
-            String name = p.path("name").asText();
-            String location = p.path("in").asText();
-            Object value = switch (location) {
+        var path = op.path();
+        var pairs = new ArrayList<String>();
+        for (var p : op.parameters()) {
+            var name = p.path("name").asText();
+            var location = p.path("in").asText();
+            var value = switch (location) {
                 case "path" -> pathParams.get(name);
                 case "query" -> query.get(name);
                 case "header" -> normalized.get(name.toLowerCase(Locale.ROOT));
@@ -53,7 +53,7 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
             }
             validate(op, p, value, location + " parameter " + name);
             if (location.equals("path")) {
-                String segment = String.valueOf(value);
+                var segment = String.valueOf(value);
                 if (segment.equals(".") || segment.equals("..")) { throw op.invalid("invalid path parameter " + name); }
                 path = path.replace("{" + name + "}", encode(segment));
             } else if (location.equals("query")) {
@@ -71,16 +71,16 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
         if (op.bodyRequired() && (body == null || (body instanceof String s && s.isBlank()))) {
             throw op.invalid("missing required body");
         }
-        String contentType = normalized.get("content-type");
-        JsonNode types = op.definition().path("contentTypes");
+        var contentType = normalized.get("content-type");
+        var types = op.definition().path("contentTypes");
         if (body != null) {
             if (types.isEmpty()) { throw op.invalid("this operation has no request body"); }
             if (contentType == null) {
                 contentType = types.get(0).asText();
-                for (JsonNode t : types) { if (t.asText().equals("application/json")) { contentType = t.asText(); } }
+                for (var t : types) { if (t.asText().equals("application/json")) { contentType = t.asText(); } }
             }
-            boolean allowed = false;
-            for (JsonNode t : types) {
+            var allowed = false;
+            for (var t : types) {
                 if (contentType.equals(t.asText()) || contentType.startsWith(t.asText() + ";")) { allowed = true; }
             }
             if (!allowed) { throw op.invalid("unsupported Content-Type"); }
@@ -91,12 +91,12 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
 
     public static void validate(Catalog.Operation op, JsonNode schema, Object value, String label) {
         if (value == null) { throw op.invalid(label + " must not be null"); }
-        String type = schema.path("type").asText("string");
-        String text = String.valueOf(value);
+        var type = schema.path("type").asText("string");
+        var text = String.valueOf(value);
         try {
             switch (type) {
                 case "integer" -> {
-                    BigDecimal number = new BigDecimal(text);
+                    var number = new BigDecimal(text);
                     number.toBigIntegerExact();
                     range(op, schema, number, label);
                 }
@@ -106,7 +106,7 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
                     if (!(value instanceof List<?> values)) { throw op.invalid(label + " must be an array"); }
                     if (schema.has("minItems") && values.size() < schema.get("minItems").asInt() ||
                         schema.has("maxItems") && values.size() > schema.get("maxItems").asInt()) { throw op.invalid(label + " has an invalid item count"); }
-                    for (Object entry : values) { validate(op, schema.path("items"), entry, label + " item"); }
+                    for (var entry : values) { validate(op, schema.path("items"), entry, label + " item"); }
                 }
                 default -> {
                     if (!(value instanceof String)) { throw op.invalid(label + " must be a string"); }
@@ -118,8 +118,8 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
             throw op.invalid(label + " must be " + type);
         }
         if (schema.has("enum")) {
-            boolean allowed = false;
-            for (JsonNode choice : schema.get("enum")) { if (choice.asText().equals(text)) { allowed = true; } }
+            var allowed = false;
+            for (var choice : schema.get("enum")) { if (choice.asText().equals(text)) { allowed = true; } }
             if (!allowed) { throw op.invalid(label + " is not an allowed enum value"); }
         }
     }
@@ -132,18 +132,18 @@ public record RequestPlan(String method, URI uri, Map<String, String> headers, S
     }
 
     public static String base(Catalog.Operation op, String site, String override) {
-        String domain = site == null || site.isBlank() ? "datadoghq.com" : site.trim();
+        var domain = site == null || site.isBlank() ? "datadoghq.com" : site.trim();
         if (!domain.matches("[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?")) { throw op.invalid("site must be a domain name"); }
         String base;
         if (override != null && !override.isBlank()) {
             base = override.trim();
         } else {
-            JsonNode server = op.definition().path("servers").path(0);
+            var server = op.definition().path("servers").path(0);
             base = server.path("url").asText("https://api.{site}");
             var variables = server.path("variables").fields();
             while (variables.hasNext()) {
                 var variable = variables.next();
-                String value = variable.getValue().path("default").asText();
+                var value = variable.getValue().path("default").asText();
                 if (variable.getKey().equals("site")) {
                     // A server can use a full intake host as the site default.
                     value = value.endsWith(".datadoghq.com") ? value.substring(0, value.length() - "datadoghq.com".length()) + domain : domain;

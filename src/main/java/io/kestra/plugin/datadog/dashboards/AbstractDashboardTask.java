@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.dashboards;
 
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,5 +13,6 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 public abstract class AbstractDashboardTask extends AbstractDatadogTask {
     @Schema(title = "Include secrets", description = "Include known credential fields and webhook URLs in dashboard outputs, diffs and exported files. False by default.")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 }

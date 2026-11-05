@@ -1,17 +1,16 @@
 package io.kestra.plugin.datadog.dashboards;
 
-import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
-import java.net.URI;
-import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -41,10 +40,10 @@ public final class Dashboards {
             throw new IllegalArgumentException("`definition.title` must be a non-blank string");
         }
         Layout.fromApi(source.get("layout_type"));
-        if (!(source.get("widgets") instanceof java.util.List<?>)) {
+        if (!(source.get("widgets") instanceof List<?>)) {
             throw new IllegalArgumentException("`definition.widgets` must be an array");
         }
-        Map<String, Object> writable = new LinkedHashMap<>(source);
+        var writable = new LinkedHashMap<String, Object>(source);
         READ_ONLY.forEach(writable::remove);
         return writable;
     }
@@ -59,7 +58,7 @@ public final class Dashboards {
         }
 
         static Layout fromApi(Object value) {
-            for (Layout layout : values()) {
+            for (var layout : values()) {
                 if (layout.value.equals(value)) {
                     return layout;
                 }
@@ -83,17 +82,17 @@ public final class Dashboards {
         return value;
     }
 
-    static java.util.List<Map<String, Object>> collect(DatadogClient client, Map<String, Object> params, int limit) throws Exception {
-        java.util.List<Map<String, Object>> rows = new ArrayList<>();
+    static List<Map<String, Object>> collect(DatadogClient client, Map<String, Object> params, int limit) throws Exception {
+        List<Map<String, Object>> rows = new ArrayList<>();
         while (rows.size() < limit) {
-            int count = Math.min(100, limit - rows.size());
+            var count = Math.min(100, limit - rows.size());
             params.put("count", count);
             params.put("start", rows.size());
-            Object response = client.get(PATH, params).map().get("dashboards");
-            if (!(response instanceof java.util.List<?> page)) {
+            var response = client.get(PATH, params).map().get("dashboards");
+            if (!(response instanceof List<?> page)) {
                 throw new IllegalStateException("Datadog did not return a dashboards array");
             }
-            for (Object row : page) {
+            for (var row : page) {
                 if (rows.size() < limit) {
                     rows.add(object(row));
                 }
@@ -111,14 +110,14 @@ public final class Dashboards {
             return value;
         }
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
+            var result = new LinkedHashMap<String, Object>();
             map.forEach((key, entry) -> {
-                String name = key.toString();
+                var name = key.toString();
                 result.put(name, sensitiveField(name) && entry != null ? REDACTED : redact(entry, false));
             });
             return (T) result;
         }
-        if (value instanceof java.util.List<?> list) {
+        if (value instanceof List<?> list) {
             return (T) list.stream().map(item -> redact(item, false)).toList();
         }
         if (value instanceof String text && text.matches("(?is).*https?://\\S+.*")) {
@@ -128,7 +127,7 @@ public final class Dashboards {
     }
 
     private static boolean sensitiveField(String name) {
-        String normalized = name.replaceAll("[^A-Za-z]", "").toLowerCase(java.util.Locale.ROOT);
+        var normalized = name.replaceAll("[^A-Za-z]", "").toLowerCase(Locale.ROOT);
         return Set.of("apikey", "applicationkey", "appkey", "password", "token", "accesstoken", "secret", "webhook", "webhookurl").contains(normalized);
     }
 
@@ -136,7 +135,7 @@ public final class Dashboards {
         if (value instanceof Map<?, ?> map) {
             return map.values().stream().anyMatch(Dashboards::containsRedaction);
         }
-        if (value instanceof java.util.List<?> list) {
+        if (value instanceof List<?> list) {
             return list.stream().anyMatch(Dashboards::containsRedaction);
         }
         return REDACTED.equals(value);
@@ -145,7 +144,7 @@ public final class Dashboards {
     /** Only widget envelope ids are generated. Ids inside definitions and tab references retain their meaning. */
     private static Object normalize(Object value, boolean widgets, boolean ignoreWidgetIds) {
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
+            var result = new LinkedHashMap<String, Object>();
             map.forEach((key, item) -> {
                 if (!(widgets && ignoreWidgetIds && key.equals("id"))) {
                     result.put(key.toString(), normalize(item, key.equals("widgets"), ignoreWidgetIds));
@@ -153,7 +152,7 @@ public final class Dashboards {
             });
             return result;
         }
-        if (value instanceof java.util.List<?> list) {
+        if (value instanceof List<?> list) {
             return list.stream().map(item -> normalize(item, widgets, ignoreWidgetIds)).toList();
         }
         if (value instanceof Number number) {
@@ -162,36 +161,36 @@ public final class Dashboards {
         return value;
     }
 
-    static java.util.List<Change> diff(Map<String, Object> before, Map<String, Object> after, boolean includeSecrets) {
-        boolean ignoreWidgetIds = !(after.get("tabs") instanceof java.util.List<?> tabs) || tabs.isEmpty();
-        java.util.List<Change> changes = new ArrayList<>();
+    static List<Change> diff(Map<String, Object> before, Map<String, Object> after, boolean includeSecrets) {
+        var ignoreWidgetIds = !(after.get("tabs") instanceof List<?> tabs) || tabs.isEmpty();
+        List<Change> changes = new ArrayList<>();
         compare("", normalize(before, false, ignoreWidgetIds), normalize(after, false, ignoreWidgetIds), changes, includeSecrets);
         return changes;
     }
 
-    private static void compare(String path, Object before, Object after, java.util.List<Change> changes, boolean includeSecrets) {
+    private static void compare(String path, Object before, Object after, List<Change> changes, boolean includeSecrets) {
         if (Objects.equals(before, after)) {
             return;
         }
         if (before instanceof Map<?, ?> left && after instanceof Map<?, ?> right) {
-            Set<String> keys = new TreeSet<>();
+            var keys = new TreeSet<String>();
             left.keySet().forEach(key -> keys.add(key.toString()));
             right.keySet().forEach(key -> keys.add(key.toString()));
-            for (String key : keys) {
+            for (var key : keys) {
                 compare(path + "/" + key.replace("~", "~0").replace("/", "~1"), left.get(key), right.get(key), changes, includeSecrets);
             }
-        } else if (before instanceof java.util.List<?> left && after instanceof java.util.List<?> right) {
-            for (int index = 0; index < Math.max(left.size(), right.size()); index++) {
+        } else if (before instanceof List<?> left && after instanceof List<?> right) {
+            for (var index = 0; index < Math.max(left.size(), right.size()); index++) {
                 compare(path + "/" + index, index < left.size() ? left.get(index) : null, index < right.size() ? right.get(index) : null, changes, includeSecrets);
             }
         } else {
             // Redact with the field name as well as its value so scalar password/token changes stay private.
-            String field = path.substring(path.lastIndexOf('/') + 1);
-            Map<String, Object> oldField = new LinkedHashMap<>();
-            Map<String, Object> newField = new LinkedHashMap<>();
+            var field = path.substring(path.lastIndexOf('/') + 1);
+            var oldField = new LinkedHashMap<String, Object>();
+            var newField = new LinkedHashMap<String, Object>();
             oldField.put(field, before);
             newField.put(field, after);
-            boolean sensitivePath = !includeSecrets && java.util.Arrays.stream(path.split("/"))
+            boolean sensitivePath = !includeSecrets && Arrays.stream(path.split("/"))
                 .map(segment -> segment.replace("~1", "/").replace("~0", "~")).anyMatch(Dashboards::sensitiveField);
             changes.add(Change.builder().path(path)
                 .before(sensitivePath && before != null ? REDACTED : redact(oldField, includeSecrets).get(field))

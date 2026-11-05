@@ -4,13 +4,12 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
-import java.net.URI;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -20,6 +19,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -99,20 +99,20 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
             throw new IllegalArgumentException("The Datadog `query` must not be blank");
         }
 
-        var end = runContext.render(this.to).as(Instant.class).orElseGet(Instant::now);
-        var window = runContext.render(this.lookback).as(Duration.class).orElse(Duration.ofHours(1));
-        var start = runContext.render(this.from).as(Instant.class).orElseGet(() -> end.minus(window));
-        if (!start.isBefore(end)) {
-            throw new IllegalArgumentException("The start of the window (" + start + ") must be before its end (" + end + ")");
+        var rEnd = runContext.render(this.to).as(Instant.class).orElseGet(Instant::now);
+        var rWindow = runContext.render(this.lookback).as(Duration.class).orElse(Duration.ofHours(1));
+        var rStart = runContext.render(this.from).as(Instant.class).orElseGet(() -> rEnd.minus(rWindow));
+        if (!rStart.isBefore(rEnd)) {
+            throw new IllegalArgumentException("The start of the window (" + rStart + ") must be before its end (" + rEnd + ")");
         }
 
         var params = DatadogClient.query();
-        params.put("from", start.getEpochSecond());
-        params.put("to", end.getEpochSecond());
+        params.put("from", rStart.getEpochSecond());
+        params.put("to", rEnd.getEpochSecond());
         params.put("query", rQuery);
 
         Map<String, Object> answer;
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             answer = client.get("/api/v1/query", params).map();
         }
 
@@ -125,7 +125,7 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
         var series = new ArrayList<Map<String, Object>>();
         var pointCount = 0;
         if (answer.get("series") instanceof List<?> list) {
-            for (Object entry : list) {
+            for (var entry : list) {
                 if (entry instanceof Map<?, ?> raw) {
                     @SuppressWarnings("unchecked")
                     var item = (Map<String, Object>) raw;

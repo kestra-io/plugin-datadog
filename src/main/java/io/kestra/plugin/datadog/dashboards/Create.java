@@ -46,8 +46,8 @@ public class Create extends AbstractDashboardTask implements RunnableTask<Create
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            Map<String, Object> body = Dashboards.definition(definition == null ? null : context.render(definition));
-            return Output.builder().dashboard(Dashboards.redact(client.post(Dashboards.PATH, body).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+            var rBody = Dashboards.definition(definition == null ? null : context.render(definition));
+            return Output.builder().dashboard(Dashboards.redact(client.post(Dashboards.PATH, rBody).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
         }
     }
 

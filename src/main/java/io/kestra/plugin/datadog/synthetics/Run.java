@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.synthetics;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -44,36 +45,41 @@ import java.util.concurrent.TimeoutException;
     """))
 public class Run extends AbstractTriggerTask implements RunnableTask<Run.Output> {
     @Schema(title = "Maximum wait", description = "Total budget for selection, trigger, polling and failure details. Between PT0.001S and P1D.", defaultValue = "PT10M")
+    @PluginProperty(group = "reliability")
     private Property<Duration> maxWait;
     @Schema(title = "Poll interval", description = "Delay between reads. Sleep is capped at the remaining budget.", defaultValue = "PT5S")
+    @PluginProperty(group = "reliability")
     private Property<Duration> pollInterval;
     @Schema(title = "Fail on test failure", description = "Fail if a blocking test fails or the batch fails without an explained nonblocking failure.", defaultValue = "true")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnFailure;
     @Schema(title = "Fail on timeout", description = "Fail when the batch is unfinished at maxWait. False returns timedOut with the last known results.", defaultValue = "true")
+    @PluginProperty(group = "main")
     private Property<Boolean> failOnTimeout;
     @Schema(title = "Include secret-bearing failure messages", description = "Expose raw failure messages from result details. False returns the failure code and redacts the message because it can contain credentials or request content.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
-            Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
-            Deadline.validate(wait, "maxWait");
-            Deadline.validate(interval, "pollInterval");
-            boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
-            boolean timeoutFails = context.render(failOnTimeout).as(Boolean.class).orElse(true);
-            boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var rWait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
+            var rInterval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
+            Deadline.validate(rWait, "maxWait");
+            Deadline.validate(rInterval, "pollInterval");
+            var rFail = context.render(failOnFailure).as(Boolean.class).orElse(true);
+            var rTimeoutFails = context.render(failOnTimeout).as(Boolean.class).orElse(true);
+            var rReveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
             String batchId = null;
-            Status status = Status.IN_PROGRESS;
-            List<TestResult> results = List.of();
-            boolean finished = false;
-            try (var deadline = new Deadline(wait)) {
+            var status = Status.IN_PROGRESS;
+            var results = List.<TestResult>of();
+            var finished = false;
+            try (var deadline = new Deadline(rWait)) {
                 try {
                     var body = deadline.call(() -> triggerBody(context, client));
                     var triggered = deadline.call(() -> client.post("/api/v1/synthetics/tests/trigger/ci", body).map());
                     batchId = Synthetics.id((String) triggered.get("batch_id"), "batch_id returned by Datadog");
-                    final String path = "/api/v1/synthetics/ci/batch/" + batchId;
+                    final var path = "/api/v1/synthetics/ci/batch/" + batchId;
                     while (!deadline.expired()) {
                         try {
                             var response = deadline.call(() -> client.get(path, Map.of()).map());
@@ -84,7 +90,7 @@ public class Run extends AbstractTriggerTask implements RunnableTask<Run.Output>
                             finished = status != Status.IN_PROGRESS && (status == Status.SKIPPED || !results.isEmpty())
                                 && results.stream().allMatch(result -> result.status != Status.IN_PROGRESS);
                             if (finished) {
-                                results = details(client, deadline, results, reveal);
+                                results = details(client, deadline, results, rReveal);
                                 break;
                             }
                         } catch (DatadogClient.DatadogException e) {
@@ -92,21 +98,21 @@ public class Run extends AbstractTriggerTask implements RunnableTask<Run.Output>
                                 throw e;
                             }
                         }
-                        deadline.pause(interval);
+                        deadline.pause(rInterval);
                     }
                 } catch (TimeoutException ignored) {
                     // Preserve the last state. A deadline is never turned into a passing batch.
                 }
             }
-            boolean timedOut = !finished;
-            boolean failed = failed(status, results);
+            var timedOut = !finished;
+            var failed = failed(status, results);
             var output = Output.builder().batchId(batchId).status(status).results(results).timedOut(timedOut)
                 .passed(finished && !failed && status == Status.PASSED).build();
-            if (timedOut && timeoutFails) {
-                throw new IllegalStateException("Synthetic batch " + batchId + " did not finish within " + wait);
+            if (timedOut && rTimeoutFails) {
+                throw new IllegalStateException("Synthetic batch " + batchId + " did not finish within " + rWait);
             }
-            if (failed && fail) {
-                String reasons = String.join("; ", results.stream().filter(TestResult::blocks)
+            if (failed && rFail) {
+                var reasons = String.join("; ", results.stream().filter(TestResult::blocks)
                     .map(row -> row.publicId + " at " + row.location + ": " + row.failureCode).toList());
                 throw new IllegalStateException("Synthetic batch " + batchId + " failed" + (reasons.isEmpty() ? "" : ": " + reasons));
             }
@@ -130,14 +136,14 @@ public class Run extends AbstractTriggerTask implements RunnableTask<Run.Output>
     }
 
     private static List<TestResult> details(DatadogClient client, Deadline deadline, List<TestResult> results, boolean reveal) throws Exception {
-        List<TestResult> enriched = new ArrayList<>();
-        for (TestResult row : results) {
+        var enriched = new ArrayList<TestResult>();
+        for (var row : results) {
             if (row.status != Status.FAILED || row.resultId == null || row.publicId == null
                 || !("api".equals(row.testType) || "browser".equals(row.testType))) {
                 enriched.add(row);
                 continue;
             }
-            String path = "/api/v1/synthetics/tests/" + ("browser".equals(row.testType) ? "browser/" : "")
+            var path = "/api/v1/synthetics/tests/" + ("browser".equals(row.testType) ? "browser/" : "")
                 + Synthetics.id(row.publicId, "test_public_id") + "/results/" + Synthetics.id(row.resultId, "result_id");
             try {
                 var answer = deadline.call(() -> client.get(path, Map.of()).map());

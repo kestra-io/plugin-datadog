@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.hosts;
 
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
@@ -15,7 +16,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 @SuperBuilder
 @ToString
@@ -25,26 +25,28 @@ import java.util.Map;
 public abstract class AbstractHostAction extends AbstractDatadogTask {
     @NotNull
     @Schema(title = "Host name", description = "Exact name of one host. Blank names and wildcards are rejected.")
+    @PluginProperty(group = "main")
     private Property<String> hostName;
 
     @Schema(title = "Ignore missing host", description = "Return found=false on HTTP 404. Defaults to false.")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     protected Output execute(RunContext context, String action, Object body) throws Exception {
         try (var client = client(context, true)) {
-            String host = context.render(hostName).as(String.class).orElse("").trim();
-            if (host.isEmpty() || host.contains("*") || host.contains("?")) {
+            var rHost = context.render(hostName).as(String.class).orElse("").trim();
+            if (rHost.isEmpty() || rHost.contains("*") || rHost.contains("?")) {
                 throw new IllegalArgumentException("`hostName` must identify one host without wildcards");
             }
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
             try {
-                Map<String, Object> response = client.post("/api/v1/host/" + URLEncoder.encode(host, StandardCharsets.UTF_8).replace("+", "%20") + "/" + action, body).map();
+                var response = client.post("/api/v1/host/" + URLEncoder.encode(rHost, StandardCharsets.UTF_8).replace("+", "%20") + "/" + action, body).map();
                 return Output.builder().found(true).hostname((String) response.get("hostname"))
                     .action((String) response.get("action")).message((String) response.get("message"))
                     .end(response.get("end") instanceof Number n ? n.longValue() : null).build();
             } catch (DatadogClient.DatadogException e) {
-                if (ignore && e.getStatus() == 404) {
-                    return Output.builder().found(false).hostname(host).build();
+                if (rIgnore && e.getStatus() == 404) {
+                    return Output.builder().found(false).hostname(rHost).build();
                 }
                 throw e;
             }

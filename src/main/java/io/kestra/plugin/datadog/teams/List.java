@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.teams;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.users.PagedTask;
@@ -11,7 +12,6 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 /** Datadog operationId: v2:ListTeams. */
 @SuperBuilder
@@ -30,11 +30,12 @@ import java.util.Map;
     """))
 public class List extends PagedTask {
     @Schema(title = "Keyword filter", description = "Matches team names and handles using Datadog's filter[keyword].")
+    @PluginProperty(group = "main")
     private Property<String> keyword;
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Map<String, Object> params = new LinkedHashMap<>();
+        var params = new LinkedHashMap<String, Object>();
         context.render(keyword).as(String.class).ifPresent(value -> params.put("filter[keyword]", value));
         return collect(context, "/api/v2/team", params);
     }

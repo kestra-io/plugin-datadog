@@ -1,9 +1,9 @@
 package io.kestra.plugin.datadog;
 
 import io.kestra.core.models.property.Property;
+import jakarta.inject.Singleton;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
-import jakarta.inject.Singleton;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 

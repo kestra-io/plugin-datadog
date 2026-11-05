@@ -20,13 +20,13 @@ final class Monitors {
         params.put("page_size", pageSize);
 
         var monitors = new ArrayList<Map<String, Object>>();
-        for (int page = 0; monitors.size() < limit; page++) {
+        for (var page = 0; monitors.size() < limit; page++) {
             params.put("page", page);
             var json = client.get("/api/v1/monitor", params).json();
             if (!(json instanceof List<?> rows)) {
                 throw new IllegalStateException("Datadog returned an unexpected answer for the monitor list: a JSON array was expected");
             }
-            for (Object row : rows) {
+            for (var row : rows) {
                 if (!(row instanceof Map<?, ?>)) {
                     throw new IllegalStateException("Datadog returned a non-object in the monitor list");
                 }

@@ -7,10 +7,12 @@ import io.kestra.plugin.datadog.DatadogClient;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Shared validation and response handling for organization workflows. Never echoes response bodies in errors. */
@@ -38,11 +40,11 @@ public final class AccessApi {
     }
 
     public static int range(RunContext context, Property<Integer> property, int fallback, int max, String name) throws Exception {
-        int value = context.render(property).as(Integer.class).orElse(fallback);
-        if (value < 1 || value > max) {
+        var rValue = context.render(property).as(Integer.class).orElse(fallback);
+        if (rValue < 1 || rValue > max) {
             throw new IllegalArgumentException("`" + name + "` must be between 1 and " + max);
         }
-        return value;
+        return rValue;
     }
 
     public static boolean flag(RunContext context, Property<Boolean> property) throws Exception {
@@ -129,11 +131,11 @@ public final class AccessApi {
             return value;
         }
         if (value instanceof Map<?, ?> map) {
-            Map<String, Object> safe = new LinkedHashMap<>();
+            var safe = new LinkedHashMap<String, Object>();
             map.forEach((key, item) -> {
-                String name = String.valueOf(key);
-                String normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-                boolean sensitive = normalized.equals("key") || normalized.endsWith("apikey") || normalized.endsWith("appkey")
+                var name = String.valueOf(key);
+                var normalized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+                var sensitive = normalized.equals("key") || normalized.endsWith("apikey") || normalized.endsWith("appkey")
                     || normalized.contains("secret") || normalized.contains("password") || normalized.contains("token")
                     || normalized.contains("credential") || normalized.contains("authorization") || normalized.contains("webhook")
                     || normalized.endsWith("url") || normalized.equals("href");
@@ -152,16 +154,16 @@ public final class AccessApi {
 
     /** Number-based JSON:API paging. Uses totals when present and refuses repeated resource IDs. */
     public static Page collect(DatadogClient client, String path, Map<String, Object> query, int pageSize, int maxResults) throws Exception {
-        Map<String, Object> params = new LinkedHashMap<>(query);
+        var params = new LinkedHashMap<String, Object>(query);
         params.put("page[size]", pageSize);
-        List<Map<String, Object>> result = new ArrayList<>();
-        java.util.Set<String> ids = new java.util.HashSet<>();
-        for (int page = 0; ; page++) {
+        var result = new ArrayList<Map<String, Object>>();
+        Set<String> ids = new HashSet<>();
+        for (var page = 0; ; page++) {
             params.put("page[number]", page);
-            Map<String, Object> response = json(request(client, "GET", path, params, null));
-            List<Map<String, Object>> rows = rows(response);
-            for (Map<String, Object> row : rows) {
-                String id = required(row.get("id"), "response id");
+            var response = json(request(client, "GET", path, params, null));
+            var rows = rows(response);
+            for (var row : rows) {
+                var id = required(row.get("id"), "response id");
                 if (!ids.add(id)) {
                     throw new IllegalStateException("Datadog pagination repeated a resource; no complete snapshot is available");
                 }
@@ -169,12 +171,12 @@ public final class AccessApi {
                     result.add(row);
                 }
             }
-            Map<String, Object> meta = optionalObject(response.get("meta"));
-            Object total = optionalObject(meta.get("page")).get("total_filtered_count");
+            var meta = optionalObject(response.get("meta"));
+            var total = optionalObject(meta.get("page")).get("total_filtered_count");
             if (total == null) {
                 total = optionalObject(meta.get("pagination")).get("total");
             }
-            boolean more = total instanceof Number count ? ids.size() < count.longValue() : rows.size() >= pageSize;
+            var more = total instanceof Number count ? ids.size() < count.longValue() : rows.size() >= pageSize;
             if (rows.isEmpty() && more) {
                 throw new IllegalStateException("Datadog pagination ended before its total count");
             }

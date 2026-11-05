@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.slos;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -15,6 +16,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
+
+import java.util.List;
+import java.util.Map;
 
 /** Datadog operationId: DeleteSLO. */
 @SuperBuilder
@@ -37,31 +41,33 @@ import lombok.experimental.SuperBuilder;
 public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.Output> {
     @NotNull
     @Schema(title = "SLO identifier")
+    @PluginProperty(group = "main")
     private Property<String> sloId;
     @Schema(title = "Ignore a missing SLO", description = "Treat HTTP 404 as a no-op. False by default.")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> ignoreNotFound;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String id = context.render(sloId).as(String.class).orElse(null);
-            String path = Slos.path(id);
-            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            var rId = context.render(sloId).as(String.class).orElse(null);
+            var path = Slos.path(rId);
+            var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
             try {
                 var response = client.delete(path).map();
-                Object errors = response.get("errors");
-                if (errors != null && !(errors instanceof java.util.Map<?, ?> map && map.isEmpty())) {
+                var errors = response.get("errors");
+                if (errors != null && !(errors instanceof Map<?, ?> map && map.isEmpty())) {
                     throw new IllegalStateException("Datadog reported errors deleting the SLO");
                 }
-                if (!(response.get("data") instanceof java.util.List<?> ids) || !ids.contains(id)) {
+                if (!(response.get("data") instanceof List<?> ids) || !ids.contains(rId)) {
                     throw new IllegalStateException("Datadog did not confirm deletion of the requested SLO");
                 }
-                return Output.builder().sloId(id).deleted(true).build();
+                return Output.builder().sloId(rId).deleted(true).build();
             } catch (DatadogClient.DatadogException e) {
-                if (!ignore || e.getStatus() != 404) {
+                if (!rIgnore || e.getStatus() != 404) {
                     throw e;
                 }
-                return Output.builder().sloId(id).deleted(false).build();
+                return Output.builder().sloId(rId).deleted(false).build();
             }
         }
     }

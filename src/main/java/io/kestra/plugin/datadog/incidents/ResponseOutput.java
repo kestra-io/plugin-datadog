@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.incidents;
 
+import io.kestra.core.models.tasks.Output;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,7 +9,7 @@ import java.util.Map;
 
 @Builder(toBuilder = true)
 @Getter
-public class ResponseOutput implements io.kestra.core.models.tasks.Output {
+public class ResponseOutput implements Output {
     @Schema(title = "Resource id", description = "The incident, page, case or status resource id returned by Datadog. Null for a dry run or an empty response.")
     private final String id;
 

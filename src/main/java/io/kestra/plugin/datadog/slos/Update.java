@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.slos;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -14,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.util.List;
 import java.util.Map;
 
 /** Datadog operationId: UpdateSLO. */
@@ -42,14 +44,15 @@ import java.util.Map;
 public class Update extends AbstractSloDefinitionTask implements RunnableTask<Update.Output> {
     @NotNull
     @Schema(title = "SLO identifier")
+    @PluginProperty(group = "main")
     private Property<String> sloId;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
+            var rPath = Slos.path(context.render(sloId).as(String.class).orElse(null));
             var body = body(context);
-            return Output.builder().slos(result(context, client.put(path, body).map())).build();
+            return Output.builder().slos(result(context, client.put(rPath, body).map())).build();
         }
     }
 
@@ -57,6 +60,6 @@ public class Update extends AbstractSloDefinitionTask implements RunnableTask<Up
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Updated SLOs", description = "The data array returned by UpdateSLO.")
-        private final java.util.List<Map<String, Object>> slos;
+        private final List<Map<String, Object>> slos;
     }
 }

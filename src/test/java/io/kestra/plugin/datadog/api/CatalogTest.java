@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -18,14 +19,14 @@ class CatalogTest {
     @TestFactory
     Stream<DynamicTest> everyCatalogOperationBuildsItsDeclaredMethodAndPath() {
         return Catalog.get().operations().stream().map(op -> DynamicTest.dynamicTest(op.key(), () -> {
-            Map<String, Object> paths = new LinkedHashMap<>();
-            Map<String, Object> query = new LinkedHashMap<>();
-            Map<String, String> headers = new LinkedHashMap<>();
-            String expected = op.path();
-            for (JsonNode p : op.parameters()) {
+            var paths = new LinkedHashMap<String, Object>();
+            var query = new LinkedHashMap<String, Object>();
+            var headers = new LinkedHashMap<String, String>();
+            var expected = op.path();
+            for (var p : op.parameters()) {
                 if (!p.path("required").asBoolean()) { continue; }
-                Object value = minimum(p);
-                String name = p.path("name").asText();
+                var value = minimum(p);
+                var name = p.path("name").asText();
                 switch (p.path("in").asText()) {
                     case "path" -> { paths.put(name, value); expected = expected.replace("{" + name + "}", String.valueOf(value)); }
                     case "query" -> query.put(name, value);
@@ -33,7 +34,7 @@ class CatalogTest {
                     default -> fail("Unhandled parameter location");
                 }
             }
-            RequestPlan plan = RequestPlan.prepare(op, "datadoghq.eu", null, paths, query, headers, op.bodyRequired() ? Map.of() : null);
+            var plan = RequestPlan.prepare(op, "datadoghq.eu", null, paths, query, headers, op.bodyRequired() ? Map.of() : null);
             assertEquals(op.method(), plan.method());
             assertEquals(expected, URLDecoder.decode(plan.uri().getRawPath(), StandardCharsets.UTF_8));
             assertEquals("https", plan.uri().getScheme());
@@ -63,7 +64,7 @@ class CatalogTest {
 
     @Test
     void allVersionCollisionsRequireQualification() {
-        var groups = Catalog.get().operations().stream().collect(java.util.stream.Collectors.groupingBy(Catalog.Operation::id));
+        var groups = Catalog.get().operations().stream().collect(Collectors.groupingBy(Catalog.Operation::id));
         groups.forEach((id, rows) -> {
             if (rows.size() > 1) { assertThrows(IllegalArgumentException.class, () -> Catalog.get().operation(id)); }
             else { assertEquals(rows.getFirst(), Catalog.get().operation(id)); }

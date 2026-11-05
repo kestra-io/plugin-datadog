@@ -7,7 +7,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -143,7 +142,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
         var payload = new ArrayList<Map<String, Object>>();
         var points = 0;
         if (multiple) {
-            for (Map<String, Object> entry : runContext.render(this.series).asList(Map.class)) {
+            for (var entry : runContext.render(this.series).asList(Map.class)) {
                 @SuppressWarnings("unchecked")
                 var item = (Map<String, Object>) entry;
                 if (item.get("metric") == null || String.valueOf(item.get("metric")).isBlank()) {
@@ -155,7 +154,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
                 // a point without a timestamp is measured now
                 var now = Instant.now().getEpochSecond();
                 var filled = new ArrayList<Map<String, Object>>();
-                for (Object point : list) {
+                for (var point : list) {
                     if (!(point instanceof Map<?, ?> raw) || raw.get("value") == null) {
                         throw new IllegalArgumentException("Every entry of `points` of the series '" + item.get("metric") + "' needs a `value`");
                     }
@@ -181,12 +180,12 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
             if (rValue == null || rValue.isNaN() || rValue.isInfinite()) {
                 throw new IllegalArgumentException("The Datadog `value` must be a finite number but was " + rValue);
             }
-            var at = runContext.render(this.timestamp).as(Instant.class).orElseGet(Instant::now);
+            var rAt = runContext.render(this.timestamp).as(Instant.class).orElseGet(Instant::now);
 
             var item = new LinkedHashMap<String, Object>();
             item.put("metric", rMetric);
             item.put("type", runContext.render(this.metricType).as(MetricType.class).orElse(MetricType.GAUGE).code());
-            item.put("points", List.of(Map.of("timestamp", at.getEpochSecond(), "value", rValue)));
+            item.put("points", List.of(Map.of("timestamp", rAt.getEpochSecond(), "value", rValue)));
             var rTags = runContext.render(this.tags).asList(String.class);
             if (!rTags.isEmpty()) {
                 item.put("tags", rTags);
@@ -198,7 +197,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
             points = 1;
         }
 
-        try (DatadogClient client = client(runContext, false)) {
+        try (var client = client(runContext, false)) {
             client.post("/api/v2/series", Map.of("series", payload));
         }
 

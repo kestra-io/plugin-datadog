@@ -2,9 +2,9 @@ package io.kestra.plugin.datadog.security;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.keys.AccessApi;
 import io.kestra.plugin.datadog.users.PagedTask;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -18,9 +18,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /** Datadog operationId: v2:SearchSecurityMonitoringSignals. */
 @SuperBuilder
@@ -43,13 +41,17 @@ import java.util.Set;
 public class SignalsSearch extends PagedTask {
     @NotNull
     @Schema(title = "Window start", description = "RFC 3339 timestamp with an offset. Must precede to.")
+    @PluginProperty(group = "processing")
     private Property<String> from;
     @NotNull
     @Schema(title = "Window end", description = "RFC 3339 timestamp with an offset.")
+    @PluginProperty(group = "processing")
     private Property<String> to;
     @Schema(title = "Signal query", description = "Datadog security signal query. Use severity and rule tags in this query.", defaultValue = "*")
+    @PluginProperty(group = "main")
     private Property<String> query;
     @Schema(title = "Sort order", description = "OLDEST maps to timestamp and NEWEST maps to -timestamp.", defaultValue = "OLDEST")
+    @PluginProperty(group = "processing")
     private Property<Sort> sort;
 
     public enum Sort {
@@ -61,8 +63,8 @@ public class SignalsSearch extends PagedTask {
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            String start = AccessApi.required(context, from, "from");
-            String end = AccessApi.required(context, to, "to");
+            var start = AccessApi.required(context, from, "from");
+            var end = AccessApi.required(context, to, "to");
             try {
                 if (!Instant.parse(start).isBefore(Instant.parse(end))) {
                     throw new IllegalArgumentException("`from` must precede `to`");
@@ -70,28 +72,28 @@ public class SignalsSearch extends PagedTask {
             } catch (DateTimeParseException e) {
                 throw new IllegalArgumentException("`from` and `to` must be RFC 3339 timestamps");
             }
-            int pageSize = AccessApi.range(context, getPageSize(), 100, 100, "pageSize");
-            int max = AccessApi.range(context, getMaxResults(), 1000, 10000, "maxResults");
-            String query = context.render(this.query).as(String.class).orElse("*");
-            String sort = context.render(this.sort).as(Sort.class).orElse(Sort.OLDEST).value;
-            List<Map<String, Object>> result = new ArrayList<>();
-            Set<String> cursors = new HashSet<>();
+            var pageSize = AccessApi.range(context, getPageSize(), 100, 100, "pageSize");
+            var max = AccessApi.range(context, getMaxResults(), 1000, 10000, "maxResults");
+            var rQuery = context.render(this.query).as(String.class).orElse("*");
+            var rSort = context.render(this.sort).as(Sort.class).orElse(Sort.OLDEST).value;
+            var result = new ArrayList<Map<String, Object>>();
+            var cursors = new HashSet<String>();
             String cursor = null;
             boolean truncated;
             do {
-                Map<String, Object> page = new LinkedHashMap<>();
+                var page = new LinkedHashMap<String, Object>();
                 page.put("limit", Math.min(pageSize, max - result.size()));
                 if (cursor != null) { page.put("cursor", cursor); }
-                Map<String, Object> body = Map.of("filter", Map.of("from", start, "to", end, "query", query), "sort", sort, "page", page);
-                Map<String, Object> response = AccessApi.json(AccessApi.request(client, "POST", "/api/v2/security_monitoring/signals/search", Map.of(), body));
-                Map<String, Object> meta = AccessApi.optionalObject(response.get("meta"));
+                var body = Map.<String, Object>of("filter", Map.of("from", start, "to", end, "query", rQuery), "sort", rSort, "page", page);
+                var response = AccessApi.json(AccessApi.request(client, "POST", "/api/v2/security_monitoring/signals/search", Map.of(), body));
+                var meta = AccessApi.optionalObject(response.get("meta"));
                 if (meta.get("status") != null && !"done".equals(meta.get("status"))) {
                     throw new IllegalStateException("Datadog signal search did not complete");
                 }
-                List<Map<String, Object>> rows = AccessApi.rows(response);
-                int remaining = max - result.size();
+                var rows = AccessApi.rows(response);
+                var remaining = max - result.size();
                 result.addAll(rows.subList(0, Math.min(rows.size(), remaining)));
-                Object next = AccessApi.optionalObject(meta.get("page")).get("after");
+                var next = AccessApi.optionalObject(meta.get("page")).get("after");
                 cursor = next instanceof String text && !text.isBlank() ? text : null;
                 if (cursor != null && !cursors.add(cursor)) {
                     throw new IllegalStateException("Datadog signal search repeated a cursor");

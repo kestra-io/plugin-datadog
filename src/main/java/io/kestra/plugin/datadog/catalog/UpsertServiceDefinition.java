@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.catalog;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
@@ -16,8 +17,8 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Datadog operationIds: v2:GetServiceDefinition and v2:CreateOrUpdateServiceDefinitions. */
@@ -43,27 +44,30 @@ import java.util.Map;
 public class UpsertServiceDefinition extends AbstractDatadogTask implements RunnableTask<UpsertServiceDefinition.Output> {
     @NotNull
     @Schema(title = "Service definition", description = "One v2.2 JSON object. Requires schema-version and dd-service. Supports the official v2.2 fields. Omitted fields are retained on update.")
+    @PluginProperty(group = "main")
     private Property<Map<String, Object>> definition;
     @Schema(title = "Plan changes", description = "Use GET requests to compute a diff without changing the service definition.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> plan;
     @Schema(title = "Include secrets", description = "Include credential and URL values in the diff. These values are redacted by default.", defaultValue = "false")
+    @PluginProperty(group = "advanced")
     private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
             if (definition == null) { throw new IllegalArgumentException("`definition` is required"); }
-            Map<String, Object> desired = new LinkedHashMap<>(context.render(definition).asMap(String.class, Object.class));
-            ServiceDefinitions.validate(desired);
-            String service = AccessApi.required(desired.get("dd-service"), "definition.dd-service");
-            desired.put("dd-service", service);
-            String path = "/api/v2/services/definitions/" + AccessApi.segment(service);
-            boolean preview = AccessApi.flag(context, plan);
-            boolean include = AccessApi.flag(context, includeSecrets);
-            Map<String, Object> current = Map.of();
-            boolean exists = true;
+            var rDesired = new LinkedHashMap<String, Object>(context.render(definition).asMap(String.class, Object.class));
+            ServiceDefinitions.validate(rDesired);
+            var service = AccessApi.required(rDesired.get("dd-service"), "definition.dd-service");
+            rDesired.put("dd-service", service);
+            var path = "/api/v2/services/definitions/" + AccessApi.segment(service);
+            var preview = AccessApi.flag(context, plan);
+            var include = AccessApi.flag(context, includeSecrets);
+            var current = Map.<String, Object>of();
+            var exists = true;
             try {
-                Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of("schema_version", "v2.2"), null)).get("data"));
+                var data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of("schema_version", "v2.2"), null)).get("data"));
                 current = AccessApi.object(AccessApi.object(data.get("attributes")).get("schema"));
                 if (!service.equals(current.get("dd-service"))) {
                     throw new IllegalStateException("Datadog returned a different service definition");
@@ -72,11 +76,11 @@ public class UpsertServiceDefinition extends AbstractDatadogTask implements Runn
                 if (e.getStatus() != 404) { throw e; }
                 exists = false;
             }
-            List<Change> diff = new ArrayList<>();
-            ServiceDefinitions.diff("", current, desired, diff, include);
-            Status status = !exists ? Status.CREATED : diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED;
+            var diff = new ArrayList<Change>();
+            ServiceDefinitions.diff("", current, rDesired, diff, include);
+            var status = !exists ? Status.CREATED : diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED;
             if (!preview && status != Status.UNCHANGED) {
-                AccessApi.request(client, "POST", "/api/v2/services/definitions", Map.of(), ServiceDefinitions.merge(current, desired));
+                AccessApi.request(client, "POST", "/api/v2/services/definitions", Map.of(), ServiceDefinitions.merge(current, rDesired));
             }
             return Output.builder().serviceName(service).status(status).plan(preview).diff(diff).build();
         }
