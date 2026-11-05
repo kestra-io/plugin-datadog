@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.serializers.FileSerde;
@@ -110,7 +111,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
             server.reply("POST", path(area), 200, answer(area, "1").replace("\"status\":\"done\"", "\"status\":\"done\",\"page\":{\"after\":\"next\"}"));
             server.reply("POST", path(area), 200, answer(area, "2"));
             var context = runContext();
-            var task = (RunnableTask<?>) builder(area).pageCursor(Property.ofValue("start")).store(Property.ofValue(true)).build();
+            var task = (RunnableTask<?>) builder(area).pageCursor(Property.ofValue("start")).fetchType(Property.ofValue(FetchType.STORE)).build();
             var output = (AbstractAggregate.Output) task.run(context);
             assertEquals(2, output.getSize());
             assertNull(output.getBuckets());
@@ -156,7 +157,7 @@ class TelemetryAggregateTest extends AbstractDatadogTest {
         String answer = answer("spans", "1").replace("\"by\":{}", "\"by\":{\"api_key\":\"fixture-key\"}");
         server.reply("POST", path("spans"), 200, answer);
         var context = runContext();
-        var output = (AbstractAggregate.Output) ((RunnableTask<?>) builder("spans").store(Property.ofValue(true)).build()).run(context);
+        var output = (AbstractAggregate.Output) ((RunnableTask<?>) builder("spans").fetchType(Property.ofValue(FetchType.STORE)).build()).run(context);
         List<Object> rows = new ArrayList<>();
         try (var input = context.storage().getFile(output.getUri())) {
             FileSerde.read(input, rows::add);

@@ -51,7 +51,7 @@ tasks:
   conditions:
   - '{{ outputs.get.test.public_id == "abc-def-ghi" }}'
 - searchQuery: tag:env:prod
-  store: false
+  fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.synthetics.List
   apiKey: e2e-api-key

@@ -38,7 +38,7 @@ import java.util.Set;
         from: "2026-01-01T00:00:00Z"
         to: "2026-01-02T00:00:00Z"
         query: "status:high"
-        store: true
+        fetchType: STORE
     """))
 public class SignalsSearch extends PagedTask {
     @NotNull
@@ -60,47 +60,48 @@ public class SignalsSearch extends PagedTask {
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String start = AccessApi.required(context, from, "from");
-        String end = AccessApi.required(context, to, "to");
-        try {
-            if (!Instant.parse(start).isBefore(Instant.parse(end))) {
-                throw new IllegalArgumentException("`from` must precede `to`");
+        try (var client = client(context, true)) {
+            String start = AccessApi.required(context, from, "from");
+            String end = AccessApi.required(context, to, "to");
+            try {
+                if (!Instant.parse(start).isBefore(Instant.parse(end))) {
+                    throw new IllegalArgumentException("`from` must precede `to`");
+                }
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("`from` and `to` must be RFC 3339 timestamps");
             }
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("`from` and `to` must be RFC 3339 timestamps");
+            int pageSize = AccessApi.range(context, getPageSize(), 100, 100, "pageSize");
+            int max = AccessApi.range(context, getMaxResults(), 1000, 10000, "maxResults");
+            String query = context.render(this.query).as(String.class).orElse("*");
+            String sort = context.render(this.sort).as(Sort.class).orElse(Sort.OLDEST).value;
+            List<Map<String, Object>> result = new ArrayList<>();
+            Set<String> cursors = new HashSet<>();
+            String cursor = null;
+            boolean truncated;
+            do {
+                Map<String, Object> page = new LinkedHashMap<>();
+                page.put("limit", Math.min(pageSize, max - result.size()));
+                if (cursor != null) { page.put("cursor", cursor); }
+                Map<String, Object> body = Map.of("filter", Map.of("from", start, "to", end, "query", query), "sort", sort, "page", page);
+                Map<String, Object> response = AccessApi.json(AccessApi.request(client, "POST", "/api/v2/security_monitoring/signals/search", Map.of(), body));
+                Map<String, Object> meta = AccessApi.optionalObject(response.get("meta"));
+                if (meta.get("status") != null && !"done".equals(meta.get("status"))) {
+                    throw new IllegalStateException("Datadog signal search did not complete");
+                }
+                List<Map<String, Object>> rows = AccessApi.rows(response);
+                int remaining = max - result.size();
+                result.addAll(rows.subList(0, Math.min(rows.size(), remaining)));
+                Object next = AccessApi.optionalObject(meta.get("page")).get("after");
+                cursor = next instanceof String text && !text.isBlank() ? text : null;
+                if (cursor != null && !cursors.add(cursor)) {
+                    throw new IllegalStateException("Datadog signal search repeated a cursor");
+                }
+                if (cursor != null && rows.isEmpty()) {
+                    throw new IllegalStateException("Datadog signal search returned an empty page with a cursor");
+                }
+                truncated = rows.size() > remaining || cursor != null;
+            } while (cursor != null && result.size() < max);
+            return output(context, new AccessApi.Page(result, truncated));
         }
-        int pageSize = AccessApi.range(context, getPageSize(), 100, 100, "pageSize");
-        int max = AccessApi.range(context, getMaxResults(), 1000, 10000, "maxResults");
-        String query = context.render(this.query).as(String.class).orElse("*");
-        String sort = context.render(this.sort).as(Sort.class).orElse(Sort.OLDEST).value;
-        DatadogClient client = client(context, true);
-        List<Map<String, Object>> result = new ArrayList<>();
-        Set<String> cursors = new HashSet<>();
-        String cursor = null;
-        boolean truncated;
-        do {
-            Map<String, Object> page = new LinkedHashMap<>();
-            page.put("limit", Math.min(pageSize, max - result.size()));
-            if (cursor != null) { page.put("cursor", cursor); }
-            Map<String, Object> body = Map.of("filter", Map.of("from", start, "to", end, "query", query), "sort", sort, "page", page);
-            Map<String, Object> response = AccessApi.json(AccessApi.request(client, "POST", "/api/v2/security_monitoring/signals/search", Map.of(), body));
-            Map<String, Object> meta = AccessApi.optionalObject(response.get("meta"));
-            if (meta.get("status") != null && !"done".equals(meta.get("status"))) {
-                throw new IllegalStateException("Datadog signal search did not complete");
-            }
-            List<Map<String, Object>> rows = AccessApi.rows(response);
-            int remaining = max - result.size();
-            result.addAll(rows.subList(0, Math.min(rows.size(), remaining)));
-            Object next = AccessApi.optionalObject(meta.get("page")).get("after");
-            cursor = next instanceof String text && !text.isBlank() ? text : null;
-            if (cursor != null && !cursors.add(cursor)) {
-                throw new IllegalStateException("Datadog signal search repeated a cursor");
-            }
-            if (cursor != null && rows.isEmpty()) {
-                throw new IllegalStateException("Datadog signal search returned an empty page with a cursor");
-            }
-            truncated = rows.size() > remaining || cursor != null;
-        } while (cursor != null && result.size() < max);
-        return output(context, new AccessApi.Page(result, truncated));
     }
 }

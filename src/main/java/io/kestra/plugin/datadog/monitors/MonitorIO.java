@@ -42,21 +42,6 @@ public final class MonitorIO {
         return (Map<String, Object>) redact(value, includeSecrets);
     }
 
-    public static URI store(RunContext context, java.util.List<?> rows, boolean yaml) throws Exception {
-        Path file = context.workingDir().createTempFile(yaml ? ".yaml" : ".ion");
-        if (yaml) {
-            JacksonMapper.ofYaml().writeValue(file.toFile(), rows);
-        } else {
-            try (var writer = Files.newBufferedWriter(file)) {
-                for (Object row : rows) {
-                    writer.write(JacksonMapper.ofIon().writeValueAsString(row));
-                    writer.newLine();
-                }
-            }
-        }
-        return context.storage().putFile(file.toFile());
-    }
-
     public static long positiveId(Long id) {
         if (id == null || id < 1) {
             throw new IllegalArgumentException("The Datadog `monitorId` must be a positive integer");

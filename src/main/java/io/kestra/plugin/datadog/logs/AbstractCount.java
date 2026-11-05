@@ -22,14 +22,16 @@ public abstract class AbstractCount extends AbstractWindow {
     private Property<Boolean> failOnBreach = Property.ofValue(false);
 
     protected Output count(RunContext context, boolean spans) throws Exception {
-        long boundary = Counts.threshold(context.render(threshold).as(Long.class).orElse(null));
-        var filter = filter(context);
-        long count = Counts.query(client(context, true), filter, spans);
-        boolean breached = Counts.breached(count, boundary);
-        if (breached && context.render(failOnBreach).as(Boolean.class).orElse(false)) {
-            throw new IllegalStateException("Datadog count " + count + " exceeds threshold " + boundary);
+        try (var client = client(context, true)) {
+            long boundary = Counts.threshold(context.render(threshold).as(Long.class).orElse(null));
+            var filter = filter(context);
+            long count = Counts.query(client, filter, spans);
+            boolean breached = Counts.breached(count, boundary);
+            if (breached && context.render(failOnBreach).as(Boolean.class).orElse(false)) {
+                throw new IllegalStateException("Datadog count " + count + " exceeds threshold " + boundary);
+            }
+            return Output.builder().count(count).breached(breached).build();
         }
-        return Output.builder().count(count).breached(breached).build();
     }
 
     @Builder

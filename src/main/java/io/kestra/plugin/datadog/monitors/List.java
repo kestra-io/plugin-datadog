@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -23,6 +24,7 @@ import lombok.experimental.SuperBuilder;
 import java.net.URI;
 import java.util.Map;
 
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

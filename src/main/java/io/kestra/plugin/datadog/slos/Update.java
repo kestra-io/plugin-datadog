@@ -46,9 +46,11 @@ public class Update extends AbstractSloDefinitionTask implements RunnableTask<Up
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
-        var body = body(context);
-        return Output.builder().slos(result(client(context, true).put(path, body).map())).build();
+        try (var client = client(context, true)) {
+            String path = Slos.path(context.render(sloId).as(String.class).orElse(null));
+            var body = body(context);
+            return Output.builder().slos(result(context, client.put(path, body).map())).build();
+        }
     }
 
     @Builder

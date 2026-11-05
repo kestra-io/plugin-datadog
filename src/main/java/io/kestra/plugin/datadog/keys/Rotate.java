@@ -37,13 +37,14 @@ public class Rotate extends Create {
 
     @Override
     public KeyOutput run(RunContext context) throws Exception {
-        String oldId = AccessApi.required(context, oldKeyId, "oldKeyId");
-        KeyKind kind = kind(context);
-        Map<String, Object> body = body(context, kind);
-        String path = kind.resourcePath(oldId);
-        boolean include = AccessApi.flag(context, getIncludeSecrets());
-        DatadogClient client = client(context, true);
-        AccessApi.request(client, "GET", path, Map.of(), null);
-        return KeyOutput.from(AccessApi.json(AccessApi.request(client, "POST", kind.createPath, Map.of(), body)), include);
+        try (var client = client(context, true)) {
+            String oldId = AccessApi.required(context, oldKeyId, "oldKeyId");
+            KeyKind kind = kind(context);
+            Map<String, Object> body = body(context, kind);
+            String path = kind.resourcePath(oldId);
+            boolean include = AccessApi.flag(context, getIncludeSecrets());
+            AccessApi.request(client, "GET", path, Map.of(), null);
+            return KeyOutput.from(AccessApi.json(AccessApi.request(client, "POST", kind.createPath, Map.of(), body)), include);
+        }
     }
 }

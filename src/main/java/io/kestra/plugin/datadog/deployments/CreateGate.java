@@ -52,14 +52,16 @@ public class CreateGate extends AbstractDatadogTask implements RunnableTask<Crea
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
-        attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
-        attributes.put("identifier", Deployments.required(context.render(identifier).as(String.class).orElse("default"), "identifier"));
-        attributes.put("dry_run", context.render(evaluationDryRun).as(Boolean.class).orElse(false));
-        var answer = client(context, true).post("/api/v2/deployment_gates", Deployments.body("deployment_gate", attributes)).map();
-        var data = Deployments.object(answer.get("data"), "gate data");
-        return Output.builder().gateId(Deployments.required((String) data.get("id"), "gate id returned by Datadog")).build();
+        try (var client = client(context, true)) {
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            attributes.put("service", Deployments.required(context.render(service).as(String.class).orElse(null), "service"));
+            attributes.put("env", Deployments.required(context.render(env).as(String.class).orElse(null), "env"));
+            attributes.put("identifier", Deployments.required(context.render(identifier).as(String.class).orElse("default"), "identifier"));
+            attributes.put("dry_run", context.render(evaluationDryRun).as(Boolean.class).orElse(false));
+            var answer = client.post("/api/v2/deployment_gates", Deployments.body("deployment_gate", attributes)).map();
+            var data = Deployments.object(answer.get("data"), "gate data");
+            return Output.builder().gateId(Deployments.required((String) data.get("id"), "gate id returned by Datadog")).build();
+        }
     }
 
     @Builder

@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.hosts;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -122,7 +123,7 @@ class HostsTest extends AbstractDatadogTest {
     void inventoryCanBeStoredWithoutInlineHosts() throws Exception {
         server.reply("GET", "/api/v1/hosts", 200, "{\"host_list\":[{\"host_name\":\"worker-01\"}],\"total_matching\":1,\"total_returned\":1}");
         var context = runContext();
-        var output = list().store(Property.ofValue(true)).build().run(context);
+        var output = list().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getHosts());
         assertFalse(output.getTruncated());
         try (var input = context.storage().getFile(output.getUri())) {

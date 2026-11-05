@@ -51,9 +51,11 @@ public class Update extends AbstractDashboardTask implements RunnableTask<Update
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String path = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
-        Map<String, Object> body = Dashboards.definition(definition == null ? null : context.render(definition));
-        return Output.builder().dashboard(Dashboards.redact(client(context, true).put(path, body).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+        try (var client = client(context, true)) {
+            String path = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
+            Map<String, Object> body = Dashboards.definition(definition == null ? null : context.render(definition));
+            return Output.builder().dashboard(Dashboards.redact(client.put(path, body).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+        }
     }
 
     @Builder

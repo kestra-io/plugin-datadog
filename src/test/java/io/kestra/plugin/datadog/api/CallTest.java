@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.api;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import com.sun.net.httpserver.HttpServer;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
@@ -123,7 +124,7 @@ class CallTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v2/roles", 200, "{\"data\":[{\"type\":\"roles\",\"id\":\"1\"}]}")
             .reply("GET", "/api/v2/roles", 200, "{\"data\":[]}");
         var context = runContext();
-        var output = call("ListRoles").paginate(Property.ofValue(true)).store(Property.ofValue(true))
+        var output = call("ListRoles").paginate(Property.ofValue(true)).fetchType(Property.ofValue(FetchType.STORE))
             .query(Property.ofValue(Map.of("page[size]", 1, "page[number]", 3))).build().run(context);
         assertEquals(1, output.getCount());
         assertEquals(2, output.getPages());
@@ -211,7 +212,8 @@ class CallTest extends AbstractDatadogTest {
         try {
             String url = "http://127.0.0.1:" + local.getAddress().getPort();
             var context = runContext();
-            var binary = call("ListRoles").apiUrl(Property.ofValue(url)).build().run(context);
+            assertTrue(assertThrows(IllegalArgumentException.class, () -> call("ListRoles").apiUrl(Property.ofValue(url)).build().run(context)).getMessage().contains("includeSecrets"));
+            var binary = call("ListRoles").apiUrl(Property.ofValue(url)).includeSecrets(Property.ofValue(true)).build().run(context);
             try (var input = context.storage().getFile(binary.getUri())) { assertArrayEquals(new byte[]{0, 1, (byte) 255, 127}, input.readAllBytes()); }
             var text = call("ListRoles").apiUrl(Property.ofValue(url + "/text")).build().run(context);
             assertEquals("ready", text.getBody());

@@ -22,7 +22,7 @@ tasks:
   to: '2026-01-02T00:00:00Z'
   productFamilies:
   - INFRA_HOSTS
-  store: false
+  fetchType: FETCH
   id: hourly
   type: io.kestra.plugin.datadog.usage.Hourly
   apiKey: e2e-api-key

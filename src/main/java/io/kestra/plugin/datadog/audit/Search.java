@@ -29,7 +29,7 @@ import lombok.experimental.SuperBuilder;
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         from: now-1h
         maxResults: 10000
-        store: true
+        fetchType: STORE
     """))
 public class Search extends AbstractSearch implements RunnableTask<AbstractSearch.Output> {
     @Override

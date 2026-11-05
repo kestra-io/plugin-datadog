@@ -104,16 +104,21 @@ public class BudgetLow extends AbstractTrigger implements PollingTriggerInterfac
         long to = Instant.now().getEpochSecond();
         long from = Math.subtractExact(to, window.getSeconds());
         Slos.window(from, to);
-        var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true);
+        try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
         Slos.Budget budget;
         try {
             budget = Slos.budget(Slos.history(client, id, from, to, target, corrections), target);
         } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 429 || e.getStatus() >= 500) {
+            if (e.isTransient()) {
                 runContext.logger().warn("Datadog SLO poll skipped after HTTP {}", e.getStatus());
                 return Optional.empty();
             }
             throw e;
+        }
+        var sampledAt = client.serverTime().orElse(null);
+        if (sampledAt == null) {
+            runContext.logger().warn("Datadog SLO poll skipped because the Date header is missing");
+            return Optional.empty();
         }
         var kv = runContext.namespaceKv(context.getNamespace());
         String key = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
@@ -140,9 +145,10 @@ public class BudgetLow extends AbstractTrigger implements PollingTriggerInterfac
             // At least once: if execution creation fails, the previous healthy cursor remains available for a retry.
             execution = TriggerService.generateExecution(this, conditionContext, context, output);
         }
-        byte[] state = JacksonMapper.ofJson().writeValueAsBytes(Map.of("configuration", configuration, "below", below, "sampledAt", to));
+        byte[] state = JacksonMapper.ofJson().writeValueAsBytes(Map.of("configuration", configuration, "below", below, "sampledAt", sampledAt.toString()));
         kv.put(key, new KVValueAndMetadata(new KVMetadata("Datadog SLO budget transition cursor", (Duration) null), state));
         return Optional.ofNullable(execution);
+        }
     }
 
     @Builder

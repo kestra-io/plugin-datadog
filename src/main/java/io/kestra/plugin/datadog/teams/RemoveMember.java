@@ -48,22 +48,23 @@ public class RemoveMember extends AbstractDatadogTask implements RunnableTask<Re
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String team = AccessApi.required(context, teamId, "teamId");
-        String user = AccessApi.required(context, userId, "userId");
-        String path = Memberships.path(team);
-        String target = path + "/" + AccessApi.segment(user);
-        boolean ignore = AccessApi.flag(context, ignoreNotFound);
-        boolean allow = AccessApi.flag(context, allowRemoveLastAdmin);
-        DatadogClient client = client(context, true);
-        try {
-            Memberships.protectAdmins(Memberships.read(client, path, 10000), Set.of(user), allow);
-        } catch (DatadogClient.DatadogException e) {
-            if (ignore && e.getStatus() == 404) {
-                return Output.builder().removed(false).build();
+        try (var client = client(context, true)) {
+            String team = AccessApi.required(context, teamId, "teamId");
+            String user = AccessApi.required(context, userId, "userId");
+            String path = Memberships.path(team);
+            String target = path + "/" + AccessApi.segment(user);
+            boolean ignore = AccessApi.flag(context, ignoreNotFound);
+            boolean allow = AccessApi.flag(context, allowRemoveLastAdmin);
+            try {
+                Memberships.protectAdmins(Memberships.read(client, path, 10000), Set.of(user), allow);
+            } catch (DatadogClient.DatadogException e) {
+                if (ignore && e.getStatus() == 404) {
+                    return Output.builder().removed(false).build();
+                }
+                throw e;
             }
-            throw e;
+            return Output.builder().removed(AccessApi.delete(client, target, ignore)).build();
         }
-        return Output.builder().removed(AccessApi.delete(client, target, ignore)).build();
     }
 
     @Builder

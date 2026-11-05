@@ -99,7 +99,7 @@ Sensitive column names such as `api_key`, `application_key`, `password`, `token`
 
 ## Internal storage
 
-Set `store: true` on list or query tasks to receive a Kestra internal-storage `uri` instead of inline data:
+Set `fetchType: STORE` on list or query tasks to receive a Kestra internal-storage `uri` instead of inline data:
 
 | Task | ION record layout |
 |---|---|

@@ -26,7 +26,7 @@ import java.util.Map;
         type: io.kestra.plugin.datadog.keys.ListApplicationKeys
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
-        store: true
+        fetchType: STORE
     """))
 public class ListApplicationKeys extends PagedTask {
     @Schema(title = "Name filter", description = "Datadog's filter string for application key names.")

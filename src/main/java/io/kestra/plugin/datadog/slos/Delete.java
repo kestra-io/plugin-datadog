@@ -43,24 +43,26 @@ public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = context.render(sloId).as(String.class).orElse(null);
-        String path = Slos.path(id);
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            var response = client(context, true).delete(path).map();
-            Object errors = response.get("errors");
-            if (errors != null && !(errors instanceof java.util.Map<?, ?> map && map.isEmpty())) {
-                throw new IllegalStateException("Datadog reported errors deleting the SLO");
+        try (var client = client(context, true)) {
+            String id = context.render(sloId).as(String.class).orElse(null);
+            String path = Slos.path(id);
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                var response = client.delete(path).map();
+                Object errors = response.get("errors");
+                if (errors != null && !(errors instanceof java.util.Map<?, ?> map && map.isEmpty())) {
+                    throw new IllegalStateException("Datadog reported errors deleting the SLO");
+                }
+                if (!(response.get("data") instanceof java.util.List<?> ids) || !ids.contains(id)) {
+                    throw new IllegalStateException("Datadog did not confirm deletion of the requested SLO");
+                }
+                return Output.builder().sloId(id).deleted(true).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (!ignore || e.getStatus() != 404) {
+                    throw e;
+                }
+                return Output.builder().sloId(id).deleted(false).build();
             }
-            if (!(response.get("data") instanceof java.util.List<?> ids) || !ids.contains(id)) {
-                throw new IllegalStateException("Datadog did not confirm deletion of the requested SLO");
-            }
-            return Output.builder().sloId(id).deleted(true).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (!ignore || e.getStatus() != 404) {
-                throw e;
-            }
-            return Output.builder().sloId(id).deleted(false).build();
         }
     }
 

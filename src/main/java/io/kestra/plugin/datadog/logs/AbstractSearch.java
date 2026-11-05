@@ -1,7 +1,12 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Getter
+@ValidDatadogLimits
 @SuperBuilder
 @NoArgsConstructor
 public abstract class AbstractSearch extends AbstractWindow {
@@ -24,14 +30,14 @@ public abstract class AbstractSearch extends AbstractWindow {
 
     @Builder.Default
     @Schema(title = "Maximum results", description = "Read until the cursor ends or this cap is reached. Between 1 and 10000.", defaultValue = "100")
-    private Property<Integer> maxResults = Property.ofValue(100);
+    private Property<@Min(1) @Max(10000) Integer> maxResults = Property.ofValue(100);
 
     @Builder.Default
-    @Schema(title = "Store results", description = "Write rows to internal storage as ION instead of returning an inline list.", defaultValue = "false")
-    private Property<Boolean> store = Property.ofValue(false);
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Builder.Default
-    @Schema(title = "Include secrets", description = "Return named credential fields without redaction. Free-form messages are not inspected.", defaultValue = "false")
+    @Schema(title = "Include secrets", description = "Return credential fields and HTTP URLs without redaction.", defaultValue = "false")
     private Property<Boolean> includeSecrets = Property.ofValue(false);
 
     protected Output search(RunContext context, String path, boolean spans, boolean flatten) throws Exception {
@@ -39,10 +45,10 @@ public abstract class AbstractSearch extends AbstractWindow {
         Map<String, Object> filter = filter(context);
         Sort order = context.render(sort).as(Sort.class).orElse(null);
         boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
-        var client = client(context, true);
         Set<String> seen = new HashSet<>();
         String cursor = null;
-        try (var sink = new Telemetry.Sink(context, context.render(store).as(Boolean.class).orElse(false))) {
+        try (var client = client(context, true);
+             var sink = new DatadogFetch.Sink<Map<String, Object>>(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH))) {
             do {
                 Map<String, Object> page = new LinkedHashMap<>();
                 page.put("limit", Math.min(1000, cap - sink.size()));
@@ -77,7 +83,8 @@ public abstract class AbstractSearch extends AbstractWindow {
                     throw new IllegalStateException("Datadog repeated a telemetry page cursor");
                 }
             } while (cursor != null);
-            return Output.builder().events(sink.rows()).size(sink.size()).uri(sink.uri()).build();
+            var result = sink.result();
+            return Output.builder().events(result.rows()).row(result.row()).size(result.size()).uri(result.uri()).build();
         }
     }
 
@@ -98,13 +105,16 @@ public abstract class AbstractSearch extends AbstractWindow {
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Events", description = "Datadog resources with id, type and attributes. Null when store is true.")
+        @Schema(title = "Events", description = "Datadog resources with id, type and attributes. Present with FETCH.")
         private final List<Map<String, Object>> events;
+
+        @Schema(title = "First event", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
 
         @Schema(title = "Number of events")
         private final Integer size;
 
-        @Schema(title = "Stored ION file", description = "Internal storage URI when store is true.")
+        @Schema(title = "Stored ION file", description = "Internal storage URI with STORE.")
         private final URI uri;
     }
 }

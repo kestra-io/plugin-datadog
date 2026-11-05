@@ -14,7 +14,7 @@ The API key is required. Operations with application-key security also require `
 
 `site` selects the regional server. Intake server overrides are taken from the catalog. `apiUrl` replaces the server for a proxy or a mock. Redirects are not followed. Use the endpoint's supported region. Some operations have a fixed server in the spec.
 
-Responses are not automatically redacted. `redact` is a list of RFC 6901 JSON pointers relative to each complete response, for example `/data/attributes/key`. Missing pointers are ignored. An empty pointer redacts the whole document. No wildcard syntax is supported. Redaction runs before JSON reaches outputs or internal storage. Non-JSON replies fail if redaction is requested. Response headers and error bodies are not emitted.
+Credential fields and HTTP URLs are redacted unless `includeSecrets: true`. `redact` adds RFC 6901 JSON pointers relative to each complete response, for example `/data/attributes/key`. Missing pointers are ignored. An empty pointer redacts the whole document. No wildcard syntax is supported. Pointer redaction applies even with `includeSecrets: true`. Redaction runs before outputs or internal storage. Non-JSON replies fail if pointers are supplied. Binary output requires `includeSecrets: true` because its fields cannot be inspected. Response headers and error bodies are not emitted.
 
 With `paginate: true`, the task detects these query styles:
 
@@ -22,7 +22,7 @@ With `paginate: true`, the task detects these query styles:
 - `page[offset]` with `page[limit]`.
 - `page[number]` with `page[size]`.
 
-The task preserves a supplied starting position. A repeated cursor fails. It stops at a short numeric page, an exhausted cursor or `maxItems`. Body-based pagination and other parameter names require explicit calls. `store: true` writes JSON as ION rows instead of retaining the full list in task outputs. Binary responses are always written to internal storage. Text responses are returned as strings unless stored.
+The task preserves a supplied starting position. A repeated cursor fails. It stops at a short numeric page, an exhausted cursor or `maxItems`. The cap is between 1 and 10000 and requires `paginate: true`. Body-based pagination and other parameter names require explicit calls. `FETCH` returns the body or paginated items. `FETCH_ONE` returns `row`. `STORE` writes ION rows and returns `uri`. `NONE` keeps only counts and status. Binary responses are stored unless `NONE` is selected.
 
 Only idempotent HTTP methods retry on 429 or 5xx. POST and PATCH never retry. `X-RateLimit-Reset` is read as seconds. If it exceeds `maxRetryDelay`, the task fails without retrying early. Without a valid reset header, delays use exponential backoff. Network errors are not retried.
 
@@ -37,7 +37,7 @@ tasks:
     operationId: ListRoles
     paginate: true
     maxItems: 500
-    store: true
+    fetchType: STORE
     query:
       page[size]: 100
 ```

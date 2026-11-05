@@ -42,6 +42,9 @@ public abstract class AbstractFormulaTask extends AbstractDatadogTask {
     private Property<Duration> lookback;
 
     protected Map<String, Object> requestBody(RunContext context, Aggregator aggregator, Long interval) throws Exception {
+        if (from != null && lookback != null) {
+            throw new IllegalArgumentException("`lookback` cannot be used with `from`");
+        }
         Instant end = context.render(to).as(Instant.class).orElseGet(Instant::now);
         Duration window = context.render(lookback).as(Duration.class).orElse(Duration.ofHours(1));
         if (window.isNegative() || window.isZero()) {

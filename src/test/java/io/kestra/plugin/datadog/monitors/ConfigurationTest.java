@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -46,7 +47,7 @@ class ConfigurationTest extends AbstractDatadogTest {
         var row = Map.of("id", "rule", "type", "monitor-notification-rule", "attributes", Map.of("name", "Route alerts", "recipients", java.util.List.of("@team-platform")));
         server.reply("GET", "/api/v2/monitor/notification_rule", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", IntStream.range(0, 100).mapToObj(i -> row).toList())));
         server.reply("GET", "/api/v2/monitor/notification_rule", 200, "{\"data\":[]}");
-        var output = task().store(Property.ofValue(true)).build().run(context);
+        var output = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertEquals(100, output.getSize());
         assertNull(output.getData());
         assertTrue(server.requests.getLast().query().contains("page=1"));

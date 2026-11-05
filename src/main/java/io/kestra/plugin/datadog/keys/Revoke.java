@@ -40,11 +40,13 @@ public class Revoke extends AbstractDatadogTask implements RunnableTask<Revoke.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = AccessApi.required(context, keyId, "keyId");
-        KeyKind kind = context.render(keyKind).as(KeyKind.class).orElse(KeyKind.API);
-        String path = kind.resourcePath(id);
-        boolean ignore = AccessApi.flag(context, ignoreNotFound);
-        return Output.builder().keyId(id).revoked(AccessApi.delete(client(context, true), path, ignore)).build();
+        try (var client = client(context, true)) {
+            String id = AccessApi.required(context, keyId, "keyId");
+            KeyKind kind = context.render(keyKind).as(KeyKind.class).orElse(KeyKind.API);
+            String path = kind.resourcePath(id);
+            boolean ignore = AccessApi.flag(context, ignoreNotFound);
+            return Output.builder().keyId(id).revoked(AccessApi.delete(client, path, ignore)).build();
+        }
     }
 
     @Builder

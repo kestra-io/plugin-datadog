@@ -6,6 +6,8 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.core.models.tasks.common.FetchType;
 
 import java.io.OutputStream;
 import java.net.URI;
@@ -21,16 +23,14 @@ final class UsageData {
     private UsageData() {
     }
 
-    record Result(List<Map<String, Object>> rows, long count, String nextRecordId, URI uri) { }
+    record Result(List<Map<String, Object>> rows, Map<String, Object> row, long count, String nextRecordId, URI uri) { }
 
     static Result collect(RunContext context, DatadogClient client, Map<String, Object> params, int pageSize, int max,
-                          String initialCursor, boolean store) throws Exception {
-        List<Map<String, Object>> result = new ArrayList<>();
+                          String initialCursor, FetchType fetchType) throws Exception {
         Set<String> seen = new HashSet<>();
         String cursor = initialCursor;
         long count = 0;
-        var file = store ? context.workingDir().createTempFile(".ion") : null;
-        try (OutputStream output = store ? Files.newOutputStream(file) : OutputStream.nullOutputStream()) {
+        try (var sink = new DatadogFetch.Sink<Map<String, Object>>(context, fetchType)) {
             do {
                 if (cursor != null && !seen.add(cursor)) {
                     throw new IllegalStateException("Datadog hourly usage repeated a pagination cursor");
@@ -52,11 +52,7 @@ final class UsageData {
                         throw new IllegalStateException("Datadog hourly usage row must be an object");
                     }
                     @SuppressWarnings("unchecked") Map<String, Object> item = (Map<String, Object>) map;
-                    if (store) {
-                        FileSerde.write(output, item);
-                    } else {
-                        result.add(item);
-                    }
+                    sink.add(item);
                     count++;
                 }
                 Object next = answer.get("meta") instanceof Map<?, ?> meta && meta.get("pagination") instanceof Map<?, ?> pagination
@@ -72,7 +68,8 @@ final class UsageData {
                     throw new IllegalStateException("Datadog hourly usage returned an empty page with a cursor");
                 }
             } while (cursor != null && count < max);
+            var result = sink.result();
+            return new Result(result.rows(), result.row(), count, cursor, result.uri());
         }
-        return new Result(store ? null : result, count, cursor, store ? context.storage().putFile(file.toFile()) : null);
     }
 }

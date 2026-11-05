@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.downtimes;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.serializers.JacksonMapper;
@@ -66,7 +67,7 @@ class DowntimeManagementTest extends AbstractDatadogTest {
     void listStoresIon() throws Exception {
         var context = runContext();
         server.reply("GET", "/api/v2/downtime", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", java.util.List.of(ROW))));
-        var output = list().store(Property.ofValue(true)).build().run(context);
+        var output = list().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getDowntimes());
         try (var input = context.storage().getFile(output.getUri())) {
             assertEquals(ROW, JacksonMapper.ofIon().readValue(input, Map.class));

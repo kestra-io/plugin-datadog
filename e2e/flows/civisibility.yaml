@@ -2,7 +2,7 @@ id: datadog_e2e_civisibility
 namespace: hq.datadog.e2e
 tasks:
 - query: '@ci.status:error'
-  store: false
+  fetchType: FETCH
   id: searchpipelines
   type: io.kestra.plugin.datadog.civisibility.SearchPipelines
   apiKey: e2e-api-key
@@ -13,7 +13,7 @@ tasks:
   conditions:
   - '{{ outputs.searchpipelines.size == 1 }}'
 - query: '@test.status:fail'
-  store: false
+  fetchType: FETCH
   id: searchtests
   type: io.kestra.plugin.datadog.civisibility.SearchTests
   apiKey: e2e-api-key

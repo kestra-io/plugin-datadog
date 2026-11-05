@@ -137,7 +137,7 @@ HTTP 429 and 5xx skip the poll without changing the cursor. Authentication error
 
 ## Storage and limits
 
-Dashboard and SLO lists default to `maxResults: 1000` and accept 1 through 10000. `truncated` tells whether more results exist. `store: true` writes an ION file and omits inline rows. A task still buffers at most its bounded result set in worker memory. Export and History write JSON. History is one API response and follows Datadog's retention and rate limits.
+Dashboard and SLO lists default to `maxResults: 1000` and accept 1 through 10000. `truncated` tells whether more results exist. `fetchType: STORE` writes an ION file and omits inline rows. A task still buffers at most its bounded result set in worker memory. Export and History write JSON. History is one API response and follows Datadog's retention and rate limits.
 
 ## Operations left to the generic API layer
 

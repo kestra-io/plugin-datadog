@@ -50,7 +50,7 @@ tasks:
   - a + b
   queryInterval: 60000
   lookback: PT1H
-  store: false
+  fetchType: FETCH
   id: querytimeseries
   type: io.kestra.plugin.datadog.metrics.QueryTimeseries
   apiKey: e2e-api-key

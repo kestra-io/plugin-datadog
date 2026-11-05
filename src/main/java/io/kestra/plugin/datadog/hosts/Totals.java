@@ -39,13 +39,15 @@ public class Totals extends AbstractDatadogTask implements RunnableTask<Totals.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var params = DatadogClient.query();
-        context.render(from).as(Instant.class).ifPresent(value -> params.put("from", value.getEpochSecond()));
-        var data = client(context, true).get("/api/v1/hosts/totals", params).map();
-        if (!(data.get("total_active") instanceof Number active) || !(data.get("total_up") instanceof Number up)) {
-            throw new IllegalStateException("Datadog host totals response needs total_active and total_up");
+        try (var client = client(context, true)) {
+            var params = DatadogClient.query();
+            context.render(from).as(Instant.class).ifPresent(value -> params.put("from", value.getEpochSecond()));
+            var data = client.get("/api/v1/hosts/totals", params).map();
+            if (!(data.get("total_active") instanceof Number active) || !(data.get("total_up") instanceof Number up)) {
+                throw new IllegalStateException("Datadog host totals response needs total_active and total_up");
+            }
+            return Output.builder().totalActive(active.longValue()).totalUp(up.longValue()).build();
         }
-        return Output.builder().totalActive(active.longValue()).totalUp(up.longValue()).build();
     }
 
     @Builder

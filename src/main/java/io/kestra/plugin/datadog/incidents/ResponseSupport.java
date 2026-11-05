@@ -67,8 +67,9 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
 
     protected ResponseOutput send(RunContext context, String method, String path, Map<String, Object> query,
                                   Map<String, Object> body, boolean preview) throws Exception {
-        DatadogClient client = client(context, true);
-        return send(context, client, client.apiBase(), method, path, query, body, preview);
+        try (var client = client(context, true)) {
+            return send(context, client, client.apiBase(), method, path, query, body, preview);
+        }
     }
 
     protected ResponseOutput send(RunContext context, DatadogClient client, String base, String method, String path,
@@ -111,6 +112,6 @@ public abstract class ResponseSupport extends AbstractDatadogTask {
         if (value instanceof java.util.List<?> list) {
             return list.stream().map(ResponseSupport::redact).toList();
         }
-        return value;
+        return io.kestra.plugin.datadog.monitors.MonitorIO.redact(value, false);
     }
 }

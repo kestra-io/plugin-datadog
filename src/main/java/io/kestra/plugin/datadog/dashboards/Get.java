@@ -40,8 +40,10 @@ public class Get extends AbstractDashboardTask implements RunnableTask<Get.Outpu
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String path = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
-        return Output.builder().dashboard(Dashboards.redact(client(context, true).get(path, Map.of()).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+        try (var client = client(context, true)) {
+            String path = Dashboards.path(context.render(dashboardId).as(String.class).orElse(null));
+            return Output.builder().dashboard(Dashboards.redact(client.get(path, Map.of()).map(), context.render(getIncludeSecrets()).as(Boolean.class).orElse(false))).build();
+        }
     }
 
     @Builder

@@ -15,7 +15,7 @@ tasks:
   conditions:
   - '{{ outputs.create.keyId == "00000000-0000-0000-0000-000000000001" }}'
   - '{{ outputs.create.key == "[REDACTED]" }}'
-- store: false
+- fetchType: FETCH
   id: listapikeys
   type: io.kestra.plugin.datadog.keys.ListApiKeys
   apiKey: e2e-api-key
@@ -26,7 +26,7 @@ tasks:
   conditions:
   - '{{ outputs.listapikeys.size == 1 }}'
   - '{{ outputs.listapikeys.rows[0].attributes.key == "[REDACTED]" }}'
-- store: false
+- fetchType: FETCH
   id: listapplicationkeys
   type: io.kestra.plugin.datadog.keys.ListApplicationKeys
   apiKey: e2e-api-key

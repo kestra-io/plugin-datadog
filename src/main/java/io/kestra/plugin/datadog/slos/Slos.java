@@ -124,18 +124,4 @@ final class Slos {
         return rows;
     }
 
-    static URI store(RunContext context, Object data, boolean rows) throws Exception {
-        var file = context.workingDir().createTempFile(rows ? ".ion" : ".json");
-        if (rows) {
-            try (var writer = Files.newBufferedWriter(file)) {
-                for (Object row : (java.util.List<?>) data) {
-                    writer.write(JacksonMapper.ofIon().writeValueAsString(row));
-                    writer.newLine();
-                }
-            }
-        } else {
-            JacksonMapper.ofJson().writeValue(file.toFile(), data);
-        }
-        return context.storage().putFile(file.toFile());
-    }
 }

@@ -1,7 +1,12 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Getter
+@ValidDatadogLimits
 @SuperBuilder
 @NoArgsConstructor
 public abstract class AbstractAggregate extends AbstractWindow {
@@ -39,14 +45,14 @@ public abstract class AbstractAggregate extends AbstractWindow {
 
     @Builder.Default
     @Schema(title = "Maximum buckets", description = "Return at most this many buckets across pages. Between 1 and 10000.", defaultValue = "1000")
-    private Property<Integer> maxResults = Property.ofValue(1000);
+    private Property<@Min(1) @Max(10000) Integer> maxResults = Property.ofValue(1000);
 
     @Builder.Default
-    @Schema(title = "Store buckets", description = "Write buckets to internal storage as ION instead of an inline list.", defaultValue = "false")
-    private Property<Boolean> store = Property.ofValue(false);
+    @Schema(title = "Fetch type", description = "FETCH returns buckets, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Builder.Default
-    @Schema(title = "Include secrets", description = "Return named credential fields without redaction. Free-form values are not inspected.", defaultValue = "false")
+    @Schema(title = "Include secrets", description = "Return credential fields and HTTP URLs without redaction.", defaultValue = "false")
     private Property<Boolean> includeSecrets = Property.ofValue(false);
 
     protected Output aggregate(RunContext context, String path, boolean spans) throws Exception {
@@ -81,9 +87,9 @@ public abstract class AbstractAggregate extends AbstractWindow {
         Map<String, Object> body = Telemetry.merge(spans ? Telemetry.envelope(attributes, "aggregate_request") : attributes,
             context.render(extraBody).asMap(String.class, Object.class));
         validateMergedWindow(body, spans);
-        var client = client(context, true);
         Set<String> seen = new HashSet<>();
-        try (var sink = new Telemetry.Sink(context, context.render(store).as(Boolean.class).orElse(false))) {
+        try (var client = client(context, true);
+             var sink = new DatadogFetch.Sink<Map<String, Object>>(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH))) {
             do {
                 Map<String, Object> answer = client.post(path, body).map();
                 Telemetry.complete(answer);
@@ -104,7 +110,8 @@ public abstract class AbstractAggregate extends AbstractWindow {
                     body = Telemetry.merge(body, Map.of("page", Map.of("cursor", cursor)));
                 }
             } while (cursor != null);
-            return Output.builder().buckets(sink.rows()).size(sink.size()).uri(sink.uri()).nextCursor(cursor).build();
+            var result = sink.result();
+            return Output.builder().buckets(result.rows()).row(result.row()).size(result.size()).uri(result.uri()).nextCursor(cursor).build();
         }
     }
 
@@ -187,14 +194,16 @@ public abstract class AbstractAggregate extends AbstractWindow {
         private String facet;
 
         @Schema(title = "Bucket limit", description = "Positive bucket limit for this facet. Datadog applies its product limit across facets.")
+        @Min(1)
+        @Max(10000)
         private Integer limit;
 
         Map<String, Object> api() {
             if (facet == null || facet.isBlank()) {
                 throw new IllegalArgumentException("The Datadog `groupBy.facet` is required");
             }
-            if (limit != null && limit < 1) {
-                throw new IllegalArgumentException("The Datadog `groupBy.limit` must be positive");
+            if (limit != null && (limit < 1 || limit > 10000)) {
+                throw new IllegalArgumentException("The Datadog `groupBy.limit` must be between 1 and 10000");
             }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("facet", facet);
@@ -208,8 +217,11 @@ public abstract class AbstractAggregate extends AbstractWindow {
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Buckets", description = "Bucket by and computes objects. Null when store is true.")
+        @Schema(title = "Buckets", description = "Bucket by and computes objects. Present with FETCH.")
         private final List<Map<String, Object>> buckets;
+
+        @Schema(title = "First bucket", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
 
         @Schema(title = "Number of buckets")
         private final Integer size;

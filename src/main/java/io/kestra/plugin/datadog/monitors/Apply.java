@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -8,6 +9,7 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -54,67 +56,70 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     private Property<String> from;
     @Schema(title = "Plan changes", description = "False by default. Uses GET requests to compute a diff without writing. Validates definitions locally and skips remote validation. Actions describe the proposed writes.")
     private Property<Boolean> plan;
-    @Schema(title = "Validate before writing", description = "True by default. Validates every definition with Datadog before the first write. Ignored when plan is true.")
+    @Schema(title = "Validate before writing", description = "True by default for writes. Validates every definition with Datadog before the first write. Cannot be supplied when plan is true.")
     private Property<Boolean> validateFirst;
-    @Schema(title = "Store results", description = "Writes result rows to an ION file instead of returning them inline.")
-    private Property<Boolean> store;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var desired = read(context);
-        boolean preview = context.render(plan).as(Boolean.class).orElse(false);
-        boolean validate = context.render(validateFirst).as(Boolean.class).orElse(true);
-        boolean include = includeSecrets(context);
-        boolean storage = context.render(store).as(Boolean.class).orElse(false);
-        DatadogClient client = client(context, true);
-        java.util.List<Plan> plans = new ArrayList<>();
-        // Finish all local validation, discovery and remote validation before any persisted write.
-        for (Map<String, Object> definition : desired) {
-            String key = MonitorDefinitions.key(definition);
-            var params = DatadogClient.query();
-            params.put("monitor_tags", key);
-            var candidates = Monitors.collect(client, params, 10001);
-            if (candidates.size() > 10000) {
-                throw new IllegalStateException("Apply lookup exceeded 10000 monitors; narrow the management key");
+        try (var client = client(context, true)) {
+            var desired = read(context);
+            boolean preview = context.render(plan).as(Boolean.class).orElse(false);
+            if (preview && validateFirst != null) {
+                throw new IllegalArgumentException("`validateFirst` cannot be used when `plan` is true");
             }
-            var matches = candidates.stream().filter(row -> row.get("tags") instanceof java.util.List<?> tags && tags.contains(key)).toList();
-            if (matches.size() > 1) {
-                throw new IllegalStateException("More than one monitor has the management key " + key);
-            }
-            Long id = null;
-            Map<String, Object> current = Map.of();
-            if (!matches.isEmpty()) {
-                id = MonitorOutput.of(matches.getFirst(), true).getMonitorId();
-                current = client.get("/api/v1/monitor/" + id, Map.of("with_assets", true)).map();
-                if (!(current.get("tags") instanceof java.util.List<?> tags) || !tags.contains(key)) {
-                    throw new IllegalStateException("The monitor management key changed during Apply discovery");
+            boolean validate = context.render(validateFirst).as(Boolean.class).orElse(true);
+            boolean include = includeSecrets(context);
+            java.util.List<Plan> plans = new ArrayList<>();
+            // Finish all local validation, discovery and remote validation before any persisted write.
+            for (Map<String, Object> definition : desired) {
+                String key = MonitorDefinitions.key(definition);
+                var params = DatadogClient.query();
+                params.put("monitor_tags", key);
+                var candidates = Monitors.collect(client, params, 10001);
+                if (candidates.size() > 10000) {
+                    throw new IllegalStateException("Apply lookup exceeded 10000 monitors; narrow the management key");
                 }
+                var matches = candidates.stream().filter(row -> row.get("tags") instanceof java.util.List<?> tags && tags.contains(key)).toList();
+                if (matches.size() > 1) {
+                    throw new IllegalStateException("More than one monitor has the management key " + key);
+                }
+                Long id = null;
+                Map<String, Object> current = Map.of();
+                if (!matches.isEmpty()) {
+                    id = MonitorOutput.of(matches.getFirst(), true).getMonitorId();
+                    current = client.get("/api/v1/monitor/" + id, Map.of("with_assets", true)).map();
+                    if (!(current.get("tags") instanceof java.util.List<?> tags) || !tags.contains(key)) {
+                        throw new IllegalStateException("The monitor management key changed during Apply discovery");
+                    }
+                }
+                var changes = MonitorDefinitions.diff(current, definition);
+                Action action = id == null ? Action.CREATED : changes.isEmpty() ? Action.UNCHANGED : Action.UPDATED;
+                Map<String, Object> body = MonitorDefinitions.merge(MonitorDefinitions.writable(current), definition);
+                if (validate && !preview) {
+                    client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
+                }
+                plans.add(new Plan(key, id, action, body, changes));
             }
-            var changes = MonitorDefinitions.diff(current, definition);
-            Action action = id == null ? Action.CREATED : changes.isEmpty() ? Action.UNCHANGED : Action.UPDATED;
-            Map<String, Object> body = MonitorDefinitions.merge(MonitorDefinitions.writable(current), definition);
-            if (validate && !preview) {
-                client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
-            }
-            plans.add(new Plan(key, id, action, body, changes));
-        }
 
-        java.util.List<Result> results = new ArrayList<>();
-        for (Plan plan : plans) {
-            Long id = plan.id();
-            if (!preview && plan.action() != Action.UNCHANGED) {
-                Map<String, Object> response = id == null
-                    ? client.post("/api/v1/monitor", plan.body()).map()
-                    : client.put("/api/v1/monitor/" + id, plan.body()).map();
-                id = MonitorOutput.of(response, true).getMonitorId();
+            java.util.List<Result> results = new ArrayList<>();
+            for (Plan plan : plans) {
+                Long id = plan.id();
+                if (!preview && plan.action() != Action.UNCHANGED) {
+                    Map<String, Object> response = id == null
+                        ? client.post("/api/v1/monitor", plan.body()).map()
+                        : client.put("/api/v1/monitor/" + id, plan.body()).map();
+                    id = MonitorOutput.of(response, true).getMonitorId();
+                }
+                var filtered = plan.changes().stream().map(change -> MonitorDefinitions.Change.builder()
+                    .field(change.getField()).before(MonitorIO.redactField(change.getField(), change.getBefore(), include))
+                    .after(MonitorIO.redactField(change.getField(), change.getAfter(), include)).build()).toList();
+                results.add(Result.builder().key(plan.key()).monitorId(id).action(plan.action()).diff(filtered).build());
             }
-            var filtered = plan.changes().stream().map(change -> MonitorDefinitions.Change.builder()
-                .field(change.getField()).before(MonitorIO.redactField(change.getField(), change.getBefore(), include))
-                .after(MonitorIO.redactField(change.getField(), change.getAfter(), include)).build()).toList();
-            results.add(Result.builder().key(plan.key()).monitorId(id).action(plan.action()).diff(filtered).build());
+            var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), results);
+            return Output.builder().results(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).plan(preview).build();
         }
-        URI uri = storage ? MonitorIO.store(context, results, false) : null;
-        return Output.builder().results(storage ? null : results).uri(uri).size(results.size()).plan(preview).build();
     }
 
     private java.util.List<Map<String, Object>> read(RunContext context) throws Exception {
@@ -188,8 +193,10 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Per-monitor results", description = "Omitted when store is true.")
+        @Schema(title = "Per-monitor results", description = "Omitted with STORE.")
         private final java.util.List<Result> results;
+        @Schema(title = "First reconciliation result", description = "Present with FETCH_ONE.")
+        private final Result row;
         @Schema(title = "Result file URI")
         private final URI uri;
         @Schema(title = "Number of definitions")

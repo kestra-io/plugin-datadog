@@ -41,10 +41,12 @@ public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output>
     @Override
     @SuppressWarnings("unchecked")
     public Output run(RunContext context) throws Exception {
-        String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
-        boolean include = AccessApi.flag(context, includeSecrets);
-        Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client(context, true), "GET", path, Map.of(), null)).get("data"));
-        return Output.builder().user((Map<String, Object>) AccessApi.redact(data, include)).build();
+        try (var client = client(context, true)) {
+            String path = "/api/v2/users/" + AccessApi.segment(AccessApi.required(context, userId, "userId"));
+            boolean include = AccessApi.flag(context, includeSecrets);
+            Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of(), null)).get("data"));
+            return Output.builder().user((Map<String, Object>) AccessApi.redact(data, include)).build();
+        }
     }
 
     @Builder

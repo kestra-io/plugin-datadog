@@ -28,7 +28,7 @@ import lombok.experimental.SuperBuilder;
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         startMonth: "2026-01"
         endMonth: "2026-03"
-        store: true
+        fetchType: STORE
     """))
 public class Historical extends AbstractCostTask implements RunnableTask<AbstractCostTask.Output> {
     @Override

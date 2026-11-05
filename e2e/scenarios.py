@@ -54,8 +54,8 @@ def build():
                 props[key] = "e2e fixture"
         if "includeSecrets" in props:
             props["includeSecrets"] = False
-        if "store" in props:
-            props["store"] = False
+        if "fetchType" in props and not name.endswith(".Export"):
+            props["fetchType"] = "FETCH"
         if "dryRun" in inventory[name]["properties"]:
             props["dryRun"] = False
         if "plan" in inventory[name]["properties"]:

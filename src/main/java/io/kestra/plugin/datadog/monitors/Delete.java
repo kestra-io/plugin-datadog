@@ -39,16 +39,18 @@ public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.O
 
     @Override
     public Output run(RunContext context) throws Exception {
-        long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            client(context, true).delete("/api/v1/monitor/" + id);
-            return Output.builder().monitorId(id).deleted(true).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 404 && ignore) {
-                return Output.builder().monitorId(id).deleted(false).build();
+        try (var client = client(context, true)) {
+            long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            try {
+                client.delete("/api/v1/monitor/" + id);
+                return Output.builder().monitorId(id).deleted(true).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() == 404 && ignore) {
+                    return Output.builder().monitorId(id).deleted(false).build();
+                }
+                throw e;
             }
-            throw e;
         }
     }
 

@@ -1,5 +1,9 @@
 package io.kestra.plugin.datadog.slos;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
@@ -7,6 +11,8 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -19,6 +25,7 @@ import java.net.URI;
 import java.util.Map;
 
 /** Datadog operationId: ListSLOs. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -34,7 +41,7 @@ import java.util.Map;
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         tagsQuery: env:prod
-        store: true
+        fetchType: STORE
     """))
 public class List extends AbstractDatadogTask implements RunnableTask<List.Output> {
     @Schema(title = "SLO identifiers", description = "Comma-separated ids, sent as ids.")
@@ -48,32 +55,41 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @Schema(title = "Deleted SLOs filter")
     private Property<Boolean> deleted;
     @Schema(title = "Maximum results", description = "Between 1 and 10000, default 1000. Reads one extra row to detect truncation.")
-    private Property<Integer> maxResults;
-    @Schema(title = "Store results", description = "Return an ION internal-storage URI instead of inline rows. False by default.")
-    private Property<Boolean> store;
+    private Property<@Min(1) @Max(10000) Integer> maxResults;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs without redaction. False by default.")
+    private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
-        int limit = Slos.limit(context.render(maxResults).as(Integer.class).orElse(1000));
-        Map<String, Object> params = DatadogClient.query();
-        context.render(ids).as(String.class).ifPresent(value -> params.put("ids", value));
-        context.render(query).as(String.class).ifPresent(value -> params.put("query", value));
-        context.render(tagsQuery).as(String.class).ifPresent(value -> params.put("tags_query", value));
-        context.render(metricsQuery).as(String.class).ifPresent(value -> params.put("metrics_query", value));
-        context.render(deleted).as(Boolean.class).ifPresent(value -> params.put("is_deleted", value));
-        var rows = Slos.collect(client(context, true), params, limit + 1);
-        boolean truncated = rows.size() > limit;
-        rows = rows.subList(0, Math.min(rows.size(), limit));
-        boolean stored = context.render(store).as(Boolean.class).orElse(false);
-        return Output.builder().slos(stored ? null : rows).uri(stored ? Slos.store(context, rows, true) : null).size(rows.size()).truncated(truncated).build();
+        try (var client = client(context, true)) {
+            int limit = Slos.limit(context.render(maxResults).as(Integer.class).orElse(1000));
+            Map<String, Object> params = DatadogClient.query();
+            context.render(ids).as(String.class).ifPresent(value -> params.put("ids", value));
+            context.render(query).as(String.class).ifPresent(value -> params.put("query", value));
+            context.render(tagsQuery).as(String.class).ifPresent(value -> params.put("tags_query", value));
+            context.render(metricsQuery).as(String.class).ifPresent(value -> params.put("metrics_query", value));
+            context.render(deleted).as(Boolean.class).ifPresent(value -> params.put("is_deleted", value));
+            var rows = Slos.collect(client, params, limit + 1);
+            boolean truncated = rows.size() > limit;
+            rows = rows.subList(0, Math.min(rows.size(), limit));
+            var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var safe = rows.stream().map(row -> MonitorIO.redactMap(row, rIncludeSecrets)).toList();
+            var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);
+            return Output.builder().slos(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).truncated(truncated).build();
+        }
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "SLO definitions", description = "Absent when store is true.")
+        @Schema(title = "SLO definitions", description = "Absent with STORE.")
         private final java.util.List<Map<String, Object>> slos;
-        @Schema(title = "ION results URI", description = "Present when store is true.")
+        @Schema(title = "First SLO", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
+        @Schema(title = "ION results URI", description = "Present with STORE.")
         private final URI uri;
         @Schema(title = "Number of SLOs returned")
         private final Integer size;

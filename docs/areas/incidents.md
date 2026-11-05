@@ -71,7 +71,7 @@ Dry runs return `request` and no HTTP status. Authentication headers are never i
 
 `cases.Comment` returns timeline cells in `body.data`, which is an array. `incidents.Search` returns the entries from `data.attributes.incidents`; each entry wraps an incident in its own `data` object.
 
-List tasks return `items`, `count`, `uri` and `limitReached`. Use `store: true` to stream the rows to an internal ION file instead of storing them in the execution output. The plugin accepts `pageSize` from 1 to 100 and `maxResults` from 1 to 10000. Defaults are 50 and 1000. These are plugin bounds. `limitReached` means more records can exist. Paging is not a snapshot of a changing organization.
+List tasks return `items`, `count`, `uri` and `limitReached`. Use `fetchType: STORE` to stream the rows to an internal ION file instead of storing them in the execution output. The plugin accepts `pageSize` from 1 to 100 and `maxResults` from 1 to 10000. Defaults are 50 and 1000. These are plugin bounds. `limitReached` means more records can exist. Paging is not a snapshot of a changing organization.
 
 ## Incident updates
 

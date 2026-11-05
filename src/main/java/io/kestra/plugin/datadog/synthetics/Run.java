@@ -56,61 +56,62 @@ public class Run extends AbstractTriggerTask implements RunnableTask<Run.Output>
 
     @Override
     public Output run(RunContext context) throws Exception {
-        Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
-        Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
-        Deadline.validate(wait, "maxWait");
-        Deadline.validate(interval, "pollInterval");
-        boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
-        boolean timeoutFails = context.render(failOnTimeout).as(Boolean.class).orElse(true);
-        boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
-        var client = client(context, true);
-        String batchId = null;
-        Status status = Status.IN_PROGRESS;
-        List<TestResult> results = List.of();
-        boolean finished = false;
-        try (var deadline = new Deadline(wait)) {
-            try {
-                var body = deadline.call(() -> triggerBody(context, client));
-                var triggered = deadline.call(() -> client.post("/api/v1/synthetics/tests/trigger/ci", body).map());
-                batchId = Synthetics.id((String) triggered.get("batch_id"), "batch_id returned by Datadog");
-                final String path = "/api/v1/synthetics/ci/batch/" + batchId;
-                while (!deadline.expired()) {
-                    try {
-                        var response = deadline.call(() -> client.get(path, Map.of()).map());
-                        var data = Synthetics.object(response.get("data"), "batch data");
-                        status = Status.from(data.get("status"));
-                        results = parse(data);
-                        // Both the batch and each reported result must be terminal. Empty success is not evidence.
-                        finished = status != Status.IN_PROGRESS && (status == Status.SKIPPED || !results.isEmpty())
-                            && results.stream().allMatch(result -> result.status != Status.IN_PROGRESS);
-                        if (finished) {
-                            results = details(client, deadline, results, reveal);
-                            break;
+        try (var client = client(context, true)) {
+            Duration wait = context.render(maxWait).as(Duration.class).orElse(Duration.ofMinutes(10));
+            Duration interval = context.render(pollInterval).as(Duration.class).orElse(Duration.ofSeconds(5));
+            Deadline.validate(wait, "maxWait");
+            Deadline.validate(interval, "pollInterval");
+            boolean fail = context.render(failOnFailure).as(Boolean.class).orElse(true);
+            boolean timeoutFails = context.render(failOnTimeout).as(Boolean.class).orElse(true);
+            boolean reveal = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            String batchId = null;
+            Status status = Status.IN_PROGRESS;
+            List<TestResult> results = List.of();
+            boolean finished = false;
+            try (var deadline = new Deadline(wait)) {
+                try {
+                    var body = deadline.call(() -> triggerBody(context, client));
+                    var triggered = deadline.call(() -> client.post("/api/v1/synthetics/tests/trigger/ci", body).map());
+                    batchId = Synthetics.id((String) triggered.get("batch_id"), "batch_id returned by Datadog");
+                    final String path = "/api/v1/synthetics/ci/batch/" + batchId;
+                    while (!deadline.expired()) {
+                        try {
+                            var response = deadline.call(() -> client.get(path, Map.of()).map());
+                            var data = Synthetics.object(response.get("data"), "batch data");
+                            status = Status.from(data.get("status"));
+                            results = parse(data);
+                            // Both the batch and each reported result must be terminal. Empty success is not evidence.
+                            finished = status != Status.IN_PROGRESS && (status == Status.SKIPPED || !results.isEmpty())
+                                && results.stream().allMatch(result -> result.status != Status.IN_PROGRESS);
+                            if (finished) {
+                                results = details(client, deadline, results, reveal);
+                                break;
+                            }
+                        } catch (DatadogClient.DatadogException e) {
+                            if (e.getStatus() != 429 && e.getStatus() < 500) {
+                                throw e;
+                            }
                         }
-                    } catch (DatadogClient.DatadogException e) {
-                        if (e.getStatus() != 429 && e.getStatus() < 500) {
-                            throw e;
-                        }
+                        deadline.pause(interval);
                     }
-                    deadline.pause(interval);
+                } catch (TimeoutException ignored) {
+                    // Preserve the last state. A deadline is never turned into a passing batch.
                 }
-            } catch (TimeoutException ignored) {
-                // Preserve the last state. A deadline is never turned into a passing batch.
             }
+            boolean timedOut = !finished;
+            boolean failed = failed(status, results);
+            var output = Output.builder().batchId(batchId).status(status).results(results).timedOut(timedOut)
+                .passed(finished && !failed && status == Status.PASSED).build();
+            if (timedOut && timeoutFails) {
+                throw new IllegalStateException("Synthetic batch " + batchId + " did not finish within " + wait);
+            }
+            if (failed && fail) {
+                String reasons = String.join("; ", results.stream().filter(TestResult::blocks)
+                    .map(row -> row.publicId + " at " + row.location + ": " + row.failureCode).toList());
+                throw new IllegalStateException("Synthetic batch " + batchId + " failed" + (reasons.isEmpty() ? "" : ": " + reasons));
+            }
+            return output;
         }
-        boolean timedOut = !finished;
-        boolean failed = failed(status, results);
-        var output = Output.builder().batchId(batchId).status(status).results(results).timedOut(timedOut)
-            .passed(finished && !failed && status == Status.PASSED).build();
-        if (timedOut && timeoutFails) {
-            throw new IllegalStateException("Synthetic batch " + batchId + " did not finish within " + wait);
-        }
-        if (failed && fail) {
-            String reasons = String.join("; ", results.stream().filter(TestResult::blocks)
-                .map(row -> row.publicId + " at " + row.location + ": " + row.failureCode).toList());
-            throw new IllegalStateException("Synthetic batch " + batchId + " failed" + (reasons.isEmpty() ? "" : ": " + reasons));
-        }
-        return output;
     }
 
     static boolean failed(Status batch, List<TestResult> results) {

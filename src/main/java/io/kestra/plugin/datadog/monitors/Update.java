@@ -42,18 +42,20 @@ public class Update extends AbstractDefinitionTask implements RunnableTask<Updat
 
     @Override
     public Output run(RunContext context) throws Exception {
-        long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
-        var body = definition(context, false);
-        boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-        boolean include = includeSecrets(context);
-        try {
-            var monitor = MonitorOutput.of(client(context, true).put("/api/v1/monitor/" + id, body).map(), include);
-            return Output.builder().monitorId(monitor.getMonitorId()).monitor(monitor.getMonitor()).updated(true).build();
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() == 404 && ignore) {
-                return Output.builder().monitorId(id).updated(false).build();
+        try (var client = client(context, true)) {
+            long id = MonitorIO.positiveId(context.render(monitorId).as(Long.class).orElse(null));
+            var body = definition(context, false);
+            boolean ignore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
+            boolean include = includeSecrets(context);
+            try {
+                var monitor = MonitorOutput.of(client.put("/api/v1/monitor/" + id, body).map(), include);
+                return Output.builder().monitorId(monitor.getMonitorId()).monitor(monitor.getMonitor()).updated(true).build();
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() == 404 && ignore) {
+                    return Output.builder().monitorId(id).updated(false).build();
+                }
+                throw e;
             }
-            throw e;
         }
     }
 

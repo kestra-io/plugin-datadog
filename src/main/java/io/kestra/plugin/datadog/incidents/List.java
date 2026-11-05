@@ -24,7 +24,7 @@ import java.util.LinkedHashMap;
         type: io.kestra.plugin.datadog.incidents.List
         apiKey: "{{ secret('DATADOG_API_KEY') }}"
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
-        store: true
+        fetchType: STORE
     """))
 public class List extends PaginatedResponseTask implements RunnableTask<CollectionOutput> {
     @Override

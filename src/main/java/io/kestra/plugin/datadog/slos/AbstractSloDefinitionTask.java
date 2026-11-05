@@ -45,6 +45,9 @@ public abstract class AbstractSloDefinitionTask extends AbstractDatadogTask {
     @Schema(title = "SLO tags")
     private Property<java.util.List<String>> tags;
 
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in the SLO definition. False by default.")
+    private Property<Boolean> includeSecrets;
+
     protected Map<String, Object> body(RunContext context) throws Exception {
         String name = context.render(this.name).as(String.class).orElse("");
         if (name.isBlank()) {
@@ -118,12 +121,13 @@ public abstract class AbstractSloDefinitionTask extends AbstractDatadogTask {
         return body;
     }
 
-    protected java.util.List<Map<String, Object>> result(Map<String, Object> response) {
+    protected java.util.List<Map<String, Object>> result(RunContext context, Map<String, Object> response) throws Exception {
         Slos.noErrors(response);
         if (!(response.get("data") instanceof java.util.List<?> data)) {
             throw new IllegalStateException("Datadog did not return an SLO data array");
         }
-        return data.stream().map(value -> Slos.object(value, "data[]")).toList();
+        var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
+        return data.stream().map(value -> io.kestra.plugin.datadog.monitors.MonitorIO.redactMap(Slos.object(value, "data[]"), rIncludeSecrets)).toList();
     }
 
     public enum SloType {

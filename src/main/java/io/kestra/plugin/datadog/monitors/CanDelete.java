@@ -38,13 +38,15 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var ids = NumericIds.render(context, monitorIds, "monitorIds");
-        if (ids.isEmpty()) {
-            throw new IllegalArgumentException("monitorIds must not be empty");
+        try (var client = client(context, true)) {
+            var ids = NumericIds.render(context, monitorIds, "monitorIds");
+            if (ids.isEmpty()) {
+                throw new IllegalArgumentException("monitorIds must not be empty");
+            }
+            ids.forEach(MonitorIO::positiveId);
+            String query = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
+            return Output.builder().result(MonitorIO.redactMap(client.get("/api/v1/monitor/can_delete", Map.of("monitor_ids", query)).map(), includeSecrets(context))).build();
         }
-        ids.forEach(MonitorIO::positiveId);
-        String query = ids.stream().map(String::valueOf).collect(Collectors.joining(","));
-        return Output.builder().result(MonitorIO.redactMap(client(context, true).get("/api/v1/monitor/can_delete", Map.of("monitor_ids", query)).map(), includeSecrets(context))).build();
     }
 
     @Builder

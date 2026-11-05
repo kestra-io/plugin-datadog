@@ -71,7 +71,7 @@ public class Page extends PagingTask implements RunnableTask<ResponseOutput> {
 
     @Override
     public ResponseOutput run(RunContext context) throws Exception {
-        Map<String, Object> attributes = new LinkedHashMap<>();
+        var attributes = new LinkedHashMap<String, Object>();
         attributes.put("title", required(context, title, "title"));
         attributes.put("target", Map.of("type", required(context, targetType, TargetType.class, "targetType").name().toLowerCase(Locale.ROOT),
             "identifier", required(context, target, "target")));
@@ -79,8 +79,9 @@ public class Page extends PagingTask implements RunnableTask<ResponseOutput> {
         if (tags != null) {
             attributes.put("tags", context.render(tags).asList(String.class));
         }
-        DatadogClient client = client(context, true);
-        return send(context, client, pagingBase(context, client), "POST", "/api/v2/on-call/pages", Map.of(),
-            Map.of("data", resource("pages", null, attributes)), dryRun(context, dryRun));
+        try (var client = client(context, true)) {
+            return send(context, client, pagingBase(context, client), "POST", "/api/v2/on-call/pages", Map.of(),
+                Map.of("data", resource("pages", null, attributes)), dryRun(context, dryRun));
+        }
     }
 }

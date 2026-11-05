@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.usage;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -72,7 +73,7 @@ class UsageTest extends AbstractDatadogTest {
     void resultCapReturnsAResumeCursorAndStoreOmitsRows() throws Exception {
         reply(row("one", "20", "parent"), "next");
         var context = runContext();
-        var output = hourly().maxResults(Property.ofValue(1)).store(Property.ofValue(true)).build().run(context);
+        var output = hourly().maxResults(Property.ofValue(1)).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getRows());
         assertTrue(output.getTruncated());
         assertEquals("next", output.getNextRecordId());

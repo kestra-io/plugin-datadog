@@ -11,9 +11,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** Shared validation and response handling for organization workflows. Never echoes response bodies in errors. */
 public final class AccessApi {
+    private static final Pattern URL = Pattern.compile("https?://[^\\s<>\\\"']+", Pattern.CASE_INSENSITIVE);
     private AccessApi() {
     }
 
@@ -70,6 +72,8 @@ public final class AccessApi {
         DatadogClient.Response response;
         try {
             response = client.exchange(method, client.apiBase(), path, query, body, false);
+        } catch (DatadogClient.DatadogException e) {
+            throw new DatadogClient.DatadogException(e.getStatus(), "Datadog organization request could not be completed");
         } catch (Exception e) {
             // Transport exception causes can include headers or a response containing a newly created key.
             throw new IllegalStateException("Datadog organization request could not be completed");
@@ -140,7 +144,7 @@ public final class AccessApi {
         if (value instanceof List<?> list) {
             return list.stream().map(item -> redact(item, false)).toList();
         }
-        return value;
+        return value instanceof String text ? URL.matcher(text).replaceAll("[REDACTED_URL]") : value;
     }
 
     public record Page(List<Map<String, Object>> rows, boolean truncated) {

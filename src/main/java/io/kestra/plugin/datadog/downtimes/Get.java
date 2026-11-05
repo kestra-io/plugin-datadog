@@ -40,14 +40,16 @@ public class Get extends AbstractDatadogTask implements RunnableTask<Get.Output>
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = context.render(downtimeId).as(String.class).orElse(null);
-        String path = DowntimeSupport.path(id);
-        boolean include = context.render(includeSecrets).as(Boolean.class).orElse(false);
-        var response = client(context, true).get(path, Map.of()).map();
-        if (!(response.get("data") instanceof Map<?, ?>)) {
-            throw new IllegalStateException("Datadog downtime response must contain a data object");
+        try (var client = client(context, true)) {
+            String id = context.render(downtimeId).as(String.class).orElse(null);
+            String path = DowntimeSupport.path(id);
+            boolean include = context.render(includeSecrets).as(Boolean.class).orElse(false);
+            var response = client.get(path, Map.of()).map();
+            if (!(response.get("data") instanceof Map<?, ?>)) {
+                throw new IllegalStateException("Datadog downtime response must contain a data object");
+            }
+            return Output.builder().downtimeId(id).downtime(MonitorIO.redactMap(response, include)).build();
         }
-        return Output.builder().downtimeId(id).downtime(MonitorIO.redactMap(response, include)).build();
     }
 
     @Builder

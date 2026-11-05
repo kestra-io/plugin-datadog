@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.usage;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
@@ -35,18 +36,18 @@ import java.util.Map;
         from: "2026-01-01T00:00:00Z"
         to: "2026-01-02T00:00:00Z"
         productFamilies: [INFRA_HOSTS]
-        store: true
+        fetchType: STORE
     """))
 public class Hourly extends AbstractHourlyTask implements RunnableTask<Hourly.Output> {
     @Schema(title = "Resume cursor", description = "Opaque next_record_id returned by a previous run with the same filters.")
     private Property<String> nextRecordId;
-    @Schema(title = "Store usage", description = "Stream one usage row per ION record and omit inline rows. Defaults to false.")
-    private Property<Boolean> store;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var result = collect(context, context.render(nextRecordId).as(String.class).filter(s -> !s.isBlank()).orElse(null), context.render(store).as(Boolean.class).orElse(false));
-        return Output.builder().rows(result.rows()).count(result.count()).nextRecordId(result.nextRecordId())
+        var result = collect(context, context.render(nextRecordId).as(String.class).filter(s -> !s.isBlank()).orElse(null), context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH));
+        return Output.builder().rows(result.rows()).row(result.row()).count(result.count()).nextRecordId(result.nextRecordId())
             .truncated(result.nextRecordId() != null).uri(result.uri()).build();
     }
 
@@ -55,6 +56,8 @@ public class Hourly extends AbstractHourlyTask implements RunnableTask<Hourly.Ou
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Usage rows", description = "Datadog usage_timeseries records, including measurements with int64 or null values.")
         private final List<Map<String, Object>> rows;
+        @Schema(title = "First usage record", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
         @Schema(title = "Collected row count")
         private final Long count;
         @Schema(title = "Next record cursor")

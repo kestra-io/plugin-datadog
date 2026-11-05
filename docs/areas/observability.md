@@ -28,7 +28,7 @@ Existing `logs.Send` and `events.Create` retain their intake and event-creation 
 
 ## Search and export
 
-Search tasks accept `query`, `from`, `to`, `sort`, `maxResults`, `store` and `includeSecrets`. Log search also accepts `indexes`. The window defaults to `now-15m` through `now`.
+Search tasks accept `query`, `from`, `to`, `sort`, `maxResults`, `fetchType` and `includeSecrets`. Log search also accepts `indexes`. The window defaults to `now-15m` through `now`.
 
 Timestamps accept ISO-8601 instants with an offset, epoch milliseconds and Datadog relative expressions such as `now-15m` or `now-1d/d`. Validation names the invalid field. Values are sent unchanged. Use fixed instants when successive pages must share a fixed window.
 
@@ -37,8 +37,8 @@ The tasks follow `meta.page.after` until it ends or `maxResults` is reached. The
 - `logs.Search` keeps the existing flattened `logs` output with the event `id` beside its attributes.
 - Other searches return `events` with each resource's `id`, `type` and `attributes` intact.
 - `size` counts returned rows.
-- With `store: true`, rows stream into an ION file and `uri` points to internal storage. The inline list is null. The result cap still applies.
-- Named API keys, application keys, passwords, tokens and webhook URLs are redacted recursively unless `includeSecrets: true`. Free-form messages and arbitrary strings are not inspected.
+- With `fetchType: STORE`, rows stream into an ION file and `uri` points to internal storage. The inline list is null. The result cap still applies.
+- Named API keys, application keys, passwords, tokens and HTTP URLs are redacted recursively unless `includeSecrets: true`. URL filtering includes links in free-form messages. Arbitrary credentials in prose are not parsed.
 
 ```yaml
 id: export_datadog_spans
@@ -52,7 +52,7 @@ tasks:
     from: "2026-11-05T10:00:00Z"
     to: "2026-11-05T11:00:00Z"
     maxResults: 10000
-    store: true
+    fetchType: STORE
 ```
 
 ## Aggregates
@@ -66,7 +66,7 @@ tasks:
 - `pageCursor`: a starting cursor for logs and RUM. Spans aggregate has no paging field and rejects this property.
 - `extraBody`: recursively merged last into the complete wire body. Scalars and arrays replace typed values. Use it for histograms, group sorting, missing values, totals and advanced options. For spans, put overrides beneath `data.attributes`. Advanced fields are validated by Datadog. Overridden filter timestamps still receive local format validation.
 - `maxResults`: bucket cap from 1 through 10000, default 1000.
-- `store` and `includeSecrets`: the same output behavior as search.
+- `fetchType` and `includeSecrets`: the same output behavior as search.
 
 Supported aggregation values are `COUNT`, `CARDINALITY`, `PC75`, `PC90`, `PC95`, `PC98`, `PC99`, `SUM`, `MIN`, `MAX`, `AVG` and `MEDIAN`. A metric is required except for `COUNT`. `computeType` is `TOTAL` or `TIMESERIES`. An interval such as `1m` requires `TIMESERIES`.
 

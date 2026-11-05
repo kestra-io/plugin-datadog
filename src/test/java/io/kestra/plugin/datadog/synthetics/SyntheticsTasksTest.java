@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.synthetics;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -116,9 +117,9 @@ class SyntheticsTasksTest extends AbstractDatadogTest {
         var context = runContextFactory.of(Map.of(
             "flow", Map.of("id", "test-flow", "namespace", "company.delivery"),
             "execution", Map.of("id", IdUtils.create()), "taskrun", Map.of("id", IdUtils.create())));
-        var output = auth(List.builder(), List.class).store(Property.ofValue(true)).build().run(context);
+        var output = auth(List.builder(), List.class).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertEquals(1, output.getSize());
-        assertTrue(output.getTests().isEmpty());
+        assertNull(output.getTests());
         assertNotNull(output.getUri());
         try (var input = context.storage().getFile(output.getUri())) {
             String ion = new String(input.readAllBytes(), StandardCharsets.UTF_8);

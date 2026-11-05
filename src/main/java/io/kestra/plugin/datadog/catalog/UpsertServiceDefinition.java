@@ -51,34 +51,35 @@ public class UpsertServiceDefinition extends AbstractDatadogTask implements Runn
 
     @Override
     public Output run(RunContext context) throws Exception {
-        if (definition == null) { throw new IllegalArgumentException("`definition` is required"); }
-        Map<String, Object> desired = new LinkedHashMap<>(context.render(definition).asMap(String.class, Object.class));
-        ServiceDefinitions.validate(desired);
-        String service = AccessApi.required(desired.get("dd-service"), "definition.dd-service");
-        desired.put("dd-service", service);
-        String path = "/api/v2/services/definitions/" + AccessApi.segment(service);
-        boolean preview = AccessApi.flag(context, plan);
-        boolean include = AccessApi.flag(context, includeSecrets);
-        DatadogClient client = client(context, true);
-        Map<String, Object> current = Map.of();
-        boolean exists = true;
-        try {
-            Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of("schema_version", "v2.2"), null)).get("data"));
-            current = AccessApi.object(AccessApi.object(data.get("attributes")).get("schema"));
-            if (!service.equals(current.get("dd-service"))) {
-                throw new IllegalStateException("Datadog returned a different service definition");
+        try (var client = client(context, true)) {
+            if (definition == null) { throw new IllegalArgumentException("`definition` is required"); }
+            Map<String, Object> desired = new LinkedHashMap<>(context.render(definition).asMap(String.class, Object.class));
+            ServiceDefinitions.validate(desired);
+            String service = AccessApi.required(desired.get("dd-service"), "definition.dd-service");
+            desired.put("dd-service", service);
+            String path = "/api/v2/services/definitions/" + AccessApi.segment(service);
+            boolean preview = AccessApi.flag(context, plan);
+            boolean include = AccessApi.flag(context, includeSecrets);
+            Map<String, Object> current = Map.of();
+            boolean exists = true;
+            try {
+                Map<String, Object> data = AccessApi.object(AccessApi.json(AccessApi.request(client, "GET", path, Map.of("schema_version", "v2.2"), null)).get("data"));
+                current = AccessApi.object(AccessApi.object(data.get("attributes")).get("schema"));
+                if (!service.equals(current.get("dd-service"))) {
+                    throw new IllegalStateException("Datadog returned a different service definition");
+                }
+            } catch (DatadogClient.DatadogException e) {
+                if (e.getStatus() != 404) { throw e; }
+                exists = false;
             }
-        } catch (DatadogClient.DatadogException e) {
-            if (e.getStatus() != 404) { throw e; }
-            exists = false;
+            List<Change> diff = new ArrayList<>();
+            ServiceDefinitions.diff("", current, desired, diff, include);
+            Status status = !exists ? Status.CREATED : diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED;
+            if (!preview && status != Status.UNCHANGED) {
+                AccessApi.request(client, "POST", "/api/v2/services/definitions", Map.of(), ServiceDefinitions.merge(current, desired));
+            }
+            return Output.builder().serviceName(service).status(status).plan(preview).diff(diff).build();
         }
-        List<Change> diff = new ArrayList<>();
-        ServiceDefinitions.diff("", current, desired, diff, include);
-        Status status = !exists ? Status.CREATED : diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED;
-        if (!preview && status != Status.UNCHANGED) {
-            AccessApi.request(client, "POST", "/api/v2/services/definitions", Map.of(), ServiceDefinitions.merge(current, desired));
-        }
-        return Output.builder().serviceName(service).status(status).plan(preview).diff(diff).build();
     }
 
     public enum Status { CREATED, UPDATED, UNCHANGED }

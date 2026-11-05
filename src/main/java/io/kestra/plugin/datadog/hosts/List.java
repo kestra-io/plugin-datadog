@@ -1,5 +1,9 @@
 package io.kestra.plugin.datadog.hosts;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
@@ -8,6 +12,8 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
+import io.kestra.plugin.datadog.monitors.MonitorIO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -25,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /** Datadog operationId: ListHosts. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -42,7 +49,7 @@ import java.util.Map;
         filter: "env:prod"
         includeMutedHostsData: true
         maxResults: 10000
-        store: true
+        fetchType: STORE
     """))
 public class List extends AbstractDatadogTask implements RunnableTask<List.Output> {
     @Schema(title = "Search filter", description = "Datadog host search expression.")
@@ -58,20 +65,23 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @Schema(title = "Include host metadata", description = "Include agent and machine metadata.")
     private Property<Boolean> includeHostsMetadata;
     @Schema(title = "Page size", description = "Hosts per request, from 1 to 1000. Defaults to 1000.")
-    private Property<Integer> pageSize;
-    @Schema(title = "Maximum results", description = "Maximum hosts collected, from 1 to 100000. Defaults to 1000.")
-    private Property<Integer> maxResults;
-    @Schema(title = "Store hosts", description = "Stream one host per ION record to internal storage. Defaults to false.")
-    private Property<Boolean> store;
+    private Property<@Min(1) @Max(1000) Integer> pageSize;
+    @Schema(title = "Maximum results", description = "Maximum hosts collected, from 1 to 10000. Defaults to 1000.")
+    private Property<@Min(1) @Max(10000) Integer> maxResults;
+    @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
+    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in host metadata. False by default.")
+    private Property<Boolean> includeSecrets;
 
     @Override
     public Output run(RunContext context) throws Exception {
         int page = context.render(pageSize).as(Integer.class).orElse(1000);
         int max = context.render(maxResults).as(Integer.class).orElse(1000);
-        if (page < 1 || page > 1000 || max < 1 || max > 100000) {
-            throw new IllegalArgumentException("`pageSize` must be 1..1000 and `maxResults` must be 1..100000");
+        if (page < 1 || page > 1000 || max < 1 || max > 10000) {
+            throw new IllegalArgumentException("`pageSize` must be 1..1000 and `maxResults` must be 1..10000");
         }
-        boolean stored = context.render(store).as(Boolean.class).orElse(false);
+        var rIncludeSecrets = context.render(includeSecrets).as(Boolean.class).orElse(false);
         var params = DatadogClient.query();
         context.render(filter).as(String.class).ifPresent(value -> params.put("filter", value));
         context.render(sortField).as(String.class).ifPresent(value -> params.put("sort_field", value));
@@ -79,13 +89,11 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         context.render(from).as(Instant.class).ifPresent(value -> params.put("from", value.getEpochSecond()));
         context.render(includeMutedHostsData).as(Boolean.class).ifPresent(value -> params.put("include_muted_hosts_data", value));
         context.render(includeHostsMetadata).as(Boolean.class).ifPresent(value -> params.put("include_hosts_metadata", value));
-        DatadogClient client = client(context, true);
-        var file = stored ? context.workingDir().createTempFile(".ion") : null;
-        java.util.List<Map<String, Object>> hosts = new ArrayList<>();
         long count = 0;
         Long total = null;
         boolean truncated = false;
-        try (OutputStream output = stored ? Files.newOutputStream(file) : OutputStream.nullOutputStream()) {
+        try (var client = client(context, true);
+             var sink = new DatadogFetch.Sink<Map<String, Object>>(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH))) {
             while (count < max) {
                 int requested = Math.min(page, max - (int) count);
                 params.put("count", requested);
@@ -103,11 +111,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
                         throw new IllegalStateException("Datadog host must be an object");
                     }
                     @SuppressWarnings("unchecked") Map<String, Object> host = (Map<String, Object>) map;
-                    if (stored) {
-                        FileSerde.write(output, host);
-                    } else {
-                        hosts.add(host);
-                    }
+                    sink.add(MonitorIO.redactMap(host, rIncludeSecrets));
                     count++;
                 }
                 boolean more = total != null ? count < total : rows.size() == requested;
@@ -121,9 +125,10 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
                     truncated = true;
                 }
             }
+            var result = sink.result();
+            return Output.builder().hosts(result.rows()).row(result.row()).count(count).totalMatching(total).truncated(truncated)
+                .uri(result.uri()).build();
         }
-        return Output.builder().hosts(stored ? null : hosts).count(count).totalMatching(total).truncated(truncated)
-            .uri(stored ? context.storage().putFile(file.toFile()) : null).build();
     }
 
     public enum SortDirection { ASC, DESC }
@@ -133,6 +138,8 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Hosts")
         private final java.util.List<Map<String, Object>> hosts;
+        @Schema(title = "First host", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
         @Schema(title = "Collected host count")
         private final Long count;
         @Schema(title = "Total matching hosts", description = "Latest Datadog total, if supplied.")

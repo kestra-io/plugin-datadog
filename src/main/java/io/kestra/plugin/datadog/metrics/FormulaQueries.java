@@ -110,13 +110,4 @@ final class FormulaQueries {
         return new BigDecimal(number.toString());
     }
 
-    static URI store(RunContext context, Iterable<?> rows) throws Exception {
-        var file = context.workingDir().createTempFile(".ion");
-        try (OutputStream writer = Files.newOutputStream(file)) {
-            for (Object row : rows) {
-                FileSerde.write(writer, row);
-            }
-        }
-        return context.storage().putFile(file.toFile());
-    }
 }

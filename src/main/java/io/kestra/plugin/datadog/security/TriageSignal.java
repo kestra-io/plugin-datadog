@@ -52,25 +52,27 @@ public class TriageSignal extends AbstractDatadogTask implements RunnableTask<Tr
 
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = AccessApi.required(context, signalId, "signalId");
-        String path = "/api/v2/security_monitoring/signals/" + AccessApi.segment(id) + "/update";
-        State state = context.render(this.state).as(State.class).orElse(null);
-        ArchiveReason reason = context.render(archiveReason).as(ArchiveReason.class).orElse(null);
-        String comment = context.render(archiveComment).as(String.class).orElse(null);
-        String assignee = context.render(assigneeId).as(String.class).orElse(null);
-        Map<String, Object> attributes = new LinkedHashMap<>();
-        if (state != null) { attributes.put("state", state.name().toLowerCase(Locale.ROOT)); }
-        if ((reason != null || comment != null) && state != State.ARCHIVED) {
-            throw new IllegalArgumentException("Archive fields require state ARCHIVED");
+        try (var client = client(context, true)) {
+            String id = AccessApi.required(context, signalId, "signalId");
+            String path = "/api/v2/security_monitoring/signals/" + AccessApi.segment(id) + "/update";
+            State state = context.render(this.state).as(State.class).orElse(null);
+            ArchiveReason reason = context.render(archiveReason).as(ArchiveReason.class).orElse(null);
+            String comment = context.render(archiveComment).as(String.class).orElse(null);
+            String assignee = context.render(assigneeId).as(String.class).orElse(null);
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            if (state != null) { attributes.put("state", state.name().toLowerCase(Locale.ROOT)); }
+            if ((reason != null || comment != null) && state != State.ARCHIVED) {
+                throw new IllegalArgumentException("Archive fields require state ARCHIVED");
+            }
+            if (reason != null) { attributes.put("archive_reason", reason.name().toLowerCase(Locale.ROOT)); }
+            if (comment != null) { attributes.put("archive_comment", comment); }
+            if (assignee != null) { attributes.put("assignee", Map.of("uuid", AccessApi.required(assignee, "assigneeId"))); }
+            if (attributes.isEmpty()) {
+                throw new IllegalArgumentException("Set state, assigneeId or archive fields");
+            }
+            AccessApi.request(client, "PATCH", path, Map.of(), Map.of("data", Map.of("type", "signal_metadata", "attributes", attributes)));
+            return Output.builder().signalId(id).updated(true).build();
         }
-        if (reason != null) { attributes.put("archive_reason", reason.name().toLowerCase(Locale.ROOT)); }
-        if (comment != null) { attributes.put("archive_comment", comment); }
-        if (assignee != null) { attributes.put("assignee", Map.of("uuid", AccessApi.required(assignee, "assigneeId"))); }
-        if (attributes.isEmpty()) {
-            throw new IllegalArgumentException("Set state, assigneeId or archive fields");
-        }
-        AccessApi.request(client(context, true), "PATCH", path, Map.of(), Map.of("data", Map.of("type", "signal_metadata", "attributes", attributes)));
-        return Output.builder().signalId(id).updated(true).build();
     }
 
     @Builder

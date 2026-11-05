@@ -3,8 +3,10 @@ package io.kestra.plugin.datadog.dashboards;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -16,6 +18,7 @@ import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.List;
 
 /** Datadog operationId: GetDashboard. */
 @SuperBuilder
@@ -39,18 +42,32 @@ public class Export extends AbstractDashboardTask implements RunnableTask<Export
     @Schema(title = "Dashboard identifier")
     private Property<String> dashboardId;
 
+    @Schema(title = "Fetch type", description = "STORE writes a JSON definition accepted by Import. FETCH returns definitions, FETCH_ONE returns row and NONE returns only size.", defaultValue = "STORE")
+    private Property<FetchType> fetchType;
+
     @Override
     public Output run(RunContext context) throws Exception {
-        String id = context.render(dashboardId).as(String.class).orElse(null);
-        String path = Dashboards.path(id);
-        var definition = Dashboards.definition(client(context, true).get(path, Map.of()).map());
-        definition = Dashboards.redact(definition, context.render(getIncludeSecrets()).as(Boolean.class).orElse(false));
-        return Output.builder().dashboardId(id).uri(Dashboards.storeJson(context, definition)).build();
+        try (var client = client(context, true)) {
+            String id = context.render(dashboardId).as(String.class).orElse(null);
+            String path = Dashboards.path(id);
+            var definition = Dashboards.definition(client.get(path, Map.of()).map());
+            definition = Dashboards.redact(definition, context.render(getIncludeSecrets()).as(Boolean.class).orElse(false));
+            var rFetchType = context.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
+            var result = DatadogFetch.apply(context, rFetchType == FetchType.STORE ? FetchType.NONE : rFetchType, List.of(definition));
+            return Output.builder().dashboardId(id).definitions(result.rows()).row(result.row()).size(result.size())
+                .uri(rFetchType == FetchType.STORE ? DatadogFetch.storeDocument(context, definition, false) : null).build();
+        }
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
+        @Schema(title = "Dashboard definitions", description = "Present with FETCH.")
+        private final List<Map<String, Object>> definitions;
+        @Schema(title = "First definition", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
+        @Schema(title = "Number of definitions")
+        private final Integer size;
         @Schema(title = "Source dashboard identifier")
         private final String dashboardId;
         @Schema(title = "JSON definition URI", description = "Pass to Import.from. Imports reject redacted placeholders.")

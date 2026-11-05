@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
@@ -27,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

@@ -50,7 +50,7 @@ tasks:
   conditions:
   - '{{ outputs.get.id == "00000000-0000-0000-0000-000000000001" }}'
   - '{{ outputs.get.dryRun == false }}'
-- store: false
+- fetchType: FETCH
   id: list
   type: io.kestra.plugin.datadog.incidents.List
   apiKey: e2e-api-key

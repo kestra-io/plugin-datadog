@@ -4,10 +4,13 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
+import java.net.URI;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -82,8 +85,15 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
     @PluginProperty(group = "processing")
     private Property<Duration> lookback;
 
+    @Schema(title = "Fetch type", description = "FETCH returns series, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only counts.", defaultValue = "FETCH")
+    @PluginProperty(group = "processing")
+    private Property<FetchType> fetchType;
+
     @Override
     public Output run(RunContext runContext) throws Exception {
+        if (from != null && lookback != null) {
+            throw new IllegalArgumentException("`lookback` cannot be used with `from`");
+        }
         var rQuery = runContext.render(this.query).as(String.class).orElse("").trim();
         if (rQuery.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `query` must not be blank");
@@ -128,7 +138,8 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
         }
 
         runContext.logger().info("Datadog returned {} series and {} points for '{}'", series.size(), pointCount, rQuery);
-        return Output.builder().status(status).series(series).seriesCount(series.size()).pointCount(pointCount).build();
+        var result = DatadogFetch.apply(runContext, runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), series);
+        return Output.builder().status(status).series(result.rows()).row(result.row()).uri(result.uri()).seriesCount(result.size()).pointCount(pointCount).build();
     }
 
     @Builder
@@ -139,6 +150,12 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
 
         @Schema(title = "Series", description = "The series returned. Each has `metric`, `scope`, `expression`, `unit` and `pointlist`, a list of `[timestamp in milliseconds, value]` pairs.")
         private final List<Map<String, Object>> series;
+
+        @Schema(title = "First series", description = "Present with FETCH_ONE.")
+        private final Map<String, Object> row;
+
+        @Schema(title = "Stored ION series", description = "Present with STORE.")
+        private final URI uri;
 
         @Schema(title = "Number of series")
         private final Integer seriesCount;

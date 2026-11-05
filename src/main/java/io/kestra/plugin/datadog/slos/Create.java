@@ -40,8 +40,10 @@ import java.util.Map;
 public class Create extends AbstractSloDefinitionTask implements RunnableTask<Create.Output> {
     @Override
     public Output run(RunContext context) throws Exception {
-        var body = body(context);
-        return Output.builder().slos(result(client(context, true).post(Slos.PATH, body).map())).build();
+        try (var client = client(context, true)) {
+            var body = body(context);
+            return Output.builder().slos(result(context, client.post(Slos.PATH, body).map())).build();
+        }
     }
 
     @Builder

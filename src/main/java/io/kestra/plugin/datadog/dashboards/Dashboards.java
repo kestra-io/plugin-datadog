@@ -105,23 +105,6 @@ public final class Dashboards {
         return rows;
     }
 
-    static URI storeJson(RunContext context, Object value) throws Exception {
-        var file = context.workingDir().createTempFile(".json");
-        JacksonMapper.ofJson().writeValue(file.toFile(), value);
-        return context.storage().putFile(file.toFile());
-    }
-
-    static URI storeRows(RunContext context, java.util.List<Map<String, Object>> rows) throws Exception {
-        var file = context.workingDir().createTempFile(".ion");
-        try (var writer = Files.newBufferedWriter(file)) {
-            for (var row : rows) {
-                writer.write(JacksonMapper.ofIon().writeValueAsString(row));
-                writer.newLine();
-            }
-        }
-        return context.storage().putFile(file.toFile());
-    }
-
     @SuppressWarnings("unchecked")
     static <T> T redact(T value, boolean includeSecrets) {
         if (includeSecrets) {
@@ -138,7 +121,7 @@ public final class Dashboards {
         if (value instanceof java.util.List<?> list) {
             return (T) list.stream().map(item -> redact(item, false)).toList();
         }
-        if (value instanceof String text && text.matches("(?is).*https?://\\S*(?:webhook|hooks\\.slack\\.com/services|hooks\\.zapier\\.com|[?&](?:token|api_key|password|access_token)=|[^/\\s]+:[^/\\s]+@)\\S*.*")) {
+        if (value instanceof String text && text.matches("(?is).*https?://\\S+.*")) {
             return (T) REDACTED;
         }
         return value;

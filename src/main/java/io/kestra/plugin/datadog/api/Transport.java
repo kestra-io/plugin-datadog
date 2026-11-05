@@ -75,10 +75,13 @@ final class Transport {
         return new Body(bytes, type);
     }
 
-    static Answer send(RunContext context, Catalog.Operation op, RequestPlan plan, Body body,
+    static HttpClient client(RunContext context) throws Exception {
+        return HttpClient.builder().runContext(context).configuration(HttpConfiguration.builder()
+            .allowFailed(Property.ofValue(true)).followRedirects(Property.ofValue(false)).build()).build();
+    }
+
+    static Answer send(HttpClient client, RunContext context, Catalog.Operation op, RequestPlan plan, Body body,
                        String apiKey, String appKey, int maxRetries, int maxRetryDelay) throws Exception {
-        try (HttpClient client = HttpClient.builder().runContext(context).configuration(HttpConfiguration.builder()
-            .allowFailed(Property.ofValue(true)).followRedirects(Property.ofValue(false)).build()).build()) {
             for (int attempt = 0; ; attempt++) {
                 HttpRequest.HttpRequestBuilder request = HttpRequest.builder().uri(plan.uri()).method(plan.method());
                 plan.headers().forEach((name, value) -> { if (!name.equals("content-type")) { request.addHeader(name, value); } });
@@ -101,7 +104,7 @@ final class Transport {
                     });
                 } catch (Exception e) {
                     // Do not propagate a cause that can contain a query, header or body value.
-                    throw new IllegalStateException("Datadog " + op.key() + ": transport failed (" + e.getClass().getSimpleName() + ")");
+                    throw new DatadogClient.DatadogException(-1, "Datadog " + op.key() + ": transport failed (" + e.getClass().getSimpleName() + ")");
                 }
                 Answer received = answer[0];
                 if (received.status() >= 200 && received.status() < 300) { return received; }
@@ -115,7 +118,6 @@ final class Transport {
                 }
                 throw new DatadogClient.DatadogException(received.status(), "Datadog " + op.key() + " returned HTTP " + received.status());
             }
-        }
     }
 
     static boolean retryable(String method, int status) {

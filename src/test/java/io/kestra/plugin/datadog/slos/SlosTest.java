@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.slos;
 
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
@@ -172,17 +173,20 @@ class SlosTest extends AbstractDatadogTest {
     }
 
     @Test
-    void readsHistoryAndCanStoreJsonWithoutInlineData() throws Exception {
+    void readsHistoryAndCanStoreIonWithoutInlineData() throws Exception {
         server.reply("GET", "/api/v1/slo/slo-123/history", 200, history("99.95"));
         var inline = historyTask().build().run(runContext());
         assertEquals(99.95, Slos.object(inline.getHistory().get("overall"), "overall").get("sli_value"));
         assertFalse(server.only().query().contains("target="));
-        var task = historyTask().store(Property.ofValue(true)).target(Property.ofValue(99.9)).build();
+        var task = historyTask().fetchType(Property.ofValue(FetchType.STORE)).target(Property.ofValue(99.9)).build();
         var context = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
         var output = task.run(context);
         assertNull(output.getHistory());
         try (var input = context.storage().getFile(output.getUri())) {
-            assertEquals(inline.getHistory(), JacksonMapper.ofJson().readValue(input, Map.class));
+            var rows = new ArrayList<Object>();
+            io.kestra.core.serializers.FileSerde.read(input, rows::add);
+            assertEquals(1, rows.size());
+            assertEquals(99.95, ((Number) ((Map<?, ?>) ((Map<?, ?>) rows.getFirst()).get("overall")).get("sli_value")).doubleValue());
         }
     }
 
@@ -222,7 +226,7 @@ class SlosTest extends AbstractDatadogTest {
     @Test
     void exactAndEmptyListsAreNotTruncatedAndCanUseIonStorage() throws Exception {
         server.reply("GET", "/api/v1/slo", 200, page(2)).reply("GET", "/api/v1/slo", 200, page(0));
-        var task = lister().maxResults(Property.ofValue(2)).store(Property.ofValue(true)).build();
+        var task = lister().maxResults(Property.ofValue(2)).fetchType(Property.ofValue(FetchType.STORE)).build();
         var context = TestsUtils.mockRunContext(runContextFactory, task, Map.of());
         var output = task.run(context);
         assertEquals(2, output.getSize());
