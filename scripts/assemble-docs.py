@@ -55,22 +55,10 @@ def update_readme(readme, table):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--areas", type=Path, default=Path("docs/areas"))
-    parser.add_argument("--source", type=Path, default=Path("src/main/java/io/kestra/plugin/datadog"))
-    parser.add_argument("--root-doc", type=Path, required=True)
-    parser.add_argument("--readme", type=Path, required=True)
-    parser.add_argument("--max-bytes", type=int, default=40000, help="Local editorial budget, not a Kestra platform limit")
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
-    root, table = assemble(args.areas, task_rows(args.source), args.max_bytes)
-    updated = update_readme(args.readme.read_text(), table)
-    if args.check:
-        if args.root_doc.read_text() != root or args.readme.read_text() != updated:
-            raise SystemExit("Assembled documentation differs")
-    else:
-        args.root_doc.write_text(root); args.readme.write_text(updated)
-    print(f"Assembled {len(task_rows(args.source))} component rows; root doc {len(root.encode())} bytes")
+    raise SystemExit(
+        "assemble-docs.py no longer writes the README or the root documentation page: both are written by hand as a story, not generated from the area parts.\n"
+        "Run scripts/gen-tasks.py to regenerate docs/TASKS.md, the grouped index of every task and trigger."
+    )
 
 
 if __name__ == "__main__":

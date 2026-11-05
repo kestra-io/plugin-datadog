@@ -37,192 +37,119 @@
 
 # Kestra Datadog Plugin
 
-## Why
+Run Datadog from a flow. Mark a deployment, mute the right monitors for thirty minutes, wait for a synthetic test and stop the release when the SLO budget is low. All with Kestra secrets, no scripts and no hand-built HTTP calls.
 
-- What user problem does this solve? Teams that report to Datadog from pipelines or read it from them, do it with ad-hoc `curl` calls and scripts that carry keys, endpoints and error handling of their own.
-- Why would a team adopt this plugin in a workflow? It keeps the Datadog steps in the same Kestra flow as the rest of the pipeline, with Kestra secrets, expressions and execution history and with errors that name the HTTP status and what Datadog said.
-- What operational/business outcome does it enable? Pipelines can mark deployments and runs on the dashboards, publish business and pipeline metrics, check a metric or the logs before they continue, mute monitors during maintenance and react when a monitor goes into alert.
+The plugin reaches **every one of the 1,941 operations** of the Datadog API (v1 and v2) through one validated task, and gives the jobs people actually automate their own typed tasks with real validation, paging and safe defaults.
 
-## What
+## What you can do from a flow
 
-<!-- datadog-tasks:start -->
-| Component | Purpose |
+**Hold a release until Datadog says it is healthy.** Run synthetic tests, wait for the batch to finish and fail with the failing test and location.
+
+```yaml
+- id: smoke
+  type: io.kestra.plugin.datadog.synthetics.Run
+  apiKey: "{{ secret('DATADOG_API_KEY') }}"
+  appKey: "{{ secret('DATADOG_APP_KEY') }}"
+  testIds: [abc-def-ghi]
+  maxWait: PT10M
+```
+
+**Gate on an error budget.** Fail the flow when the remaining budget of an SLO is below a limit.
+
+```yaml
+- id: budget
+  type: io.kestra.plugin.datadog.slos.Check
+  sloId: 0123456789abcdef0123456789abcdef
+  target: 99.9
+  minRemainingBudget: 20
+```
+
+**Keep monitors in Git.** Apply monitor definitions from YAML. The task reports what it would create or change, shows a field-level diff, and a second run changes nothing.
+
+```yaml
+- id: apply
+  type: io.kestra.plugin.datadog.monitors.Apply
+  dryRun: true
+  definitions: |
+    - name: CPU usage
+      type: query alert
+      query: "avg(last_5m):avg:system.cpu.user{env:prod} > 80"
+      tags: [managed_by:kestra:cpu-prod]
+```
+
+**Mute for a deployment, then unmute.** A downtime always needs an end or a duration, so a failed flow cannot leave monitors muted for good.
+
+**Stop a flow on bad telemetry.** Count error logs or spans in a window and branch on the result.
+
+```yaml
+- id: gate
+  type: io.kestra.plugin.datadog.logs.Count
+  query: "service:orders status:error"
+  from: now-15m
+  threshold: 0
+  failOnBreach: true
+```
+
+**Page a person, open an incident, post a status update.** `oncall.Page` and the incident tasks can preview the exact request first.
+
+**React when Datadog changes.** Triggers start a flow when a monitor enters a watched state, an SLO budget runs low, a log count crosses a limit or a metric crosses a threshold. Each keeps a cursor, so an alert that stays red starts one execution.
+
+Every example above is validated against a real Kestra 2.0.6 in the test suite.
+
+## Where each part lives
+
+| You want to | Package |
 |---|---|
-| `api.Call` | Call a Datadog API operation |
-| `api.Operations` | Find Datadog API operations |
-| `audit.Search` | Search the Datadog audit trail |
-| `cases.Assign` | Assign a Datadog case |
-| `cases.Comment` | Comment on a Datadog case |
-| `cases.Create` | Create a Datadog case |
-| `cases.Get` | Get a Datadog case |
-| `cases.Search` | Search Datadog cases |
-| `cases.SetPriority` | Set a Datadog case priority |
-| `cases.SetStatus` | Set a Datadog case status |
-| `catalog.Delete` | Delete one Datadog service definition |
-| `catalog.UpsertServiceDefinition` | Apply a Datadog service definition |
-| `civisibility.SearchPipelines` | Search Datadog CI pipelines |
-| `civisibility.SearchTests` | Search Datadog CI tests |
-| `cost.Estimated` | Read estimated organization costs |
-| `cost.Historical` | Read historical organization costs |
-| `dashboards.Create` | Create a Datadog dashboard |
-| `dashboards.Delete` | Delete one Datadog dashboard |
-| `dashboards.Export` | Export a Datadog dashboard |
-| `dashboards.Get` | Get a Datadog dashboard |
-| `dashboards.Import` | Apply a Datadog dashboard definition |
-| `dashboards.List` | List Datadog dashboards |
-| `dashboards.Update` | Update a Datadog dashboard |
-| `ddsql.Query` | Run a tabular DDSQL query |
-| `deployments.CreateGate` | Create a Datadog deployment gate |
-| `deployments.CreateMonitorRule` | Create a monitor-based Datadog gate rule |
-| `deployments.Evaluate` | Evaluate a Datadog deployment gate |
-| `deployments.GetRules` | Read Datadog deployment gate rules |
-| `deployments.Record` | Record a Datadog DORA deployment |
-| `downtimes.Cancel` | Cancel a Datadog downtime |
-| `downtimes.Create` | Schedule a Datadog downtime that mutes monitor notifications |
-| `downtimes.Get` | Get a Datadog downtime |
-| `downtimes.List` | List Datadog downtimes |
-| `downtimes.Update` | Update one Datadog downtime |
-| `events.Create` | Post an event to the Datadog event stream |
-| `events.Search` | Search Datadog events |
-| `hosts.List` | List Datadog hosts |
-| `hosts.Mute` | Mute one host for a bounded period |
-| `hosts.Totals` | Read active and up host totals |
-| `hosts.Unmute` | Unmute one host |
-| `incidents.Create` | Create a Datadog incident |
-| `incidents.Delete` | Delete one Datadog incident |
-| `incidents.Get` | Get a Datadog incident |
-| `incidents.List` | List Datadog incidents |
-| `incidents.Search` | Search Datadog incidents |
-| `incidents.Update` | Update one Datadog incident |
-| `keys.Create` | Create a Datadog key |
-| `keys.ListApiKeys` | List Datadog API keys |
-| `keys.ListApplicationKeys` | List Datadog application keys |
-| `keys.Revoke` | Revoke one Datadog key |
-| `keys.Rotate` | Create a replacement Datadog key |
-| `logs.Aggregate` | Aggregate Datadog logs |
-| `logs.Count` | Count Datadog logs against a threshold |
-| `logs.CountThreshold` | Start a flow when a log count crosses a threshold |
-| `logs.Search` | Search Datadog logs |
-| `logs.Send` | Send log entries to Datadog |
-| `metrics.Check` | Check a scalar metric threshold |
-| `metrics.Query` | Query timeseries metrics from Datadog |
-| `metrics.QueryScalar` | Query scalar metric formulas |
-| `metrics.QueryTimeseries` | Query metric timeseries formulas |
-| `metrics.Submit` | Submit a custom metric point to Datadog |
-| `metrics.Threshold` | Trigger on a metric threshold crossing |
-| `monitors.Apply` | Apply Datadog monitors from code |
-| `monitors.CanDelete` | Check whether Datadog monitors can be deleted |
-| `monitors.Configuration` | Read Datadog monitor configuration |
-| `monitors.Create` | Create a Datadog monitor |
-| `monitors.Delete` | Delete one Datadog monitor |
-| `monitors.Export` | Export Datadog monitor definitions |
-| `monitors.Get` | Get one Datadog monitor |
-| `monitors.List` | List Datadog monitors |
-| `monitors.Search` | Search Datadog monitors with facets |
-| `monitors.StateChange` | Start a flow when Datadog monitors change to an alerting state |
-| `monitors.Update` | Update one Datadog monitor |
-| `monitors.Validate` | Validate a Datadog monitor definition |
-| `oncall.Acknowledge` | Acknowledge a Datadog On-Call page |
-| `oncall.Escalate` | Escalate a Datadog On-Call page |
-| `oncall.Page` | Page a Datadog On-Call team or user |
-| `oncall.Resolve` | Resolve a Datadog On-Call page |
-| `oncall.WhoIsOnCall` | Read the current On-Call responders for a team |
-| `rum.Aggregate` | Aggregate Datadog RUM events |
-| `rum.Search` | Search Datadog RUM events |
-| `security.SignalsSearch` | Search Datadog security signals |
-| `security.TriageSignal` | Triage one Datadog security signal |
-| `slos.BudgetLow` | Start a flow when an SLO budget becomes low |
-| `slos.Check` | Gate a flow on a Datadog SLO error budget |
-| `slos.Create` | Create a Datadog SLO |
-| `slos.Delete` | Delete one Datadog SLO |
-| `slos.Get` | Get a Datadog SLO |
-| `slos.History` | Read Datadog SLO history |
-| `slos.List` | List Datadog SLOs |
-| `slos.Update` | Update a Datadog SLO |
-| `spans.Aggregate` | Aggregate Datadog spans |
-| `spans.Count` | Count Datadog spans against a threshold |
-| `spans.Search` | Search Datadog spans |
-| `statuspages.CreateDegradation` | Create a status page degradation |
-| `statuspages.Get` | Get a Datadog status page |
-| `statuspages.List` | List Datadog status pages |
-| `statuspages.UpdateDegradation` | Update or resolve a status page degradation |
-| `synthetics.Create` | Create a Datadog synthetic test |
-| `synthetics.Delete` | Delete one Datadog synthetic test |
-| `synthetics.Get` | Get a Datadog synthetic test |
-| `synthetics.List` | List Datadog synthetic tests |
-| `synthetics.Locations` | List Datadog synthetic locations |
-| `synthetics.Results` | Read Datadog synthetic test results |
-| `synthetics.Run` | Run Datadog synthetic tests as a quality gate |
-| `synthetics.SetStatus` | Pause or resume a Datadog synthetic test |
-| `synthetics.Trigger` | Trigger Datadog synthetic CI tests |
-| `synthetics.Update` | Replace a Datadog synthetic test |
-| `teams.List` | List Datadog teams |
-| `teams.RemoveMember` | Remove one Datadog team member |
-| `teams.SyncMembers` | Sync one Datadog team's members |
-| `usage.Check` | Check product usage against a budget |
-| `usage.Hourly` | Read hourly product usage |
-| `users.Disable` | Disable one Datadog user |
-| `users.Get` | Get a Datadog user |
-| `users.List` | List Datadog users |
-<!-- datadog-tasks:end -->
+| Monitors, downtimes, monitor notification rules | `monitors`, `downtimes` |
+| Dashboards, SLOs, notebooks | `dashboards`, `slos` |
+| Synthetic tests and deployment gates | `synthetics`, `deployments` |
+| Incidents, cases, paging, status pages | `incidents`, `cases`, `oncall`, `statuspages` |
+| Search logs, spans, RUM, audit and CI data | `logs`, `spans`, `rum`, `audit`, `civisibility`, `events` |
+| Metrics, hosts, usage and cost | `metrics`, `hosts`, `usage`, `cost`, `ddsql` |
+| Users, teams, keys, security signals, service catalog | `users`, `teams`, `keys`, `security`, `catalog` |
+| Anything else in the Datadog API | `api.Call`, `api.Operations` |
+
+The full list of tasks, grouped by package, is in [`docs/TASKS.md`](docs/TASKS.md).
+
+## How much of Datadog this covers
+
+The generated [coverage report](docs/COVERAGE.md) maps each Datadog operation to the task that implements it.
+
+- 1,941 operations in the official API description.
+- 122 of them have a typed task. The typed tasks are the ones a flow author reaches for: they validate input, page results, redact secrets and offer previews.
+- The other 1,819 are reachable through `api.Call`. It checks the operation, the path and query parameters and the required body against a built-in catalog before it sends anything, and `api.Operations` searches that catalog.
+
+## Safe by default
+
+- Anything that deletes, disables, revokes or overwrites works on **one named object**. There is no "delete everything matching".
+- Downtimes and host mutes need an end or a duration.
+- Tasks that apply a definition can run as a preview first and show the exact changes.
+- Key values, tokens and webhook secrets are redacted from outputs unless you set `includeSecrets: true`. Keys are never written to a log.
+- Tasks that page people or open incidents can preview the exact request before sending it.
 
 ## Authentication
 
-Provide the keys through Kestra secrets, for example `{{ secret('DATADOG_API_KEY') }}`.
+Every task needs `apiKey`. Tasks that read data or manage things also need `appKey`, created with the scopes that task needs (each task page lists them). Set `site` to the domain of your organization (`datadoghq.com` by default, `datadoghq.eu`, `us3.datadoghq.com` and so on). A key only works on the site that issued it.
 
-- `apiKey` is needed by every task.
-- `appKey` is needed by the calls that read data or manage monitors and downtimes: `metrics.Query`, `monitors.List`, `monitors.StateChange`, `downtimes.Create`, `downtimes.Cancel` and `logs.Search`.
-- `site` selects the Datadog site of the organization (`datadoghq.com` by default, `datadoghq.eu`, `us3.datadoghq.com` and so on). A key only works on the site that created it.
+## Build and test
 
-See [the plugin documentation](src/main/resources/doc/io.kestra.plugin.datadog.md) for the scopes each call needs and for the behavior of each task and of the trigger.
-
-## Example
-
-```yaml
-id: datadog_deploy_window
-namespace: company.observability
-
-tasks:
-  - id: mute
-    type: io.kestra.plugin.datadog.downtimes.Create
-    apiKey: "{{ secret('DATADOG_API_KEY') }}"
-    appKey: "{{ secret('DATADOG_APP_KEY') }}"
-    scope: "env:prod AND service:orders"
-    monitorTags: ["service:orders"]
-    duration: PT30M
-
-  - id: deploy
-    type: io.kestra.plugin.core.log.Log
-    message: Deploying the orders service
-
-  - id: mark
-    type: io.kestra.plugin.datadog.events.Create
-    apiKey: "{{ secret('DATADOG_API_KEY') }}"
-    title: "Orders deployed"
-    text: "Execution {{ execution.id }}"
-    alertType: SUCCESS
-    tags: ["env:prod", "source:kestra"]
-
-  - id: unmute
-    type: io.kestra.plugin.datadog.downtimes.Cancel
-    apiKey: "{{ secret('DATADOG_API_KEY') }}"
-    appKey: "{{ secret('DATADOG_APP_KEY') }}"
-    downtimeId: "{{ outputs.mute.downtimeId }}"
+```sh
+./gradlew check        # unit tests, contract tests and the documentation lint
+./gradlew shadowJar    # build/libs/plugin-datadog-*.jar
+python3 e2e/run.py --jar build/libs/plugin-datadog-1.0.0-SNAPSHOT.jar --artifact-commit "$(git rev-parse HEAD)" --evidence /tmp/evidence --include-api
 ```
 
-## Tests
+The last full run: 3,461 tests passed and 0 failed. 31 executions of every task and trigger ran in Kestra 2.0.6 against a mock of the Datadog API, and 157 example flows validated.
 
-`./gradlew test` runs the unit tests against a local mock of the Datadog API. They have not been run against a live Datadog organization.
+## What has not been verified
+
+No test has run against a live Datadog organization. The mock server follows the official OpenAPI description, and a contract check compares requests against it for the highest-risk tasks (14 test classes so far; [details](docs/CONTRACT-TESTS.md)). Rate-limit behavior, permissions and server-side validation on a real account are covered only by that mock. Known issues from the integration audit are in [`docs/INTEGRATION-FINDINGS.md`](docs/INTEGRATION-FINDINGS.md).
 
 ## Documentation
-* Full documentation can be found under: [kestra.io/docs](https://kestra.io/docs)
-* Documentation for developing a plugin is included in the [Plugin Developer Guide](https://kestra.io/docs/plugin-developer-guide/)
 
+- [Kestra plugin documentation](https://kestra.io/docs/plugin-developer-guide)
+- [Datadog API reference](https://docs.datadoghq.com/api/latest/)
 
 ## License
+
 Apache 2.0 © [Kestra Technologies](https://kestra.io)
-
-
-## Stay up to date
-
-We release new versions every month. Give the [main repository](https://github.com/kestra-io/kestra) a star to stay up to date with the latest releases and get notified about future updates.
