@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.slos
+name: "slos"
+title: "Datadog SLOs"
+description: "Check SLO error budgets in Kestra flows."
+body: "Create, replace or delete a metric or monitor SLO. Read definitions and history, fail a gate when budget is low or start a flow on a low-budget transition."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

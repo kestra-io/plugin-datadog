@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.dashboards
+name: "dashboards"
+title: "Datadog dashboards"
+description: "Manage dashboard definitions from Kestra flows."
+body: "List, read, create, replace or delete one dashboard. Export definitions to JSON and apply them with a dry run and field-level diff."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
