@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.deployments
+name: "deployments"
+title: "Datadog deployments"
+description: "Evaluate deployment gates and record DORA deployments."
+body: "Use Datadog rules as a deployment quality gate and record completed deployments for delivery performance metrics."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
