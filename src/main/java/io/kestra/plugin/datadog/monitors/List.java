@@ -4,8 +4,10 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -15,6 +17,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.util.Map;
 
 @SuperBuilder
@@ -78,6 +81,15 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @Schema(title = "Maximum number of monitors", description = "Stops after this many monitors, between 1 and 10000.", defaultValue = "1000")
     private Property<Integer> maxMonitors;
 
+    @Builder.Default
+    @Schema(
+        title = "How to return the monitors",
+        description = "`FETCH` returns all the monitors in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. " +
+            "Use `STORE` for a large result: the output of a task is kept in the execution.",
+        defaultValue = "FETCH"
+    )
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         int limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
@@ -91,19 +103,29 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         Monitors.join(runContext.render(this.monitorTags).asList(String.class)).ifPresent(value -> params.put("monitor_tags", value));
         Monitors.join(runContext.render(this.groupStates).asList(String.class)).ifPresent(value -> params.put("group_states", value));
 
-        java.util.List<Map<String, Object>> monitors = Monitors.collect(client(runContext, true), params, limit);
+        java.util.List<Map<String, Object>> monitors;
+        try (DatadogClient client = client(runContext, true)) {
+            monitors = Monitors.collect(client, params, limit);
+        }
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());
-        return Output.builder().monitors(monitors).size(monitors.size()).build();
+        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), monitors);
+        return Output.builder().monitors(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Monitors", description = "The monitors as Datadog returns them: `id`, `name`, `type`, `query`, `overall_state`, `overall_state_modified`, `tags`, `message` and `options`.")
+        @Schema(title = "Monitors", description = "With `FETCH`, the monitors as Datadog returns them: `id`, `name`, `type`, `query`, `overall_state`, `overall_state_modified`, `tags`, `message` and `options`.")
         private final java.util.List<Map<String, Object>> monitors;
 
-        @Schema(title = "Number of monitors")
+        @Schema(title = "First monitor", description = "With `FETCH_ONE`, the first monitor.")
+        private final Map<String, Object> row;
+
+        @Schema(title = "Internal storage URI", description = "With `STORE`, the Ion file that holds the monitors, one per line.")
+        private final URI uri;
+
+        @Schema(title = "Number of monitors", description = "The number of monitors found, whatever the `fetchType`.")
         private final Integer size;
     }
 }

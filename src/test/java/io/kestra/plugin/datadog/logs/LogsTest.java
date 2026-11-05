@@ -45,7 +45,7 @@ class LogsTest extends AbstractDatadogTest {
             .source(Property.ofValue("kestra"))
             .host(Property.ofValue("worker-1"))
             .tags(Property.ofValue(List.of("env:prod", "team:data")))
-            .attributes(Property.ofValue(Map.of("rows", 1250, "message", "attribute cannot replace the message")))
+            .attributes(Property.ofValue(Map.of("rows", 1250)))
             .build().run(runContext());
 
         MockDatadogServer.Received request = server.only();
@@ -63,6 +63,42 @@ class LogsTest extends AbstractDatadogTest {
         assertEquals("env:prod,team:data", entry.get("ddtags"));
         assertEquals(1250, entry.get("rows"));
         assertEquals(1, output.getSent());
+    }
+
+    @Test
+    void attributesCannotSetTheFieldsThatHaveAPropertyOfTheirOwn() {
+        for (String reserved : List.of("message", "service", "ddsource", "hostname", "ddtags")) {
+            assertThrows(IllegalArgumentException.class, () -> send().message(Property.ofValue("m")).attributes(Property.ofValue(Map.of(reserved, "x"))).build().run(runContext()), reserved);
+            assertThrows(IllegalArgumentException.class, () -> send().logs(Property.ofValue(List.of(Map.of("message", "m")))).attributes(Property.ofValue(Map.of(reserved, "x"))).build().run(runContext()), reserved);
+        }
+        assertTrue(server.requests.isEmpty());
+    }
+
+    @Test
+    void logsModeUsesTheOtherPropertiesAsDefaultsForEveryEntry() throws Exception {
+        send().logs(Property.ofValue(List.of(
+                Map.of("message", "a"),
+                Map.of("message", "b", "service", "own-service", "ddtags", "team:data")
+            )))
+            .service(Property.ofValue("default-service"))
+            .source(Property.ofValue("kestra"))
+            .host(Property.ofValue("worker-1"))
+            .tags(Property.ofValue(List.of("env:prod")))
+            .attributes(Property.ofValue(Map.of("execution_id", "e1")))
+            .build().run(runContext());
+
+        List<?> body = server.only().jsonList();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> first = (Map<String, Object>) body.get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> second = (Map<String, Object>) body.get(1);
+        assertEquals("default-service", first.get("service"));
+        assertEquals("kestra", first.get("ddsource"));
+        assertEquals("worker-1", first.get("hostname"));
+        assertEquals("env:prod", first.get("ddtags"));
+        assertEquals("e1", first.get("execution_id"));
+        assertEquals("own-service", second.get("service"), "an entry keeps what it sets");
+        assertEquals("team:data,env:prod", second.get("ddtags"), "the tags are added to the ones of the entry");
     }
 
     @Test
@@ -150,6 +186,26 @@ class LogsTest extends AbstractDatadogTest {
 
         assertEquals(3, search().maxResults(Property.ofValue(500)).build().run(runContext()).getSize());
         assertEquals(1, server.requests.size());
+    }
+
+    @Test
+    void searchFetchTypeControlsWhatIsReturned() throws Exception {
+        server.reply("POST", "/api/v2/logs/events/search", 200, events(1, 3, null));
+
+        Search.Output one = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.FETCH_ONE)).build().run(runContext());
+        assertEquals("e1", one.getRow().get("id"));
+        assertEquals(null, one.getLogs());
+        assertEquals(3, one.getSize());
+
+        Search.Output none = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.NONE)).build().run(runContext());
+        assertEquals(null, none.getLogs());
+        assertEquals(null, none.getUri());
+        assertEquals(3, none.getSize());
+
+        Search.Output stored = search().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build().run(runContext());
+        assertEquals(null, stored.getLogs());
+        assertTrue(stored.getUri() != null && stored.getUri().toString().startsWith("kestra://"), String.valueOf(stored.getUri()));
+        assertEquals(3, stored.getSize());
     }
 
     @Test

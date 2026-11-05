@@ -16,6 +16,7 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -112,7 +113,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
     @Schema(
         title = "Series",
         description = "A list of series in the shape of the Datadog `POST /api/v2/series` body (`metric`, `type`, `points`, `tags`, `resources`, `unit`, `interval`). " +
-            "`type` is a number there: 1 count, 2 rate, 3 gauge. Use instead of `metric` and `value`."
+            "`type` is a number there: 1 count, 2 rate, 3 gauge. A point `timestamp` is a number of seconds or an ISO-8601 instant. Use instead of `metric` and `value`: `metricType`, `tags`, `host`, `unit`, `interval` and `timestamp` then go on each entry."
     )
     private Property<List<Map<String, Object>>> series;
 
@@ -122,6 +123,10 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
         boolean multiple = this.series != null;
         if (single == multiple) {
             throw new IllegalArgumentException("Give either `metric` and `value` for one point or `series` for several, but not both and not neither");
+        }
+        if (multiple && (this.metricType != null || this.tags != null || this.host != null || this.unit != null || this.interval != null || this.timestamp != null)) {
+            throw new IllegalArgumentException("`metricType`, `tags`, `host`, `unit`, `interval` and `timestamp` describe the single point of `metric` and `value`: " +
+                "set them on each entry of `series` instead");
         }
 
         List<Map<String, Object>> payload = new ArrayList<>();
@@ -145,7 +150,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
                     }
                     Map<String, Object> copy = new LinkedHashMap<>();
                     raw.forEach((k, v) -> copy.put(String.valueOf(k), v));
-                    copy.putIfAbsent("timestamp", now);
+                    copy.put("timestamp", copy.containsKey("timestamp") ? epochSeconds(copy.get("timestamp"), item.get("metric")) : now);
                     filled.add(copy);
                 }
                 Map<String, Object> withPoints = new LinkedHashMap<>(item);
@@ -182,10 +187,30 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
             points = 1;
         }
 
-        client(runContext, false).post("/api/v2/series", Map.of("series", payload));
+        try (DatadogClient client = client(runContext, false)) {
+            client.post("/api/v2/series", Map.of("series", payload));
+        }
 
         runContext.logger().info("Datadog accepted {} point(s) in {} series", points, payload.size());
         return Output.builder().series(payload.size()).points(points).build();
+    }
+
+    /** Datadog wants a number of seconds: an ISO-8601 instant is converted as the single point does. */
+    private static long epochSeconds(Object timestamp, Object metric) {
+        if (timestamp instanceof Number number) {
+            return number.longValue();
+        }
+        String text = String.valueOf(timestamp).trim();
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException ignored) {
+            // not a number: an ISO-8601 instant
+        }
+        try {
+            return Instant.parse(text).getEpochSecond();
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("The timestamp '" + text + "' of the series '" + metric + "' must be a number of seconds or an ISO-8601 instant such as `2026-01-01T00:00:00Z`");
+        }
     }
 
     public enum MetricType {

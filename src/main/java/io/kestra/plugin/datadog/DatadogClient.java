@@ -1,6 +1,7 @@
 package io.kestra.plugin.datadog;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.HttpResponse;
 import io.kestra.core.http.client.HttpClient;
@@ -14,6 +15,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +31,7 @@ import java.util.regex.Pattern;
  * error answer into a message that names the HTTP status and the {@code errors} returned by Datadog. The keys are
  * never written to a log or to an error message.
  */
-public final class DatadogClient {
+public final class DatadogClient implements AutoCloseable {
     public static final String DEFAULT_SITE = "datadoghq.com";
 
     // a DNS name only, so that a rendered `site` cannot add a path, a port or credentials to the URL
@@ -37,6 +42,10 @@ public final class DatadogClient {
     private final String appKey;
     private final String site;
     private final String apiUrl;
+    // one client, so one connection pool, for all the requests of a task or a poll
+    private HttpClient httpClient;
+    // the latest time Datadog gave in a Date header: Datadog's own clock, not the one of the worker
+    private Instant serverTime;
 
     private DatadogClient(RunContext runContext, String apiKey, String appKey, String site, String apiUrl) {
         this.runContext = runContext;
@@ -132,28 +141,61 @@ public final class DatadogClient {
         }
 
         HttpResponse<String> response;
-        // allowFailed: the status is handled here, with the message Datadog sends
-        try (HttpClient client = HttpClient.builder()
-            .runContext(runContext)
-            .configuration(HttpConfiguration.builder().allowFailed(Property.ofValue(true)).build())
-            .build()) {
-            response = client.request(request.build(), String.class);
-        } catch (HttpClientException | IOException e) {
-            throw new IllegalStateException("Datadog could not be reached at " + uri.getScheme() + "://" + uri.getAuthority() + ": " + e.getMessage(), e);
+        try {
+            response = http().request(request.build(), String.class);
+        } catch (HttpClientException e) {
+            // status -1: Datadog did not answer (DNS, TLS, reset, timeout)
+            throw new DatadogException(-1, "Datadog could not be reached at " + uri.getScheme() + "://" + uri.getAuthority() + ": " + e.getMessage(), e);
         }
 
         int status = response.getStatus().getCode();
         String raw = response.getBody() == null ? "" : response.getBody();
         String retryAfter = response.getHeaders().firstValue("X-RateLimit-Reset").orElse(null);
+        Instant date = response.getHeaders().firstValue("Date").map(DatadogClient::parseHttpDate).orElse(null);
+        if (date != null) {
+            serverTime = date;
+        }
 
         if (failOnError && (status < 200 || status >= 300)) {
             throw new DatadogException(status, describe(method, uri, status, raw, retryAfter));
         }
 
-        return new Response(status, raw, retryAfter);
+        return new Response(status, raw, retryAfter, date);
     }
 
-    private static String describe(String method, URI uri, int status, String raw, String retryAfter) {
+    /** The time of the latest answer according to Datadog's {@code Date} header or empty before the first answer. */
+    public java.util.Optional<Instant> serverTime() {
+        return java.util.Optional.ofNullable(serverTime);
+    }
+
+    private HttpClient http() throws IllegalVariableEvaluationException {
+        if (httpClient == null) {
+            // allowFailed: the status is handled here, with the message Datadog sends
+            httpClient = HttpClient.builder()
+                .runContext(runContext)
+                .configuration(HttpConfiguration.builder().allowFailed(Property.ofValue(true)).build())
+                .build();
+        }
+        return httpClient;
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (httpClient != null) {
+            httpClient.close();
+            httpClient = null;
+        }
+    }
+
+    private static Instant parseHttpDate(String value) {
+        try {
+            return ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private String describe(String method, URI uri, int status, String raw, String retryAfter) {
         StringBuilder message = new StringBuilder("Datadog answered ").append(method).append(' ').append(uri.getPath())
             .append(" with HTTP ").append(status);
         String detail = errors(raw);
@@ -162,7 +204,7 @@ public final class DatadogClient {
         }
         switch (status) {
             case 401, 403 -> message.append(". Check the `apiKey` and the `appKey`, that they belong to the `site` '")
-                .append(uri.getHost()).append("' and that the application key has the permission this call needs");
+                .append(site).append("' and that the application key has the permission this call needs");
             case 404 -> message.append(". Check the `site` and the id in the request");
             case 429 -> message.append(". The rate limit is reached").append(retryAfter == null ? "" : ", it resets in " + retryAfter + " seconds");
             default -> {
@@ -213,8 +255,8 @@ public final class DatadogClient {
         return new LinkedHashMap<>();
     }
 
-    /** An answer of Datadog: the status, the raw body and, when sent, the number of seconds before the rate limit resets. */
-    public record Response(int status, String body, String rateLimitReset) {
+    /** An answer of Datadog: the status, the raw body, the seconds before the rate limit resets when sent and the time Datadog gives in its {@code Date} header. */
+    public record Response(int status, String body, String rateLimitReset, Instant date) {
         public boolean ok() {
             return status >= 200 && status < 300;
         }
@@ -245,13 +287,23 @@ public final class DatadogClient {
         }
     }
 
-    /** Raised when Datadog answers with an error status. */
+    /** Raised when Datadog answers with an error status (or, with status -1, does not answer). */
     public static class DatadogException extends IllegalStateException {
         private final int status;
 
         public DatadogException(int status, String message) {
             super(message);
             this.status = status;
+        }
+
+        public DatadogException(int status, String message, Throwable cause) {
+            super(message, cause);
+            this.status = status;
+        }
+
+        /** {@code true} when the call may work later: Datadog did not answer, is rate limiting or is failing. */
+        public boolean isTransient() {
+            return status == -1 || status == 429 || status >= 500;
         }
 
         public int getStatus() {

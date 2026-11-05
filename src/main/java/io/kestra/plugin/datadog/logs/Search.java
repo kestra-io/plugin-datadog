@@ -4,8 +4,11 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
+import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -14,6 +17,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -85,6 +89,15 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
     @Schema(title = "Maximum number of results", description = "Stops after this many log events, between 1 and 10000.", defaultValue = "100")
     private Property<Integer> maxResults = Property.ofValue(100);
 
+    @Builder.Default
+    @Schema(
+        title = "How to return the events",
+        description = "`FETCH` returns all the events in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. " +
+            "Use `STORE` for a large result: the output of a task is kept in the execution and verbose events can reach several MB.",
+        defaultValue = "FETCH"
+    )
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         int limit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
@@ -102,38 +115,40 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
         }
         Sort renderedSort = runContext.render(this.sort).as(Sort.class).orElse(null);
 
-        var client = client(runContext, true);
         List<Map<String, Object>> logs = new ArrayList<>();
-        String cursor = null;
-        do {
-            Map<String, Object> page = new LinkedHashMap<>();
-            page.put("limit", Math.min(PAGE_SIZE, limit - logs.size()));
-            if (cursor != null) {
-                page.put("cursor", cursor);
-            }
-            Map<String, Object> body = new LinkedHashMap<>();
-            body.put("filter", filter);
-            body.put("page", page);
-            if (renderedSort != null) {
-                body.put("sort", renderedSort.api());
-            }
+        try (DatadogClient client = client(runContext, true)) {
+            String cursor = null;
+            do {
+                Map<String, Object> page = new LinkedHashMap<>();
+                page.put("limit", Math.min(PAGE_SIZE, limit - logs.size()));
+                if (cursor != null) {
+                    page.put("cursor", cursor);
+                }
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("filter", filter);
+                body.put("page", page);
+                if (renderedSort != null) {
+                    body.put("sort", renderedSort.api());
+                }
 
-            Map<String, Object> answer = client.post("/api/v2/logs/events/search", body).map();
-            if (answer.get("data") instanceof List<?> rows) {
-                for (Object row : rows) {
-                    if (row instanceof Map<?, ?> raw && logs.size() < limit) {
-                        logs.add(flatten(raw));
+                Map<String, Object> answer = client.post("/api/v2/logs/events/search", body).map();
+                if (answer.get("data") instanceof List<?> rows) {
+                    for (Object row : rows) {
+                        if (row instanceof Map<?, ?> raw && logs.size() < limit) {
+                            logs.add(flatten(raw));
+                        }
                     }
                 }
-            }
-            cursor = null;
-            if (logs.size() < limit && answer.get("meta") instanceof Map<?, ?> meta && meta.get("page") instanceof Map<?, ?> metaPage && metaPage.get("after") != null) {
-                cursor = String.valueOf(metaPage.get("after"));
-            }
-        } while (cursor != null);
+                cursor = null;
+                if (logs.size() < limit && answer.get("meta") instanceof Map<?, ?> meta && meta.get("page") instanceof Map<?, ?> metaPage && metaPage.get("after") != null) {
+                    cursor = String.valueOf(metaPage.get("after"));
+                }
+            } while (cursor != null);
+        }
 
         runContext.logger().info("Datadog returned {} log event(s)", logs.size());
-        return Output.builder().logs(logs).size(logs.size()).build();
+        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), logs);
+        return Output.builder().logs(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
     }
 
     /** Puts the id and the attributes of an event side by side: {@code id}, {@code timestamp}, {@code host}, {@code service}, {@code status}, {@code message}, {@code tags} and {@code attributes}. */
@@ -164,10 +179,16 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Log events", description = "The events: `id`, `timestamp`, `host`, `service`, `status`, `message`, `tags` and `attributes` (the parsed fields of the log).")
+        @Schema(title = "Log events", description = "With `FETCH`, the events: `id`, `timestamp`, `host`, `service`, `status`, `message`, `tags` and `attributes` (the parsed fields of the log).")
         private final List<Map<String, Object>> logs;
 
-        @Schema(title = "Number of events")
+        @Schema(title = "First event", description = "With `FETCH_ONE`, the first event.")
+        private final Map<String, Object> row;
+
+        @Schema(title = "Internal storage URI", description = "With `STORE`, the Ion file that holds the events, one per line.")
+        private final URI uri;
+
+        @Schema(title = "Number of events", description = "The number of events found, whatever the `fetchType`.")
         private final Integer size;
     }
 }

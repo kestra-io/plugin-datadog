@@ -97,6 +97,36 @@ class SubmitTest extends AbstractDatadogTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void seriesTimestampsMayBeIsoInstantsOrNumbers() throws Exception {
+        task().series(Property.ofValue(List.of(
+            Map.of("metric", "a", "points", List.of(Map.of("value", 1, "timestamp", "2026-01-01T00:00:00Z"), Map.of("value", 2, "timestamp", "1767225660"), Map.of("value", 3, "timestamp", 1767225720)))
+        ))).build().run(runContext());
+
+        List<Map<String, Object>> points = (List<Map<String, Object>>) onlySeries(server.only()).get("points");
+        assertEquals(List.of(1767225600L, 1767225660L, 1767225720L), points.stream().map(p -> ((Number) p.get("timestamp")).longValue()).toList());
+    }
+
+    @Test
+    void refusesATimestampOfASeriesThatIsNeitherANumberNorAnInstant() {
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(List.of(
+            Map.of("metric", "a", "points", List.of(Map.of("value", 1, "timestamp", "yesterday")))))).build().run(runContext()));
+        assertTrue(server.requests.isEmpty());
+    }
+
+    @Test
+    void seriesModeRefusesTheSinglePointProperties() {
+        List<Map<String, Object>> series = List.of(Map.of("metric", "a", "points", List.of(Map.of("value", 1))));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).tags(Property.ofValue(List.of("env:prod"))).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).host(Property.ofValue("h")).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).unit(Property.ofValue("row")).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).interval(Property.ofValue(10L)).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).metricType(Property.ofValue(Submit.MetricType.COUNT)).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().series(Property.ofValue(series)).timestamp(Property.ofValue(Instant.now())).build().run(runContext()));
+        assertTrue(server.requests.isEmpty(), "nothing is sent when a property would be dropped");
+    }
+
+    @Test
     void refusesInvalidInputBeforeSending() {
         // neither, both
         assertThrows(IllegalArgumentException.class, () -> task().build().run(runContext()));

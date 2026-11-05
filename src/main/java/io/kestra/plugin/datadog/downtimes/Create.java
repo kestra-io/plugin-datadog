@@ -143,7 +143,10 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
         runContext.render(this.muteFirstRecoveryNotification).as(Boolean.class).ifPresent(value -> attributes.put("mute_first_recovery_notification", value));
 
         Map<String, Object> body = Map.of("data", Map.of("type", "downtime", "attributes", attributes));
-        Map<String, Object> answer = client(runContext, true).post("/api/v2/downtime", body).map();
+        Map<String, Object> answer;
+        try (DatadogClient client = client(runContext, true)) {
+            answer = client.post("/api/v2/downtime", body).map();
+        }
 
         String id = null;
         String status = null;

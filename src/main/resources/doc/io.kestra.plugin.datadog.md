@@ -21,7 +21,7 @@ Store both as Kestra secrets: `apiKey: "{{ secret('DATADOG_API_KEY') }}"` and `a
 
 ## Site
 
-A key only works on the Datadog site of the organization that created it. Set `site` to the domain you see in the Datadog URL: `datadoghq.com` (the default), `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com` or `ddog-gov.com`. The tasks call `https://api.<site>` and `logs.Send` calls `https://http-intake.logs.<site>`. `apiUrl` (and `intakeUrl` for `logs.Send`) replace those addresses, for a proxy, a private link or a test server.
+A key only works on the Datadog site of the organization that created it. Set `site` to the domain you see in the Datadog URL: `datadoghq.com` (the default), `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com` or `ddog-gov.com`. The tasks call `https://api.<site>` and `logs.Send` calls `https://http-intake.logs.<site>`. `apiUrl` (and `intakeUrl` for `logs.Send`) replace those addresses, for a proxy, a private link or a test server. `apiUrl` does not apply to `logs.Send`, which has its own address, so a proxy for the other tasks needs a route for the intake too.
 
 ## Tasks
 
@@ -31,7 +31,7 @@ Posts an event to the event stream, for example to mark a deployment or a pipeli
 
 ### metrics.Submit
 
-Sends custom metric points. Give `metric` and `value` for one point or `series` for several series in the shape of the Datadog `POST /api/v2/series` body. A point without a timestamp gets the time the task runs. Datadog accepts points up to one hour in the past and one hour in the future and processes them after it has answered, so a rejected point does not fail the task.
+Sends custom metric points. Give `metric` and `value` for one point or `series` for several series in the shape of the Datadog `POST /api/v2/series` body. A point without a timestamp gets the time the task runs and a point timestamp is a number of seconds or an ISO-8601 instant. With `series`, `metricType`, `tags`, `host`, `unit`, `interval` and `timestamp` are refused: set them on each entry of `series`. Datadog accepts points up to one hour in the past and one hour in the future and processes them after it has answered, so a rejected point does not fail the task.
 
 ### metrics.Query
 
@@ -39,7 +39,7 @@ Runs a metrics query over a window and returns the series, with `seriesCount` an
 
 ### monitors.List
 
-Lists monitors by name, tags, monitor tags or group state, page by page up to `maxMonitors` (1000 by default). `groupStates` is applied by Datadog and selects monitors that have a group in that state, which is not always the monitor's `overall_state`.
+Lists monitors by name, tags, monitor tags or group state, page by page up to `maxMonitors` (1000 by default). `fetchType` returns them in the output (`FETCH`), as the first one (`FETCH_ONE`), in internal storage (`STORE`) or only as a count (`NONE`). `groupStates` is applied by Datadog and selects monitors that have a group in that state, which is not always the monitor's `overall_state`.
 
 ### downtimes.Create and downtimes.Cancel
 
@@ -47,7 +47,7 @@ Lists monitors by name, tags, monitor tags or group state, page by page up to `m
 
 ### logs.Send and logs.Search
 
-`Send` posts one entry (`message`) or up to 1000 (`logs`) to the intake. `Search` runs a Log Explorer query over a window and follows the cursor until `maxResults` events are collected. Datadog limits this endpoint to 300 requests per hour.
+`Send` posts one entry (`message`) or up to 1000 (`logs`) to the intake. With `logs`, `service`, `source`, `host`, `tags` and `attributes` are defaults for the entries that do not set them and `tags` are added to the `ddtags` of each entry. `attributes` refuses the keys that have a property of their own (`message`, `service`, `ddsource`, `hostname`, `ddtags`). `Search` runs a Log Explorer query over a window and follows the cursor until `maxResults` events are collected. Its `fetchType` works as the one of `monitors.List`: use `STORE` for a large result, since the output of a task is kept in the execution. Datadog limits this endpoint to 300 requests per hour.
 
 ## Triggers
 
@@ -55,11 +55,11 @@ Lists monitors by name, tags, monitor tags or group state, page by page up to `m
 
 Polls the monitors and starts one execution with the monitors that entered one of the watched `states` (`ALERT` by default) since the previous poll. The execution receives `{{ trigger.monitors }}` and `{{ trigger.count }}`.
 
-A monitor is returned when its `overall_state` is watched and its `overall_state_modified` is later than the previous poll. The trigger keeps the newest `overall_state_modified` it has returned in the namespace KV store, so a monitor that stays in alert starts one execution, not one per poll. The first poll only records the starting time. The cursor moves once the execution has been created, so if creating it fails the same monitors are returned by the next poll.
+A monitor is returned when its `overall_state` is watched and its `overall_state_modified` is later than the previous poll. `overall_state_modified` has a precision of one second, so the trigger keeps in the namespace KV store the newest value it has returned and the monitors returned at that second. A monitor that changes in the same second as another one is returned even when it is only listed by a later poll and nothing is returned twice. A monitor that stays in alert starts one execution, not one per poll. The first poll only records the starting time, taken from the `Date` header of the Datadog answer so that the clock of the worker does not matter and the monitors that already alert are not returned. The cursor moves once the execution has been created, so if creating it fails the same monitors are returned by the next poll.
 
 Limitations:
 
 - A monitor that goes into alert and recovers between two polls is not seen. Keep `interval` shorter than the shortest outage that matters.
-- At most `maxMonitors` monitors are read per poll, in the order Datadog returns them. When the organization has more, narrow the poll with `name`, `tags` or `monitorTags`.
-- A rate limit (HTTP 429) or a server error (5xx) skips that poll and the next one reads the same window again. An authentication or permission error fails the trigger.
+- At most `maxMonitors` monitors are read per poll, in the order Datadog returns them. When the poll reaches that number it logs a warning and the monitors past it are not watched: narrow the poll with `name`, `tags` or `monitorTags`.
+- A rate limit (HTTP 429), a server error (5xx) or a network failure (DNS, TLS, a reset connection, a timeout) skips that poll and the next one reads the same window again. An authentication or permission error fails the trigger.
 - The automated tests use a local mock of the Datadog API that follows the published OpenAPI description. They do not cover the behavior of a live Datadog organization.

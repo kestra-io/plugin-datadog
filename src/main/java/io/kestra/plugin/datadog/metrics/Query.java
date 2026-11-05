@@ -95,7 +95,10 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
         params.put("to", end.getEpochSecond());
         params.put("query", renderedQuery);
 
-        Map<String, Object> answer = client(runContext, true).get("/api/v1/query", params).map();
+        Map<String, Object> answer;
+        try (DatadogClient client = client(runContext, true)) {
+            answer = client.get("/api/v1/query", params).map();
+        }
 
         // a query Datadog cannot run is answered with a 200 and `status: error`
         String status = answer.get("status") == null ? null : String.valueOf(answer.get("status"));

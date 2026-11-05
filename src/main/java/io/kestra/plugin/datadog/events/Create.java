@@ -131,7 +131,10 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
         runContext.render(this.sourceTypeName).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> body.put("source_type_name", value));
         runContext.render(this.dateHappened).as(Instant.class).ifPresent(value -> body.put("date_happened", value.getEpochSecond()));
 
-        DatadogClient.Response response = client(runContext, false).post("/api/v1/events", body);
+        DatadogClient.Response response;
+        try (DatadogClient client = client(runContext, false)) {
+            response = client.post("/api/v1/events", body);
+        }
 
         Map<String, Object> answer = response.map();
         Object event = answer.get("event");

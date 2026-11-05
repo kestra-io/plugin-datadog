@@ -63,11 +63,13 @@ import java.util.Map;
 )
 public class Send extends AbstractDatadogTask implements RunnableTask<Send.Output> {
     private static final int MAX_ENTRIES = 1000;
+    // the fields of an entry that have a property of their own
+    private static final List<String> RESERVED = List.of("message", "service", "ddsource", "hostname", "ddtags");
 
     @Schema(title = "Message", description = "The text of one log entry.")
     private Property<String> message;
 
-    @Schema(title = "Service", description = "The service the entry belongs to, to filter on in the Log Explorer.")
+    @Schema(title = "Service", description = "The service the entry belongs to, to filter on in the Log Explorer. With `logs`, the default for the entries that set no `service`.")
     private Property<String> service;
 
     @Schema(title = "Source", description = "The source of the entry (`ddsource`), which picks the log pipeline in Datadog, such as `kestra`.")
@@ -76,10 +78,10 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
     @Schema(title = "Host", description = "The host name the entry comes from (`hostname`).")
     private Property<String> host;
 
-    @Schema(title = "Tags", description = "Tags to attach, such as `env:prod`.")
+    @Schema(title = "Tags", description = "Tags to attach, such as `env:prod`. With `logs`, they are added to the `ddtags` of every entry.")
     private Property<List<String>> tags;
 
-    @Schema(title = "Attributes", description = "Extra attributes added to the entry as JSON fields. They cannot replace `message`, `service`, `ddsource`, `hostname` and `ddtags`.")
+    @Schema(title = "Attributes", description = "Extra attributes added to the entry as JSON fields. `message`, `service`, `ddsource`, `hostname` and `ddtags` are refused here because they have a property of their own. With `logs`, the default for the entries that do not have the attribute.")
     private Property<Map<String, Object>> attributes;
 
     @Schema(
@@ -88,9 +90,26 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
     )
     private Property<List<Map<String, Object>>> logs;
 
-    @Schema(title = "Log intake URL", description = "Replaces `https://http-intake.logs.<site>` when set, for a proxy or a test server.")
+    @Schema(title = "Log intake URL", description = "Replaces `https://http-intake.logs.<site>` when set, for a proxy or a test server. `apiUrl` does not apply to this task: the log intake has its own address, so a proxy for the other tasks needs its own route for it.")
     @PluginProperty(group = "advanced")
     private Property<String> intakeUrl;
+
+    private static void rejectReserved(Map<String, Object> attributes) {
+        for (String reserved : RESERVED) {
+            if (attributes.containsKey(reserved)) {
+                throw new IllegalArgumentException("`attributes` cannot set '" + reserved + "': use the property of the task with the matching name (`message`, `service`, `source`, `host` or `tags`)");
+            }
+        }
+    }
+
+    private Map<String, Object> defaults(RunContext runContext) throws Exception {
+        Map<String, Object> defaults = new LinkedHashMap<>(runContext.render(this.attributes).asMap(String.class, Object.class));
+        rejectReserved(defaults);
+        runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("service", v));
+        runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("ddsource", v));
+        runContext.render(this.host).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> defaults.put("hostname", v));
+        return defaults;
+    }
 
     @Override
     public Output run(RunContext runContext) throws Exception {
@@ -100,11 +119,19 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
 
         List<Map<String, Object>> entries = new ArrayList<>();
         if (this.logs != null) {
+            // service, source, host, tags and attributes are defaults for the entries that do not set them
+            Map<String, Object> defaults = defaults(runContext);
+            List<String> defaultTags = runContext.render(this.tags).asList(String.class).stream().filter(t -> t != null && !t.isBlank()).toList();
             for (Map<?, ?> raw : runContext.render(this.logs).asList(Map.class)) {
                 Map<String, Object> entry = new LinkedHashMap<>();
                 raw.forEach((key, value) -> entry.put(String.valueOf(key), value));
                 if (entry.get("message") == null || String.valueOf(entry.get("message")).isBlank()) {
                     throw new IllegalArgumentException("Every entry of `logs` needs a `message`");
+                }
+                defaults.forEach(entry::putIfAbsent);
+                if (!defaultTags.isEmpty()) {
+                    String own = entry.get("ddtags") == null ? "" : String.valueOf(entry.get("ddtags"));
+                    entry.put("ddtags", own.isBlank() ? String.join(",", defaultTags) : own + "," + String.join(",", defaultTags));
                 }
                 entries.add(entry);
             }
@@ -117,6 +144,7 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
                 throw new IllegalArgumentException("The Datadog log `message` must not be blank");
             }
             Map<String, Object> entry = new LinkedHashMap<>(runContext.render(this.attributes).asMap(String.class, Object.class));
+            rejectReserved(entry);
             entry.put("message", renderedMessage);
             runContext.render(this.service).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> entry.put("service", v));
             runContext.render(this.source).as(String.class).filter(v -> !v.isBlank()).ifPresent(v -> entry.put("ddsource", v));
@@ -131,9 +159,10 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
             throw new IllegalArgumentException("Datadog accepts at most " + MAX_ENTRIES + " log entries per request but " + entries.size() + " were given: split them over several tasks");
         }
 
-        DatadogClient client = client(runContext, false);
-        String base = client.logsIntakeBase(runContext.render(this.intakeUrl).as(String.class).orElse(""));
-        client.exchange("POST", base, "/api/v2/logs", Map.of(), entries, true);
+        try (DatadogClient client = client(runContext, false)) {
+            String base = client.logsIntakeBase(runContext.render(this.intakeUrl).as(String.class).orElse(""));
+            client.exchange("POST", base, "/api/v2/logs", Map.of(), entries, true);
+        }
 
         runContext.logger().info("Datadog accepted {} log entr{}", entries.size(), entries.size() == 1 ? "y" : "ies");
         return Output.builder().sent(entries.size()).build();

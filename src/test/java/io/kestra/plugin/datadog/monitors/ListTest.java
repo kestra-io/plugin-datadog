@@ -79,6 +79,17 @@ class ListTest extends AbstractDatadogTest {
     }
 
     @Test
+    void fetchTypeStoreWritesTheMonitorsToInternalStorage() throws Exception {
+        server.reply("GET", "/api/v1/monitor", 200, monitors(1, 3));
+
+        List.Output stored = task().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build().run(runContext());
+
+        assertEquals(null, stored.getMonitors());
+        assertTrue(stored.getUri() != null && stored.getUri().toString().startsWith("kestra://"), String.valueOf(stored.getUri()));
+        assertEquals(3, stored.getSize());
+    }
+
+    @Test
     void anEmptyListIsNotAnError() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
         assertEquals(0, task().build().run(runContext()).getSize());

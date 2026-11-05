@@ -66,8 +66,8 @@ public class Cancel extends AbstractDatadogTask implements RunnableTask<Cancel.O
         }
 
         boolean ignore = runContext.render(this.ignoreNotFound).as(Boolean.class).orElse(false);
-        try {
-            client(runContext, true).delete("/api/v2/downtime/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
+        try (DatadogClient client = client(runContext, true)) {
+            client.delete("/api/v2/downtime/" + URLEncoder.encode(id, StandardCharsets.UTF_8));
         } catch (DatadogClient.DatadogException e) {
             if (e.getStatus() == 404 && ignore) {
                 runContext.logger().info("Datadog downtime {} was not found, nothing to cancel", id);
