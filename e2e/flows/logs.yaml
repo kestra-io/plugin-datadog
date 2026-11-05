@@ -1,0 +1,19 @@
+id: datadog_e2e_logs
+namespace: hq.datadog.e2e
+tasks:
+  - id: send
+    type: io.kestra.plugin.datadog.logs.Send
+    apiKey: mock-api-key
+    intakeUrl: __MOCK_URL__
+    message: e2e line
+  - id: search
+    type: io.kestra.plugin.datadog.logs.Search
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+    query: service:e2e
+  - id: verify
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.send.sent == 1 }}"
+      - "{{ outputs.search.size == 1 }}"

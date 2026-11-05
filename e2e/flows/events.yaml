@@ -1,0 +1,13 @@
+id: datadog_e2e_events
+namespace: hq.datadog.e2e
+tasks:
+  - id: create
+    type: io.kestra.plugin.datadog.events.Create
+    apiKey: mock-api-key
+    apiUrl: __MOCK_URL__
+    title: End-to-end event
+    text: Mock Datadog only
+  - id: verify
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.create.eventId == '123' }}"

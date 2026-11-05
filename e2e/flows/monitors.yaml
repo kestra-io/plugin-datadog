@@ -1,0 +1,19 @@
+id: datadog_e2e_monitors
+namespace: hq.datadog.e2e
+tasks:
+  - id: list
+    type: io.kestra.plugin.datadog.monitors.List
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+  - id: verify
+    type: io.kestra.plugin.core.execution.Assert
+    conditions:
+      - "{{ outputs.list.size == 1 }}"
+triggers:
+  - id: changed
+    type: io.kestra.plugin.datadog.monitors.StateChange
+    apiKey: mock-api-key
+    appKey: mock-app-key
+    apiUrl: __MOCK_URL__
+    interval: PT1S
