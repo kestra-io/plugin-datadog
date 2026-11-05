@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.logs;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
@@ -20,6 +21,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Getter
+@ValidDatadogLimits
 @SuperBuilder
 @NoArgsConstructor
 public abstract class AbstractSearch extends AbstractWindow {

@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.api;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Calls any operationId in the pinned catalog. Use api.Operations to discover qualified IDs. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

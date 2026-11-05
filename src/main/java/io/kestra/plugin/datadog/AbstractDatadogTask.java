@@ -17,7 +17,6 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-@ValidDatadogLimits
 public abstract class AbstractDatadogTask extends Task {
     @Schema(
         title = "Datadog API key",

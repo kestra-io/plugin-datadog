@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.synthetics;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.util.Map;
 
 /** Datadog operationIds: v1:ListTests and v1:SearchTests. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

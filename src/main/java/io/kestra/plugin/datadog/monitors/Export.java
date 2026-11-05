@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.monitors;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.annotations.Example;
@@ -20,6 +21,7 @@ import java.net.URI;
 import java.util.Map;
 
 /** Datadog operationId: ListMonitors. */
+@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor

@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.ddsql;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.Locale;
 
 /** Datadog operationIds: ExecuteDdsqlTabularQuery and FetchDdsqlTabularQuery. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

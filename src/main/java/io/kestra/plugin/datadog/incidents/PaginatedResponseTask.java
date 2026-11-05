@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.incidents;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Map;
 
 /** Bounded paging and optional streaming storage for the incident response list tasks. */
+@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor

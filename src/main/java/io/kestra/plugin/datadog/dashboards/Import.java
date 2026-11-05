@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.dashboards;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.annotations.Example;
@@ -23,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Datadog operationIds: ListDashboards, GetDashboard, CreateDashboard and UpdateDashboard. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

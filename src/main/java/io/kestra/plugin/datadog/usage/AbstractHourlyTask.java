@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.usage;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
@@ -20,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

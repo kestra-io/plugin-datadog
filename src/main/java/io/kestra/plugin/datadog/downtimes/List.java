@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.downtimes;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Datadog v2 operationId: ListDowntimes. */
+@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor

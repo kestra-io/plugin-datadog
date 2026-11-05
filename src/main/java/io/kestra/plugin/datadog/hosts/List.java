@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.hosts;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -30,6 +31,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /** Datadog operationId: ListHosts. */
+@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode

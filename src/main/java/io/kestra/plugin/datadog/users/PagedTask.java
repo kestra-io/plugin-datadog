@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.users;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Bounded organization list output with optional internal storage. */
+@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor

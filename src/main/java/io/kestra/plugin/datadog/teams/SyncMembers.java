@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.teams;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.annotations.Example;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Datadog operationIds: v2:ListUsers, v2:GetTeamMemberships, v2:CreateTeamMembership and v2:DeleteTeamMembership. */
+@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor

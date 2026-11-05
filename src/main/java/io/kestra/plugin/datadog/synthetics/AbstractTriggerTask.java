@@ -1,5 +1,6 @@
 package io.kestra.plugin.datadog.synthetics;
 
+import io.kestra.plugin.datadog.ValidDatadogLimits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import io.kestra.core.models.property.Property;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @Getter
+@ValidDatadogLimits
 @SuperBuilder
 @NoArgsConstructor
 public abstract class AbstractTriggerTask extends AbstractDatadogTask {
