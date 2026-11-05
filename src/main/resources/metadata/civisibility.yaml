@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.civisibility
+name: "civisibility"
+title: "Datadog CI visibility"
+description: "Search CI pipeline and test events."
+body: "Read pipeline and test events by query and window or export them as ION."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"

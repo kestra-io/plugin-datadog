@@ -1,6 +1,6 @@
 @PluginSubGroup(
     title = "Datadog logs",
-    description = "Tasks to send log entries to Datadog and to search the logs.",
+    description = "Send, search, aggregate and count logs or trigger a flow when a count crosses a threshold.",
     categories = {
         PluginSubGroup.PluginCategory.DATA,
         PluginSubGroup.PluginCategory.INFRASTRUCTURE
