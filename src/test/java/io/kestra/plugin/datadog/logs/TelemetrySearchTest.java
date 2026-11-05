@@ -30,7 +30,6 @@ class TelemetrySearchTest extends AbstractDatadogTest {
 
     private List<Endpoint> endpoints() {
         return List.of(
-            new Endpoint("/api/v2/logs/events/search", "log", Search::builder),
             new Endpoint("/api/v2/spans/events/search", "spans", io.kestra.plugin.datadog.spans.Search::builder),
             new Endpoint("/api/v2/rum/events/search", "rum", io.kestra.plugin.datadog.rum.Search::builder),
             new Endpoint("/api/v2/audit/events/search", "audit", io.kestra.plugin.datadog.audit.Search::builder),

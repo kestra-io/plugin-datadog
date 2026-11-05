@@ -86,7 +86,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         var context = runContext();
         server.reply("GET", "/api/v1/monitor", 200, "[{\"id\":123,\"message\":\"https://hooks.example.org/value\"}]");
         var task = List.builder().id(IdUtils.create()).type(List.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
-            .apiUrl(Property.ofValue(server.url())).store(Property.ofValue(true)).build();
+            .apiUrl(Property.ofValue(server.url())).fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build();
         var output = task.run(context);
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
