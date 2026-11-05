@@ -1,10 +1,10 @@
 {
-  "name": "plugin-template",
+  "name": "plugin-datadog",
   "build": {
     "context": ".",
     "dockerfile": "Dockerfile"
   },
-  "workspaceFolder": "/workspaces/plugin-template",
+  "workspaceFolder": "/workspaces/plugin-datadog",
   "forwardPorts": [8080],
   "customizations": {
     "vscode": {
