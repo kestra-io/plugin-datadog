@@ -1,0 +1,8 @@
+group: io.kestra.plugin.datadog.users
+name: "users"
+title: "Datadog users"
+description: "Audit and disable user access."
+body: "Read user and service account access metadata or disable a single account by ID."
+videos: []
+createdBy: "Kestra Core Team"
+managedBy: "Kestra Core Team"
