@@ -7,6 +7,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -26,7 +27,7 @@ class StateChangeTest extends AbstractDatadogTest {
 
     private StateChange.StateChangeBuilder<?, ?> trigger() {
         return StateChange.builder()
-            .id("on_alert_" + java.util.UUID.randomUUID())
+            .id(IdUtils.create())
             .type(StateChange.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY))

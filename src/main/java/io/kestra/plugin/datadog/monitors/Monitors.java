@@ -16,20 +16,20 @@ final class Monitors {
 
     /** Collects up to {@code limit} monitors with the Datadog filters already set in {@code params}. */
     static List<Map<String, Object>> collect(DatadogClient client, Map<String, Object> params, int limit) throws Exception {
-        int pageSize = Math.min(PAGE_SIZE, limit);
+        var pageSize = Math.min(PAGE_SIZE, limit);
         params.put("page_size", pageSize);
 
-        List<Map<String, Object>> monitors = new ArrayList<>();
+        var monitors = new ArrayList<Map<String, Object>>();
         for (int page = 0; monitors.size() < limit; page++) {
             params.put("page", page);
-            Object json = client.get("/api/v1/monitor", params).json();
+            var json = client.get("/api/v1/monitor", params).json();
             if (!(json instanceof List<?> rows)) {
                 throw new IllegalStateException("Datadog returned an unexpected answer for the monitor list: a JSON array was expected");
             }
             for (Object row : rows) {
                 if (row instanceof Map<?, ?> raw && monitors.size() < limit) {
                     @SuppressWarnings("unchecked")
-                    Map<String, Object> monitor = (Map<String, Object>) raw;
+                    var monitor = (Map<String, Object>) raw;
                     monitors.add(monitor);
                 }
             }
@@ -43,7 +43,7 @@ final class Monitors {
 
     /** Joins the non-blank values with a comma, the way the Datadog filters expect them. */
     static Optional<String> join(List<String> values) {
-        List<String> kept = values.stream().filter(value -> value != null && !value.isBlank()).map(String::trim).toList();
+        var kept = values.stream().filter(value -> value != null && !value.isBlank()).map(String::trim).toList();
         return kept.isEmpty() ? Optional.empty() : Optional.of(String.join(",", kept));
     }
 }

@@ -27,7 +27,7 @@ public final class DatadogFetch {
             case FETCH_ONE -> new Result(null, found.isEmpty() ? null : found.getFirst(), null, found.size());
             case NONE -> new Result(null, null, null, found.size());
             case STORE -> {
-                File file = runContext.workingDir().createTempFile(".ion").toFile();
+                var file = runContext.workingDir().createTempFile(".ion").toFile();
                 try (OutputStream out = Files.newOutputStream(file.toPath())) {
                     for (Map<String, Object> row : found) {
                         FileSerde.write(out, row);

@@ -3,6 +3,7 @@ package io.kestra.plugin.datadog.logs;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.MockDatadogServer;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,13 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LogsTest extends AbstractDatadogTest {
     private Send.SendBuilder<?, ?> send() {
         server.reply("POST", "/api/v2/logs", 202, "{}");
-        return Send.builder().id("send").type(Send.class.getName())
+        return Send.builder().id(IdUtils.create()).type(Send.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .intakeUrl(Property.ofValue(server.url()));
     }
 
     private Search.SearchBuilder<?, ?> search() {
-        return Search.builder().id("search").type(Search.class.getName())
+        return Search.builder().id(IdUtils.create()).type(Search.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
             .apiUrl(Property.ofValue(server.url()));
     }
@@ -129,7 +130,7 @@ class LogsTest extends AbstractDatadogTest {
     void anIntakeErrorFailsTheTask() {
         server.reply("POST", "/api/v2/logs", 403, "{\"errors\":[{\"code\":\"forbidden\",\"detail\":\"API key invalid\"}]}");
         IllegalStateException error = assertThrows(IllegalStateException.class,
-            () -> Send.builder().id("s").type(Send.class.getName()).apiKey(Property.ofValue(API_KEY)).intakeUrl(Property.ofValue(server.url()))
+            () -> Send.builder().id(IdUtils.create()).type(Send.class.getName()).apiKey(Property.ofValue(API_KEY)).intakeUrl(Property.ofValue(server.url()))
                 .message(Property.ofValue("m")).build().run(runContext()));
         assertTrue(error.getMessage().contains("403"), error.getMessage());
     }

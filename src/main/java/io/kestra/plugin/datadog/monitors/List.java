@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -10,6 +11,8 @@ import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -67,19 +70,24 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     private static final int DEFAULT_MAX = 1000;
 
     @Schema(title = "Name filter", description = "Returns the monitors whose name contains this text.")
+    @PluginProperty(group = "processing")
     private Property<String> name;
 
     @Schema(title = "Tags filter", description = "Returns the monitors that carry all these tags. Tags set on the monitor, for example `service:orders`.")
+    @PluginProperty(group = "processing")
     private Property<java.util.List<String>> tags;
 
     @Schema(title = "Monitor tags filter", description = "Returns the monitors that carry all these monitor tags (the tags in the monitor definition, not the ones that come from the scope), for example `env:prod`.")
+    @PluginProperty(group = "processing")
     private Property<java.util.List<String>> monitorTags;
 
     @Schema(title = "Group states filter", description = "Returns the monitors that have a group in one of these states: `alert`, `warn`, `no data` or `ok`.")
+    @PluginProperty(group = "processing")
     private Property<java.util.List<String>> groupStates;
 
     @Schema(title = "Maximum number of monitors", description = "Stops after this many monitors, between 1 and 10000.", defaultValue = "1000")
-    private Property<Integer> maxMonitors;
+    @PluginProperty(group = "processing")
+    private Property<@Min(1) @Max(10000) Integer> maxMonitors;
 
     @Builder.Default
     @Schema(
@@ -88,16 +96,17 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
             "Use `STORE` for a large result: the output of a task is kept in the execution.",
         defaultValue = "FETCH"
     )
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        int limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
+        var limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
         if (limit < 1 || limit > 10_000) {
             throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + limit);
         }
 
-        Map<String, Object> params = DatadogClient.query();
+        var params = DatadogClient.query();
         runContext.render(this.name).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> params.put("name", value));
         Monitors.join(runContext.render(this.tags).asList(String.class)).ifPresent(value -> params.put("tags", value));
         Monitors.join(runContext.render(this.monitorTags).asList(String.class)).ifPresent(value -> params.put("monitor_tags", value));

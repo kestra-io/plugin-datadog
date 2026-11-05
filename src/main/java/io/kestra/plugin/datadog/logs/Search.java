@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.logs;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
@@ -10,6 +11,8 @@ import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -69,25 +72,31 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
 
     @Builder.Default
     @Schema(title = "Query", description = "A Log Explorer query, such as `service:orders status:error`. All the logs when it is not set.", defaultValue = "*")
+    @PluginProperty(group = "main")
     private Property<String> query = Property.ofValue("*");
 
     @Builder.Default
     @Schema(title = "From", description = "The start of the window: a relative time such as `now-15m` or `now-1d`, an ISO-8601 date or a timestamp in milliseconds.", defaultValue = "now-15m")
+    @PluginProperty(group = "processing")
     private Property<String> from = Property.ofValue("now-15m");
 
     @Builder.Default
     @Schema(title = "To", description = "The end of the window, in the same formats as `from`.", defaultValue = "now")
+    @PluginProperty(group = "processing")
     private Property<String> to = Property.ofValue("now");
 
     @Schema(title = "Indexes", description = "The log indexes to search. All the indexes when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<List<String>> indexes;
 
     @Schema(title = "Sort order", description = "`ASCENDING` (oldest first) or `DESCENDING` (newest first). Datadog uses `DESCENDING` when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<Sort> sort;
 
     @Builder.Default
     @Schema(title = "Maximum number of results", description = "Stops after this many log events, between 1 and 10000.", defaultValue = "100")
-    private Property<Integer> maxResults = Property.ofValue(100);
+    @PluginProperty(group = "processing")
+    private Property<@Min(1) @Max(10000) Integer> maxResults = Property.ofValue(100);
 
     @Builder.Default
     @Schema(
@@ -96,42 +105,43 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
             "Use `STORE` for a large result: the output of a task is kept in the execution and verbose events can reach several MB.",
         defaultValue = "FETCH"
     )
+    @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        int limit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
+        var limit = runContext.render(this.maxResults).as(Integer.class).orElse(100);
         if (limit < 1 || limit > 10_000) {
             throw new IllegalArgumentException("The Datadog `maxResults` must be between 1 and 10000 but was " + limit);
         }
 
-        Map<String, Object> filter = new LinkedHashMap<>();
+        var filter = new LinkedHashMap<String, Object>();
         filter.put("query", runContext.render(this.query).as(String.class).filter(v -> !v.isBlank()).orElse("*"));
         filter.put("from", runContext.render(this.from).as(String.class).filter(v -> !v.isBlank()).orElse("now-15m"));
         filter.put("to", runContext.render(this.to).as(String.class).filter(v -> !v.isBlank()).orElse("now"));
-        List<String> renderedIndexes = runContext.render(this.indexes).asList(String.class);
-        if (!renderedIndexes.isEmpty()) {
-            filter.put("indexes", renderedIndexes);
+        var rIndexes = runContext.render(this.indexes).asList(String.class);
+        if (!rIndexes.isEmpty()) {
+            filter.put("indexes", rIndexes);
         }
-        Sort renderedSort = runContext.render(this.sort).as(Sort.class).orElse(null);
+        var rSort = runContext.render(this.sort).as(Sort.class).orElse(null);
 
-        List<Map<String, Object>> logs = new ArrayList<>();
+        var logs = new ArrayList<Map<String, Object>>();
         try (DatadogClient client = client(runContext, true)) {
             String cursor = null;
             do {
-                Map<String, Object> page = new LinkedHashMap<>();
+                var page = new LinkedHashMap<String, Object>();
                 page.put("limit", Math.min(PAGE_SIZE, limit - logs.size()));
                 if (cursor != null) {
                     page.put("cursor", cursor);
                 }
-                Map<String, Object> body = new LinkedHashMap<>();
+                var body = new LinkedHashMap<String, Object>();
                 body.put("filter", filter);
                 body.put("page", page);
-                if (renderedSort != null) {
-                    body.put("sort", renderedSort.api());
+                if (rSort != null) {
+                    body.put("sort", rSort.api());
                 }
 
-                Map<String, Object> answer = client.post("/api/v2/logs/events/search", body).map();
+                var answer = client.post("/api/v2/logs/events/search", body).map();
                 if (answer.get("data") instanceof List<?> rows) {
                     for (Object row : rows) {
                         if (row instanceof Map<?, ?> raw && logs.size() < limit) {
@@ -153,7 +163,7 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
 
     /** Puts the id and the attributes of an event side by side: {@code id}, {@code timestamp}, {@code host}, {@code service}, {@code status}, {@code message}, {@code tags} and {@code attributes}. */
     private static Map<String, Object> flatten(Map<?, ?> event) {
-        Map<String, Object> out = new LinkedHashMap<>();
+        var out = new LinkedHashMap<String, Object>();
         out.put("id", event.get("id"));
         if (event.get("attributes") instanceof Map<?, ?> attributes) {
             attributes.forEach((key, value) -> out.put(String.valueOf(key), value));

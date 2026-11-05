@@ -2,6 +2,7 @@ package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ListTest extends AbstractDatadogTest {
     private List.ListBuilder<?, ?> task() {
         return List.builder()
-            .id("monitors")
+            .id(IdUtils.create())
             .type(List.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY))
@@ -105,7 +106,7 @@ class ListTest extends AbstractDatadogTest {
 
     @Test
     void theApplicationKeyIsRequired() {
-        assertThrows(IllegalArgumentException.class, () -> List.builder().id("m").type(List.class.getName())
+        assertThrows(IllegalArgumentException.class, () -> List.builder().id(IdUtils.create()).type(List.class.getName())
             .apiKey(Property.ofValue(API_KEY)).apiUrl(Property.ofValue(server.url())).build().run(runContext()));
     }
 }

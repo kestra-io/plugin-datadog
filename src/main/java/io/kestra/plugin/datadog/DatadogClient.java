@@ -22,15 +22,10 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
-/**
- * Minimal Datadog HTTP client shared by every task and trigger of the plugin.
- * <p>
- * It adds the {@code DD-API-KEY} and {@code DD-APPLICATION-KEY} headers, builds the regional base URL and turns an
- * error answer into a message that names the HTTP status and the {@code errors} returned by Datadog. The keys are
- * never written to a log or to an error message.
- */
+// The keys are sent as headers and never reach a log or an error message
 public final class DatadogClient implements AutoCloseable {
     public static final String DEFAULT_SITE = "datadoghq.com";
 
@@ -55,12 +50,7 @@ public final class DatadogClient implements AutoCloseable {
         this.apiUrl = apiUrl;
     }
 
-    /**
-     * Renders the connection properties and validates them.
-     *
-     * @param needsAppKey {@code true} for the endpoints that read data or manage monitors, which Datadog only opens to an
-     *                    application key. The endpoints that only send data need the API key alone.
-     */
+    // needsAppKey: Datadog opens the calls that read data or manage monitors to an application key only
     public static DatadogClient create(
         RunContext runContext,
         Property<String> apiKey,
@@ -69,33 +59,33 @@ public final class DatadogClient implements AutoCloseable {
         Property<String> apiUrl,
         boolean needsAppKey
     ) throws Exception {
-        String renderedApiKey = runContext.render(apiKey).as(String.class).orElse("").trim();
-        if (renderedApiKey.isEmpty()) {
+        var rApiKey = runContext.render(apiKey).as(String.class).orElse("").trim();
+        if (rApiKey.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `apiKey` must not be blank");
         }
 
-        String renderedAppKey = runContext.render(appKey).as(String.class).orElse("").trim();
-        if (needsAppKey && renderedAppKey.isEmpty()) {
+        var rAppKey = runContext.render(appKey).as(String.class).orElse("").trim();
+        if (needsAppKey && rAppKey.isEmpty()) {
             throw new IllegalArgumentException("The Datadog `appKey` must not be blank: this endpoint needs an application key in addition to the API key");
         }
 
-        String renderedSite = runContext.render(site).as(String.class).orElse("").trim();
-        if (renderedSite.isEmpty()) {
-            renderedSite = DEFAULT_SITE;
+        var rSite = runContext.render(site).as(String.class).orElse("").trim();
+        if (rSite.isEmpty()) {
+            rSite = DEFAULT_SITE;
         }
-        if (!SITE.matcher(renderedSite).matches()) {
-            throw new IllegalArgumentException("The Datadog `site` must be a domain name such as `datadoghq.com` or `datadoghq.eu` but was '" + renderedSite + "'");
+        if (!SITE.matcher(rSite).matches()) {
+            throw new IllegalArgumentException("The Datadog `site` must be a domain name such as `datadoghq.com` or `datadoghq.eu` but was '" + rSite + "'");
         }
 
-        String renderedApiUrl = runContext.render(apiUrl).as(String.class).orElse("").trim();
-        if (!renderedApiUrl.isEmpty()) {
-            URI uri = URI.create(renderedApiUrl);
+        var rApiUrl = runContext.render(apiUrl).as(String.class).orElse("").trim();
+        if (!rApiUrl.isEmpty()) {
+            var uri = URI.create(rApiUrl);
             if (uri.getScheme() == null || !(uri.getScheme().equals("https") || uri.getScheme().equals("http")) || uri.getHost() == null) {
-                throw new IllegalArgumentException("The Datadog `apiUrl` must be an http or https URL but was '" + renderedApiUrl + "'");
+                throw new IllegalArgumentException("The Datadog `apiUrl` must be an http or https URL but was '" + rApiUrl + "'");
             }
         }
 
-        return new DatadogClient(runContext, renderedApiKey, renderedAppKey, renderedSite, renderedApiUrl);
+        return new DatadogClient(runContext, rApiKey, rAppKey, rSite, rApiUrl);
     }
 
     /** The base URL of the Datadog API: the override if given, otherwise {@code https://api.<site>}. */
@@ -105,7 +95,7 @@ public final class DatadogClient implements AutoCloseable {
 
     /** The base URL of the log intake: the override if given, otherwise {@code https://http-intake.logs.<site>}. */
     public String logsIntakeBase(String intakeUrl) {
-        String override = intakeUrl == null ? "" : intakeUrl.trim();
+        var override = intakeUrl == null ? "" : intakeUrl.trim();
         return trimSlash(override.isEmpty() ? "https://http-intake.logs." + site : override);
     }
 
@@ -121,12 +111,9 @@ public final class DatadogClient implements AutoCloseable {
         return exchange("DELETE", apiBase(), path, Map.of(), null, true);
     }
 
-    /**
-     * Sends a request and returns the answer whatever its status, so that a caller such as a trigger can decide what to do
-     * with a rate limit or a server error. A network failure still throws.
-     */
+    // failOnError false returns any status, so that a caller such as a trigger can skip a rate limit; a network failure still throws
     public Response exchange(String method, String base, String path, Map<String, ?> query, Object body, boolean failOnError) throws Exception {
-        URI uri = URI.create(trimSlash(base) + path + queryString(query));
+        var uri = URI.create(trimSlash(base) + path + queryString(query));
 
         HttpRequest.HttpRequestBuilder request = HttpRequest.builder()
             .uri(uri)
@@ -148,10 +135,10 @@ public final class DatadogClient implements AutoCloseable {
             throw new DatadogException(-1, "Datadog could not be reached at " + uri.getScheme() + "://" + uri.getAuthority() + ": " + e.getMessage(), e);
         }
 
-        int status = response.getStatus().getCode();
-        String raw = response.getBody() == null ? "" : response.getBody();
-        String retryAfter = response.getHeaders().firstValue("X-RateLimit-Reset").orElse(null);
-        Instant date = response.getHeaders().firstValue("Date").map(DatadogClient::parseHttpDate).orElse(null);
+        var status = response.getStatus().getCode();
+        var raw = response.getBody() == null ? "" : response.getBody();
+        var retryAfter = response.getHeaders().firstValue("X-RateLimit-Reset").orElse(null);
+        var date = response.getHeaders().firstValue("Date").map(DatadogClient::parseHttpDate).orElse(null);
         if (date != null) {
             serverTime = date;
         }
@@ -164,8 +151,8 @@ public final class DatadogClient implements AutoCloseable {
     }
 
     /** The time of the latest answer according to Datadog's {@code Date} header or empty before the first answer. */
-    public java.util.Optional<Instant> serverTime() {
-        return java.util.Optional.ofNullable(serverTime);
+    public Optional<Instant> serverTime() {
+        return Optional.ofNullable(serverTime);
     }
 
     private HttpClient http() throws IllegalVariableEvaluationException {
@@ -198,7 +185,7 @@ public final class DatadogClient implements AutoCloseable {
     private String describe(String method, URI uri, int status, String raw, String retryAfter) {
         StringBuilder message = new StringBuilder("Datadog answered ").append(method).append(' ').append(uri.getPath())
             .append(" with HTTP ").append(status);
-        String detail = errors(raw);
+        var detail = errors(raw);
         if (!detail.isEmpty()) {
             message.append(": ").append(detail);
         }
@@ -219,7 +206,7 @@ public final class DatadogClient implements AutoCloseable {
             return "";
         }
         try {
-            Object json = JacksonMapper.ofJson().readValue(raw, Object.class);
+            var json = JacksonMapper.ofJson().readValue(raw, Object.class);
             if (json instanceof Map<?, ?> map && map.get("errors") instanceof List<?> list && !list.isEmpty()) {
                 return String.join("; ", list.stream().map(String::valueOf).toList());
             }
@@ -233,7 +220,7 @@ public final class DatadogClient implements AutoCloseable {
         if (query == null || query.isEmpty()) {
             return "";
         }
-        StringBuilder out = new StringBuilder();
+        var out = new StringBuilder();
         for (Map.Entry<String, ?> entry : query.entrySet()) {
             if (entry.getValue() == null) {
                 continue;
@@ -276,7 +263,7 @@ public final class DatadogClient implements AutoCloseable {
         /** The body as a JSON object. */
         @SuppressWarnings("unchecked")
         public Map<String, Object> map() {
-            Object json = json();
+            var json = json();
             if (json == null) {
                 return Map.of();
             }

@@ -22,6 +22,8 @@ import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.datadog.ConnectionDocs;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -41,6 +43,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -120,42 +123,47 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
     private Property<String> apiUrl;
 
     @Schema(title = "Name filter", description = "Watches the monitors whose name contains this text.")
+    @PluginProperty(group = "processing")
     private Property<String> name;
 
     @Schema(title = "Tags filter", description = "Watches the monitors that carry all these tags.")
+    @PluginProperty(group = "processing")
     private Property<List<String>> tags;
 
     @Schema(title = "Monitor tags filter", description = "Watches the monitors that carry all these monitor tags, such as `env:prod`.")
+    @PluginProperty(group = "processing")
     private Property<List<String>> monitorTags;
 
     @Schema(title = "States to watch", description = "The monitor states that start an execution. `ALERT` only when it is not set.")
+    @PluginProperty(group = "processing")
     private Property<List<State>> states;
 
     @Builder.Default
     @Schema(title = "Maximum number of monitors per poll", description = "Reads at most this many monitors from Datadog at each poll, between 1 and 10000. " +
         "Narrow the filters when the organization has more monitors than this.", defaultValue = "1000")
-    private Property<Integer> maxMonitors = Property.ofValue(1000);
+    @PluginProperty(group = "processing")
+    private Property<@Min(1) @Max(10000) Integer> maxMonitors = Property.ofValue(1000);
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
-        RunContext runContext = conditionContext.getRunContext();
-        Logger logger = runContext.logger();
+        var runContext = conditionContext.getRunContext();
+        var logger = runContext.logger();
 
-        int limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(1000);
+        var limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(1000);
         if (limit < 1 || limit > 10_000) {
             throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + limit);
         }
-        List<State> renderedStates = runContext.render(this.states).asList(State.class);
-        Set<String> labels = (renderedStates.isEmpty() ? Set.of(State.ALERT) : Set.copyOf(renderedStates)).stream().map(State::label).collect(Collectors.toSet());
+        var rStates = runContext.render(this.states).asList(State.class);
+        var labels = (rStates.isEmpty() ? Set.of(State.ALERT) : Set.copyOf(rStates)).stream().map(State::label).collect(Collectors.toSet());
 
-        Map<String, Object> params = DatadogClient.query();
+        var params = DatadogClient.query();
         runContext.render(this.name).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> params.put("name", value));
         Monitors.join(runContext.render(this.tags).asList(String.class)).ifPresent(value -> params.put("tags", value));
         Monitors.join(runContext.render(this.monitorTags).asList(String.class)).ifPresent(value -> params.put("monitor_tags", value));
 
-        KVStore kvStore = runContext.namespaceKv(context.getNamespace());
-        String stateKey = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
-        Optional<Cursor> stored = readCursor(kvStore, stateKey);
+        var kvStore = runContext.namespaceKv(context.getNamespace());
+        var stateKey = StatefulTriggerService.defaultKey(context.getNamespace(), context.getFlowId(), context.getTriggerId());
+        var stored = readCursor(kvStore, stateKey);
 
         List<Map<String, Object>> all;
         Instant serverTime;
@@ -178,21 +186,21 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
         if (stored.isEmpty()) {
             // first poll: start from Datadog's own clock, so that a worker clock that runs ahead cannot hide the next alerts.
             // The monitors that changed in that same second are marked as seen, the ones that already alert are not replayed.
-            Instant newest = newestModified(all).orElse(null);
-            Instant start = serverTime == null ? (newest == null ? Instant.now() : newest) : (newest != null && newest.isAfter(serverTime) ? newest : serverTime);
+            var newest = newestModified(all).orElse(null);
+            var start = serverTime == null ? (newest == null ? Instant.now() : newest) : (newest != null && newest.isAfter(serverTime) ? newest : serverTime);
             writeCursor(kvStore, stateKey, new Cursor(start, idsModifiedAt(all, start)));
             logger.info("No cursor found, watching Datadog monitors that change state after {}", start);
             return Optional.empty();
         }
-        Cursor cursor = stored.get();
+        var cursor = stored.get();
 
         // a monitor is new when it changed after the cursor or in the same second as the cursor without having been returned yet
-        List<Map<String, Object>> changed = new ArrayList<>();
+        var changed = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> monitor : all) {
             if (!labels.contains(String.valueOf(monitor.get("overall_state")))) {
                 continue;
             }
-            Instant modified = parseInstant(monitor.get("overall_state_modified"));
+            var modified = parseInstant(monitor.get("overall_state_modified"));
             if (modified == null || modified.isBefore(cursor.modified())) {
                 continue;
             }
@@ -205,23 +213,23 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
         }
         changed.sort(Comparator.comparing(monitor -> parseInstant(monitor.get("overall_state_modified"))));
 
-        Instant newest = parseInstant(changed.getLast().get("overall_state_modified"));
-        Set<String> seen = new HashSet<>(idsModifiedAt(changed, newest));
+        var newest = parseInstant(changed.getLast().get("overall_state_modified"));
+        var seen = new HashSet<String>(idsModifiedAt(changed, newest));
         if (newest.equals(cursor.modified())) {
             seen.addAll(cursor.ids());
         }
 
-        Output output = Output.builder().monitors(changed).count(changed.size()).build();
+        var output = Output.builder().monitors(changed).count(changed.size()).build();
 
         // at-least-once: the cursor moves once the execution is built. If building fails, the next poll returns the same monitors.
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
+        var execution = TriggerService.generateExecution(this, conditionContext, context, output);
         writeCursor(kvStore, stateKey, new Cursor(newest, seen));
         logger.info("{} Datadog monitor(s) entered {}", changed.size(), labels);
         return Optional.of(execution);
     }
 
     private static Optional<Instant> newestModified(List<Map<String, Object>> monitors) {
-        return monitors.stream().map(monitor -> parseInstant(monitor.get("overall_state_modified"))).filter(java.util.Objects::nonNull).max(Comparator.naturalOrder());
+        return monitors.stream().map(monitor -> parseInstant(monitor.get("overall_state_modified"))).filter(Objects::nonNull).max(Comparator.naturalOrder());
     }
 
     private static Set<String> idsModifiedAt(List<Map<String, Object>> monitors, Instant at) {
@@ -236,7 +244,7 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
         if (value == null) {
             return null;
         }
-        String text = String.valueOf(value).trim();
+        var text = String.valueOf(value).trim();
         try {
             return OffsetDateTime.parse(text).toInstant();
         } catch (DateTimeParseException ignored) {
@@ -254,11 +262,11 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
     }
 
     private static Optional<Cursor> readCursor(KVStore kvStore, String key) throws Exception {
-        Optional<KVValue> stored = kvStore.getValue(key);
+        var stored = kvStore.getValue(key);
         if (stored.isEmpty()) {
             return Optional.empty();
         }
-        Object value = stored.get().value();
+        var value = stored.get().value();
         Map<String, Object> json = switch (value) {
             case byte[] bytes -> JacksonMapper.ofJson().readValue(bytes, MAP_TYPE);
             case String text -> JacksonMapper.ofJson().readValue(text, MAP_TYPE);
@@ -270,7 +278,7 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
     }
 
     private static void writeCursor(KVStore kvStore, String key, Cursor cursor) throws Exception {
-        byte[] bytes = JacksonMapper.ofJson().writeValueAsString(Map.of("modified", cursor.modified().toString(), "ids", cursor.ids().stream().sorted().toList())).getBytes(StandardCharsets.UTF_8);
+        var bytes = JacksonMapper.ofJson().writeValueAsString(Map.of("modified", cursor.modified().toString(), "ids", cursor.ids().stream().sorted().toList())).getBytes(StandardCharsets.UTF_8);
         // no expiration: an expired cursor would replay or skip alerts
         kvStore.put(key, new KVValueAndMetadata(new KVMetadata("Datadog StateChange trigger cursor", (Duration) null), bytes));
     }

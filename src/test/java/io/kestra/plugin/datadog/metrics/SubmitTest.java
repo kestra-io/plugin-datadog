@@ -3,6 +3,7 @@ package io.kestra.plugin.datadog.metrics;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.MockDatadogServer;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -18,7 +19,7 @@ class SubmitTest extends AbstractDatadogTest {
     private Submit.SubmitBuilder<?, ?> task() {
         server.reply("POST", "/api/v2/series", 202, "{\"errors\":[]}");
         return Submit.builder()
-            .id("metric")
+            .id(IdUtils.create())
             .type(Submit.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .apiUrl(Property.ofValue(server.url()));
@@ -149,7 +150,7 @@ class SubmitTest extends AbstractDatadogTest {
     void anErrorAnswerFailsTheTask() {
         server.reply("POST", "/api/v2/series", 400, "{\"errors\":[\"bad payload\"]}");
         IllegalStateException error = assertThrows(IllegalStateException.class,
-            () -> Submit.builder().id("m").type(Submit.class.getName()).apiKey(Property.ofValue(API_KEY)).apiUrl(Property.ofValue(server.url()))
+            () -> Submit.builder().id(IdUtils.create()).type(Submit.class.getName()).apiKey(Property.ofValue(API_KEY)).apiUrl(Property.ofValue(server.url()))
                 .metric(Property.ofValue("m")).value(Property.ofValue(1.0)).build().run(runContext()));
         assertTrue(error.getMessage().contains("bad payload"), error.getMessage());
     }

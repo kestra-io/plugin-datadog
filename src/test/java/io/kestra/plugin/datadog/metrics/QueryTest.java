@@ -3,6 +3,7 @@ package io.kestra.plugin.datadog.metrics;
 import io.kestra.core.models.property.Property;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.MockDatadogServer;
+import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class QueryTest extends AbstractDatadogTest {
     private Query.QueryBuilder<?, ?> task() {
         return Query.builder()
-            .id("query")
+            .id(IdUtils.create())
             .type(Query.class.getName())
             .apiKey(Property.ofValue(API_KEY))
             .appKey(Property.ofValue(APP_KEY))
@@ -87,7 +88,7 @@ class QueryTest extends AbstractDatadogTest {
 
     @Test
     void theApplicationKeyIsRequired() {
-        assertThrows(IllegalArgumentException.class, () -> Query.builder().id("q").type(Query.class.getName())
+        assertThrows(IllegalArgumentException.class, () -> Query.builder().id(IdUtils.create()).type(Query.class.getName())
             .apiKey(Property.ofValue(API_KEY)).apiUrl(Property.ofValue(server.url())).query(Property.ofValue("avg:x{*}"))
             .build().run(runContext()));
         assertTrue(server.requests.isEmpty());
