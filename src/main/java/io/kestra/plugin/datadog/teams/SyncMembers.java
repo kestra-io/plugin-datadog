@@ -37,7 +37,7 @@ import java.util.Set;
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         teamId: 00000000-0000-0000-0000-000000000001
         handles: [admin@example.com, engineer@example.com]
-        dryRun: true
+        plan: true
     """))
 public class SyncMembers extends AbstractDatadogTask implements RunnableTask<SyncMembers.Output> {
     @NotNull
@@ -46,8 +46,8 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
     @NotNull
     @Schema(title = "Desired user handles", description = "Exact Datadog user handles. An explicit empty list requests removal of every member. Unknown, disabled or duplicate handles fail validation.")
     private Property<List<String>> handles;
-    @Schema(title = "Dry run", description = "Return the planned changes without writing. The last-admin guard is still checked.", defaultValue = "false")
-    private Property<Boolean> dryRun;
+    @Schema(title = "Plan changes", description = "Use GET requests to return the planned changes without writing. The last-admin guard is still checked.", defaultValue = "false")
+    private Property<Boolean> plan;
     @Schema(title = "Allow removing the last admin", description = "Permit removing every current admin. New members are regular members.", defaultValue = "false")
     private Property<Boolean> allowRemoveLastAdmin;
     @Schema(title = "Maximum users to scan", description = "Between 1 and 10000. An incomplete user inventory fails before writing.", defaultValue = "10000")
@@ -72,7 +72,7 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
         }
         int usersLimit = AccessApi.range(context, maxUsers, 10000, 10000, "maxUsers");
         int membersLimit = AccessApi.range(context, maxMembers, 10000, 10000, "maxMembers");
-        boolean dry = AccessApi.flag(context, dryRun);
+        boolean preview = AccessApi.flag(context, plan);
         boolean allow = AccessApi.flag(context, allowRemoveLastAdmin);
         DatadogClient client = client(context, true);
         AccessApi.Page users = AccessApi.collect(client, "/api/v2/users", Map.of("sort", "handle", "sort_dir", "asc"), 100, usersLimit);
@@ -117,7 +117,7 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
         List<Change> diff = new ArrayList<>();
         added.forEach(id -> diff.add(Change.builder().userId(id).handle(handleById.get(id)).before(false).after(true).build()));
         removed.forEach(id -> diff.add(Change.builder().userId(id).handle(handleById.get(id)).before(true).after(false).build()));
-        if (!dry) {
+        if (!preview) {
             for (String id : added) {
                 AccessApi.request(client, "POST", path, Map.of(), Memberships.create(id));
             }
@@ -127,7 +127,7 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
                 AccessApi.delete(client, path + "/" + AccessApi.segment(id), true);
             }
         }
-        return Output.builder().teamId(team).dryRun(dry).status(diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED)
+        return Output.builder().teamId(team).plan(preview).status(diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED)
             .added(added.stream().map(handleById::get).toList()).removed(removed.stream().map(handleById::get).toList())
             .unchanged(unchanged.stream().map(handleById::get).toList()).diff(diff).build();
     }
@@ -152,13 +152,13 @@ public class SyncMembers extends AbstractDatadogTask implements RunnableTask<Syn
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Team identifier")
         private final String teamId;
-        @Schema(title = "Sync result", description = "UPDATED or UNCHANGED. With dryRun this describes the planned result.")
+        @Schema(title = "Sync result", description = "UPDATED or UNCHANGED. With plan this describes the planned result.")
         private final Status status;
-        @Schema(title = "Dry run")
-        private final Boolean dryRun;
-        @Schema(title = "Added handles", description = "Planned additions when dryRun is true.")
+        @Schema(title = "Plan mode")
+        private final Boolean plan;
+        @Schema(title = "Added handles", description = "Planned additions when plan is true.")
         private final List<String> added;
-        @Schema(title = "Removed handles", description = "Planned removals when dryRun is true.")
+        @Schema(title = "Removed handles", description = "Planned removals when plan is true.")
         private final List<String> removed;
         @Schema(title = "Unchanged handles")
         private final List<String> unchanged;

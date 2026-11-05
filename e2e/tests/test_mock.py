@@ -10,6 +10,22 @@ from mock_datadog import MockDatadog
 
 
 class MockTest(unittest.TestCase):
+    def test_preview_routes_enforce_zero_requests_or_reads_only(self):
+        mock = MockDatadog()
+        try:
+            for method, path in (
+                ("POST", "/scenarios/incidents.Create-dry/api/v2/incidents"),
+                ("PUT", "/scenarios/dashboards.Import-plan/api/v1/dashboard/abc-def-ghi"),
+                ("POST", "/scenarios/monitors.Apply-plan/api/v1/monitor/validate"),
+            ):
+                with self.subTest(path=path):
+                    status, _ = mock.answer(method, path, {})
+                    self.assertEqual(400, status)
+            status, _ = mock.answer("GET", "/scenarios/monitors.Apply-plan/api/v1/monitor", None)
+            self.assertEqual(200, status)
+        finally:
+            mock.server.server_close()
+
     def test_unknown_paths_fail_and_credentials_are_not_recorded(self):
         mock = MockDatadog().start()
         try:

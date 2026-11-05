@@ -73,7 +73,7 @@ Datadog includes hosts seen in the past three hours by default and retains seven
 
 ## Usage and budgets
 
-`usage.Hourly` accepts exact UTC-hour instants. The request uses `YYYY-MM-DDThh`, as the operation description requires. Select `productFamilies` with the documented enum names. `includeDescendants`, `includeConnectedAccounts` and `includeBreakdown` default to false.
+`usage.Hourly` and `usage.Check` accept exact UTC-hour instants. Requests use full RFC 3339 timestamps such as `2026-01-01T00:00:00Z` for both bounds. This follows the pinned GetHourlyUsage date-time schemas while retaining hourly alignment. Select `productFamilies` with the documented enum names. `includeDescendants`, `includeConnectedAccounts` and `includeBreakdown` default to false.
 
 The task follows `meta.pagination.next_record_id`. A result cap returns that token as `nextRecordId` with `truncated: true`. Resume with the same filters. Repeated cursors and empty pages with a continuation token fail. `pageSize` is at most 500. `maxResults` defaults to 1000 and is capped at 100000. Usage measurements are int64 or null. Counts above the exact range of binary floating point retain their integer value.
 
@@ -82,6 +82,8 @@ The task follows `meta.pagination.next_record_id`. A result cap returns that tok
 ## Organization costs
 
 `cost.Estimated` and `cost.Historical` read Datadog account charges. They expose the monthly endpoint subset with `startMonth` and optional `endMonth` in `YYYY-MM` form. `view` maps `SUMMARY` to `summary` and `SUB_ORG` to `sub-org`. Connected partner accounts are excluded by default.
+
+Both month inputs are validated before HTTP. Requests expand each month to midnight UTC on its first day: `2026-01` becomes `2026-01-01T00:00:00Z`. GetEstimatedCostByOrg and GetHistoricalCostByOrg declare date-time query schemas even though their descriptions discuss month precision. The task follows those schemas. This wire format is contract-tested but has not been verified against a live organization.
 
 Cost outputs contain organization and account IDs, names, date, region, `totalCost` and charges. Decimal money is parsed from the original JSON text into `BigDecimal`, without a binary floating-point intermediate. No currency conversion is applied.
 

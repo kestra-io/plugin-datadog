@@ -1,6 +1,6 @@
 # Integrated verification
 
-## Measured coverage
+## Integration audit baseline
 
 | Measure | Before this change | After this change |
 |---|---:|---:|
@@ -17,14 +17,14 @@ The mock-backed Kestra 2.0.6 run completed 31 successful executions and 157 flow
 
 ## Test layers
 
-- `ScenarioTest`: shared e2e inputs, output expectations and pinned response schemas. Request contracts are also asserted. Four strict date-format discrepancies are retained as documented findings.
-- `SafetyInvariantsTest`: reflection inventory, reserved property names, single-object destructive selectors, every declared dry-run input and named credential output redaction. Seven strict behavior findings are retained.
+- `ScenarioTest`: shared e2e inputs, output expectations and pinned response schemas. Request contracts apply to every task, including usage and cost date-time parameters.
+- `SafetyInvariantsTest`: reflection inventory, reserved property names, single-object destructive selectors, every declared dry-run input and named credential output redaction. Plans use GET requests only. Numeric ID arrays preserve small and 64-bit values.
 - Existing task tests: required fields, error responses, paging, storage, redaction and second-run idempotency. High-risk write tests now also assert through the contract helper.
-- Python: seven script tests and seven e2e runner/mock tests.
+- Python: seven script tests and eight e2e runner/mock tests, including preview route enforcement.
 - Mutation: replacing component discovery with an empty set made three e2e tests fail. Restoring discovery returned all seven tests to green. Full red and green logs are retained in the agent evidence directory.
 
 ## Evidence limits
 
-The strict audit reports 11 known failures. They are not silently skipped: normal tests assert their current behavior and `DD_STRICT_SAFETY=1` exposes the failures. See [integration findings](INTEGRATION-FINDINGS.md).
+The repair reproduced the audit's 11 failures before changing task behavior. Safety and request contracts now run without an environment switch or known-failure bypass. The baseline measurements above describe the preceding integration audit. Repair red and green logs are retained with its publication evidence. See [integration findings](INTEGRATION-FINDINGS.md).
 
 The mock verifies workflow integration and pinned contracts. It does not establish live Datadog permissions, regional availability, account-specific responses or production behavior. The Kestra documentation website was not built locally. Notebook operations have generic routing but no typed tasks in this source.

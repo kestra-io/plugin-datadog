@@ -24,7 +24,7 @@ import java.util.Map;
 @SuperBuilder
 @Getter
 @NoArgsConstructor
-@Schema(title = "Apply a Datadog service definition", description = "Creates or updates one v2.2 service definition keyed by dd-service. Compares supplied fields and preserves omitted fields. Supplied arrays replace whole arrays. Returns CREATED, UPDATED or UNCHANGED with a field diff and supports dryRun. Needs apm_service_catalog_read and apm_service_catalog_write. Concurrent writers are not serialized by Datadog.")
+@Schema(title = "Apply a Datadog service definition", description = "Creates or updates one v2.2 service definition keyed by dd-service. Compares supplied fields and preserves omitted fields. Supplied arrays replace whole arrays. Returns CREATED, UPDATED or UNCHANGED with a field diff. Use plan for a read-only preview. Needs apm_service_catalog_read and apm_service_catalog_write for writes. Concurrent writers are not serialized by Datadog.")
 @Plugin(examples = @Example(title = "Preview a service ownership update", full = true, code = """
     id: datadog_apply_service
     namespace: company.security
@@ -38,14 +38,14 @@ import java.util.Map;
           dd-service: checkout
           team: payments
           tags: [env:prod]
-        dryRun: true
+        plan: true
     """))
 public class UpsertServiceDefinition extends AbstractDatadogTask implements RunnableTask<UpsertServiceDefinition.Output> {
     @NotNull
     @Schema(title = "Service definition", description = "One v2.2 JSON object. Requires schema-version and dd-service. Supports the official v2.2 fields. Omitted fields are retained on update.")
     private Property<Map<String, Object>> definition;
-    @Schema(title = "Dry run", description = "Compute a diff without changing the service definition.", defaultValue = "false")
-    private Property<Boolean> dryRun;
+    @Schema(title = "Plan changes", description = "Use GET requests to compute a diff without changing the service definition.", defaultValue = "false")
+    private Property<Boolean> plan;
     @Schema(title = "Include secrets", description = "Include credential and URL values in the diff. These values are redacted by default.", defaultValue = "false")
     private Property<Boolean> includeSecrets;
 
@@ -57,7 +57,7 @@ public class UpsertServiceDefinition extends AbstractDatadogTask implements Runn
         String service = AccessApi.required(desired.get("dd-service"), "definition.dd-service");
         desired.put("dd-service", service);
         String path = "/api/v2/services/definitions/" + AccessApi.segment(service);
-        boolean dry = AccessApi.flag(context, dryRun);
+        boolean preview = AccessApi.flag(context, plan);
         boolean include = AccessApi.flag(context, includeSecrets);
         DatadogClient client = client(context, true);
         Map<String, Object> current = Map.of();
@@ -75,10 +75,10 @@ public class UpsertServiceDefinition extends AbstractDatadogTask implements Runn
         List<Change> diff = new ArrayList<>();
         ServiceDefinitions.diff("", current, desired, diff, include);
         Status status = !exists ? Status.CREATED : diff.isEmpty() ? Status.UNCHANGED : Status.UPDATED;
-        if (!dry && status != Status.UNCHANGED) {
+        if (!preview && status != Status.UNCHANGED) {
             AccessApi.request(client, "POST", "/api/v2/services/definitions", Map.of(), ServiceDefinitions.merge(current, desired));
         }
-        return Output.builder().serviceName(service).status(status).dryRun(dry).diff(diff).build();
+        return Output.builder().serviceName(service).status(status).plan(preview).diff(diff).build();
     }
 
     public enum Status { CREATED, UPDATED, UNCHANGED }
@@ -99,10 +99,10 @@ public class UpsertServiceDefinition extends AbstractDatadogTask implements Runn
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(title = "Service name")
         private final String serviceName;
-        @Schema(title = "Apply result", description = "With dryRun this describes the planned result.")
+        @Schema(title = "Apply result", description = "With plan this describes the planned result.")
         private final Status status;
-        @Schema(title = "Dry run")
-        private final Boolean dryRun;
+        @Schema(title = "Plan mode")
+        private final Boolean plan;
         @Schema(title = "Field changes")
         private final List<Change> diff;
     }

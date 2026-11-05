@@ -25,16 +25,11 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Strict audit: DD_STRICT_SAFETY=1 exposes documented integration findings as failures. */
+/** Safety contracts apply to every plugin component in the default test suite. */
 class SafetyInvariantsTest extends AbstractDatadogTest {
     private static final String PREFIX = "io.kestra.plugin.datadog.";
-    private static final Map<String, List<String>> KNOWN_DRY_REQUESTS = Map.of(
-        "catalog.UpsertServiceDefinition", List.of("GET"),
-        "dashboards.Import", List.of("GET"),
-        "deployments.CreateGate", List.of("POST"),
-        "monitors.Apply", List.of("GET", "POST"),
-        "teams.SyncMembers", List.of("GET", "GET")
-    );
+    private static final Set<String> PLANNERS = Set.of(
+        "catalog.UpsertServiceDefinition", "dashboards.Import", "monitors.Apply", "teams.SyncMembers");
 
     static List<Class<?>> components() throws Exception {
         Path source = Path.of("src/main/java/io/kestra/plugin/datadog");
@@ -96,15 +91,36 @@ class SafetyInvariantsTest extends AbstractDatadogTest {
                 assertFalse(scenario.isMissingNode(), "Missing executable dry-run fixture");
                 server.requests.clear();
                 scenarioTask(scenario, Map.of("dryRun", true)).run(runContext());
-                if (KNOWN_DRY_REQUESTS.containsKey(name)) {
-                    AssertionError failure = assertThrows(AssertionError.class, () -> assertEquals(0, server.requests.size(), name + " dryRun sends requests"));
-                    assertEquals(KNOWN_DRY_REQUESTS.get(name), server.requests.stream().map(MockDatadogServer.Received::method).toList());
-                    if (name.equals("monitors.Apply")) assertTrue(server.requests.getLast().path().endsWith("/validate"));
-                    if ("1".equals(System.getenv("DD_STRICT_SAFETY"))) throw failure;
-                } else {
-                    assertEquals(0, server.requests.size(), name + " dryRun sends requests");
-                }
+                assertEquals(0, server.requests.size(), name + " dryRun sends requests");
             }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> plansReadWithoutSendingWriteMethods() throws Exception {
+        JsonNode scenarios = ScenarioTest.fixtures();
+        return PLANNERS.stream().map(name -> DynamicTest.dynamicTest(name, () -> {
+            server.requests.clear();
+            var task = scenarioTask(scenarios.path(name), Map.of("plan", true));
+            assertTrue(fields(task.getClass()).stream().anyMatch(f -> f.getName().equals("plan")));
+            assertTrue(fields(task.getClass()).stream().noneMatch(f -> f.getName().equals("dryRun")));
+            JsonNode output = JacksonMapper.ofJson().valueToTree(task.run(runContext()));
+            assertTrue(output.path("plan").asBoolean());
+            assertFalse(server.requests.isEmpty(), "A plan must read the current state");
+            assertTrue(server.requests.stream().allMatch(r -> r.method().equals("GET")), "Planning must send only GET requests");
+        }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> persistedGateEvaluationModeHasAnExplicitName() throws Exception {
+        JsonNode scenario = ScenarioTest.fixtures().path("deployments.CreateGate");
+        return Stream.of(false, true).map(mode -> DynamicTest.dynamicTest("evaluationDryRun=" + mode, () -> {
+            server.requests.clear();
+            var task = scenarioTask(scenario, Map.of("evaluationDryRun", mode));
+            assertTrue(fields(task.getClass()).stream().noneMatch(f -> f.getName().equals("dryRun")));
+            task.run(runContext());
+            assertEquals("POST", server.only().method());
+            assertEquals(mode, JacksonMapper.ofJson().valueToTree(server.only().json()).at("/data/attributes/dry_run").asBoolean());
+        }));
     }
 
     @Test
@@ -130,15 +146,40 @@ class SafetyInvariantsTest extends AbstractDatadogTest {
     }
 
     @TestFactory
-    Stream<DynamicTest> smallNumericIdArrayDeserializationFindings() throws Exception {
+    Stream<DynamicTest> numericIdArraysPreserveSmallAndLargeIntegers() throws Exception {
         JsonNode scenarios = ScenarioTest.fixtures();
-        return Stream.of("monitors.CanDelete", "slos.Update").map(name -> DynamicTest.dynamicTest(name, () -> {
-            server.requests.clear();
-            RunnableTask<?> task = scenarioTask(scenarios.path(name), Map.of("monitorIds", List.of(12345)));
-            ClassCastException failure = assertThrows(ClassCastException.class, () -> task.run(runContext()));
-            assertTrue(failure.getMessage().contains("java.lang.Integer"));
-            assertEquals(0, server.requests.size());
-            if ("1".equals(System.getenv("DD_STRICT_SAFETY"))) throw failure;
-        }));
+        return Stream.of("monitors.CanDelete", "slos.Create", "slos.Update").flatMap(name ->
+            Stream.of(List.of(12345), List.of(12345, 9007199254740993L, Long.MAX_VALUE)).map(ids -> DynamicTest.dynamicTest(name + ids, () -> {
+                server.requests.clear();
+                Map<String, Object> overrides = new LinkedHashMap<>();
+                overrides.put("monitorIds", ids);
+                if (name.startsWith("slos.")) {
+                    overrides.put("sloType", "MONITOR");
+                    overrides.put("numerator", null);
+                    overrides.put("denominator", null);
+                }
+                scenarioTask(scenarios.path(name), overrides).run(runContext());
+                if (name.equals("monitors.CanDelete")) {
+                    assertEquals("monitor_ids=" + ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")),
+                        java.net.URLDecoder.decode(server.only().query(), java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    JsonNode actual = JacksonMapper.ofJson().valueToTree(server.only().json()).path("monitor_ids");
+                    assertEquals(ids.size(), actual.size());
+                    for (int i = 0; i < ids.size(); i++) assertEquals(ids.get(i).longValue(), actual.get(i).longValue());
+                }
+            })));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> invalidNumericIdsFailBeforeRequests() throws Exception {
+        JsonNode scenarios = ScenarioTest.fixtures();
+        return Stream.of("monitors.CanDelete", "slos.Update").flatMap(name ->
+            Stream.of(List.of(0), List.of(-1), List.of(1.5), List.of(new java.math.BigInteger("9223372036854775808")),
+                java.util.Collections.singletonList(null)).map(ids -> DynamicTest.dynamicTest(name + ids, () -> {
+                server.requests.clear();
+                var task = scenarioTask(scenarios.path(name), Map.of("monitorIds", ids));
+                assertThrows(IllegalArgumentException.class, () -> task.run(runContext()));
+                assertTrue(server.requests.isEmpty());
+            })));
     }
 }

@@ -42,7 +42,9 @@ Every definition requires `name`, `query`, `type` and exactly one tag of the for
 
 The task discovers candidates through `ListMonitors` with `monitor_tags`, checks the exact tag locally and reads a matched monitor through `GetMonitor`. Duplicate input keys and duplicate matches fail. A lookup over 10000 candidates fails. Local validation, discovery and remote validation finish for the whole batch before the first persisted write.
 
-Each result has `key`, `monitorId`, `action` and `diff`. Actions are `CREATED`, `UPDATED` and `UNCHANGED`. A diff entry has a JSON pointer `field` plus `before` and `after` values. `dryRun: true` reports proposed actions and sends no create or update request. A proposed creation has no monitor id. `validateFirst` defaults to true; dry runs still call the validation endpoints. Set it to false to skip remote validation.
+Each result has `key`, `monitorId`, `action` and `diff`. Actions are `CREATED`, `UPDATED` and `UNCHANGED`. A diff entry has a JSON pointer `field` plus `before` and `after` values. `plan: true` reports proposed actions with GET requests only. A proposed creation has no monitor id. Local validation still runs. Remote POST validation is skipped in plan mode. `validateFirst` defaults to true for writes.
+
+The preview input and output flag are named `plan`. Replace the former `dryRun` property and output references in flows. Across the plugin a `dryRun` input means zero HTTP requests; `plan` allows reads and forbids writes. `CanDelete.monitorIds` accepts small and 64-bit integer literals without changing their values. Fractional, null and out-of-range IDs fail before HTTP.
 
 Only explicitly supplied writable fields are managed. Omitted fields remain unowned. Empty objects manage no children. Nested objects are compared recursively and merged with existing writable values before an update. Arrays replace the whole supplied array. Scalar JSON numeric values compare by value, so `80` and `80.0` do not create drift. Map key order does not matter.
 
@@ -108,6 +110,6 @@ These operations are deliberately left to the generic `api.Call` layer:
 - v2 `CreateMonitorUserTemplate`, `UpdateMonitorUserTemplate`, `DeleteMonitorUserTemplate`, `ValidateMonitorUserTemplate` and `ValidateExistingMonitorUserTemplate`: versioned Preview template writes remain generic.
 - Recurring schedules within v2 `CreateDowntime` and `UpdateDowntime`: the spec describes a subset of RFC 5545 without a complete RRULE grammar. The typed tasks retain finite one-time schedules.
 
-Mock-server tests cover lifecycle calls, response envelopes, validation, paging, storage, output filtering, dry runs and second-run idempotency. The maintenance example and task examples parse as Kestra flows. Error tests exercise HTTP 400, 403, 404, 429 and 500. A deliberate diff mutation is tested and restored before the final gate.
+Mock-server tests cover lifecycle calls, response envelopes, validation, paging, storage, output filtering, read-only plans and second-run idempotency. The maintenance example and task examples parse as Kestra flows. Error tests exercise HTTP 400, 403, 404, 429 and 500. A deliberate diff mutation is tested and restored before the final gate.
 
 No test calls a live Datadog organization. Live permissions, query validation, response ordering, API normalization, eventual consistency and maintenance execution under a running Kestra scheduler are not verified by the mock tests.

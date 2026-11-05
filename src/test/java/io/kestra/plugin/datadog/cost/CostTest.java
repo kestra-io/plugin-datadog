@@ -35,8 +35,10 @@ class CostTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v2/usage/estimated_cost", 200, COSTS);
         var output = estimated().endMonth(Property.ofValue("2026-02")).view(Property.ofValue(AbstractCostTask.View.SUB_ORG))
             .includeConnectedAccounts(Property.ofValue(true)).build().run(runContext());
-        assertTrue(server.only().query().contains("start_month=2026-01"));
-        assertTrue(server.only().query().contains("end_month=2026-02"));
+        String query = java.net.URLDecoder.decode(server.only().query(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(query.contains("start_month=2026-01-01T00:00:00Z&"));
+        assertTrue(query.contains("end_month=2026-02-01T00:00:00Z&"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:GetEstimatedCostByOrg");
         assertTrue(server.only().query().contains("view=sub-org"));
         assertTrue(server.only().query().contains("include_connected_accounts=true"));
         assertEquals(API_KEY, server.only().header("DD-API-KEY"));
@@ -56,6 +58,7 @@ class CostTest extends AbstractDatadogTest {
         assertNull(output.getCosts());
         assertTrue(server.only().query().contains("view=summary"));
         assertTrue(server.only().query().contains("include_connected_accounts=false"));
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:GetHistoricalCostByOrg");
         try (var input = context.storage().getFile(output.getUri())) {
             Map<?, ?> row = JacksonMapper.ofIon().readValue(input, Map.class);
             assertEquals("org-1", row.get("orgId"));

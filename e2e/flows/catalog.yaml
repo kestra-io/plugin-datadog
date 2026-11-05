@@ -18,23 +18,23 @@ tasks:
     team: payments
     tags:
     - env:prod
-  dryRun: true
-  id: upsertservicedefinition_dry
+  plan: true
+  id: upsertservicedefinition_plan
   type: io.kestra.plugin.datadog.catalog.UpsertServiceDefinition
   apiKey: e2e-api-key
   appKey: e2e-app-key
-  apiUrl: __MOCK_URL__/scenarios/catalog.UpsertServiceDefinition-dry
-- id: upsertservicedefinition_dry_assert
+  apiUrl: __MOCK_URL__/scenarios/catalog.UpsertServiceDefinition-plan
+- id: upsertservicedefinition_plan_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.upsertservicedefinition_dry.dryRun == true }}'
+  - '{{ outputs.upsertservicedefinition_plan.plan == true }}'
 - definition:
     schema-version: v2.2
     dd-service: checkout
     team: payments
     tags:
     - env:prod
-  dryRun: false
+  plan: false
   id: upsertservicedefinition
   type: io.kestra.plugin.datadog.catalog.UpsertServiceDefinition
   apiKey: e2e-api-key

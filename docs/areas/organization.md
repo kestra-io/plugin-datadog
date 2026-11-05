@@ -42,7 +42,9 @@ Organization task errors retain the HTTP status and suppress response bodies. A 
 
 Existing roles are retained. New users become regular members by omitting the optional `role` field. The API's only non-null role is `admin`. Members absent from `handles` are removed. An explicit empty list requests removal of every member.
 
-The task returns `added`, `removed`, `unchanged` and a per-user membership `diff`. `status` is `UPDATED` or `UNCHANGED`. With `dryRun: true` the output is a plan and no writes occur. The last-admin guard still runs during a dry run. A second run against the resulting membership returns `UNCHANGED` and makes no writes.
+The task returns `added`, `removed`, `unchanged` and a per-user membership `diff`. `status` is `UPDATED` or `UNCHANGED`. With `plan: true` the task uses GET requests to compute changes without writing. The last-admin guard still runs. A second run against the resulting membership returns `UNCHANGED` and makes no writes.
+
+The membership and service definition previews use `plan` as both the input and output flag. Replace former `dryRun` references in flows. Across the plugin `dryRun` means zero HTTP requests and `plan` permits reads only.
 
 `allowRemoveLastAdmin` defaults to false. The planned removal set is checked before any writes. Each removal also rereads the membership and checks the guard again. Datadog does not provide a conditional membership delete, so this is not an atomic lock against another writer. Serialize membership writers for the same team. Changes are sequential. A later failure does not roll back earlier additions or removals. Rerun to reconcile the remaining difference.
 
@@ -68,7 +70,7 @@ The endpoint exposes `archive_comment`, not a general note operation. The task r
 
 `catalog.UpsertServiceDefinition` accepts one `definition` map in the v2.2 schema. It requires `schema-version: v2.2` and `dd-service`. It validates supported fields and reads the current definition with `schema_version=v2.2`.
 
-`dd-service` is the stable key. A missing definition produces `CREATED`. Supplied fields are compared recursively. Omitted fields are retained. Supplied arrays replace whole arrays. Changed fields produce `UPDATED`; an empty diff produces `UNCHANGED` without a write. With `dryRun: true` the task reports the planned status and field diff without writing.
+`dd-service` is the stable key. A missing definition produces `CREATED`. Supplied fields are compared recursively. Omitted fields are retained. Supplied arrays replace whole arrays. Changed fields produce `UPDATED`; an empty diff produces `UNCHANGED` without a write. With `plan: true` the task reads the current definition and reports the planned status and field diff without writing.
 
 Diff paths use JSON Pointer syntax. Credential and URL values are redacted unless `includeSecrets` is true. The task compares raw values before redaction so a credential change still appears in the diff. The read and write are separate requests. Serialize concurrent writers for the same service definition.
 

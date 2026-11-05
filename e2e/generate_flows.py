@@ -31,12 +31,18 @@ def main():
             props.update(apiKey="e2e-api-key", appKey="e2e-app-key", apiUrl=base)
         if name == "logs.Send":
             props["intakeUrl"] = base
-        if scenario["dryRun"]:
-            preview = {**props, "id": identifier + "_dry", "dryRun": True, "apiUrl": base + "-dry"}
+        mode = "plan" if scenario["plan"] else "dryRun" if scenario["dryRun"] else None
+        if mode:
+            suffix = "_plan" if mode == "plan" else "_dry"
+            preview = {**props, "id": identifier + suffix, mode: True, "apiUrl": base + suffix.replace("_", "-")}
             flows[area].append(preview)
-            # Server-side deployment gate mode returns a gate ID, not a local preview flag.
-            checks = ["{{ outputs." + preview["id"] + (".gateId == '00000000-0000-0000-0000-000000000001'" if name == "deployments.CreateGate" else ".dryRun == true") + " }}"]
+            checks = ["{{ outputs." + preview["id"] + "." + mode + " == true }}"]
             flows[area].append({"id": preview["id"] + "_assert", "type": "io.kestra.plugin.core.execution.Assert", "conditions": checks})
+        if name == "deployments.CreateGate":
+            evaluation = {**props, "id": identifier + "_evaluation_dry", "evaluationDryRun": True}
+            flows[area].append(evaluation)
+            flows[area].append({"id": evaluation["id"] + "_assert", "type": "io.kestra.plugin.core.execution.Assert",
+                                "conditions": ["{{ outputs." + evaluation["id"] + ".gateId == '00000000-0000-0000-0000-000000000001' }}"]})
         flows[area].append(props)
         conditions = []
         for field, value in scenario["expected"].items():

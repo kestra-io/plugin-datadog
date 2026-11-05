@@ -37,6 +37,7 @@ public class ScenarioTest extends AbstractDatadogTest {
         }
         if (name.equals("logs.Send")) config.put("intakeUrl", server.url());
         if (scenario.path("dryRun").asBoolean()) config.put("dryRun", dry);
+        if (scenario.path("plan").asBoolean()) config.put("plan", dry);
         return (RunnableTask<?>) JacksonMapper.ofJson().convertValue(config, Task.class);
     }
 
@@ -64,15 +65,7 @@ public class ScenarioTest extends AbstractDatadogTest {
             }
             String[] operations = StreamSupport.stream(scenario.path("replies").spliterator(), false)
                 .map(reply -> reply.path("operation").asText()).distinct().toArray(String[]::new);
-            if (scenario.path("task").asText().startsWith("usage.") || scenario.path("task").asText().startsWith("cost.")) {
-                // Pinned schemas say date-time while these endpoints document hour/month precision.
-                // Keep the failed strict contract visible until the schema/task discrepancy is resolved.
-                AssertionError failure = assertThrows(AssertionError.class, () -> OpenApiContract.assertRequests(server.requests, operations));
-                assertTrue(failure.getMessage().contains("invalid date format"), failure.getMessage());
-                if ("1".equals(System.getenv("DD_STRICT_SAFETY"))) throw failure;
-            } else {
-                OpenApiContract.assertRequests(server.requests, operations);
-            }
+            OpenApiContract.assertRequests(server.requests, operations);
         }));
     }
 

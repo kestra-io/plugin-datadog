@@ -266,15 +266,15 @@ class DashboardsTest extends AbstractDatadogTest {
     }
 
     @Test
-    void dryRunNeverCreatesOrUpdates() throws Exception {
+    void planNeverCreatesOrUpdates() throws Exception {
         server.reply("GET", "/api/v1/dashboard", 200, "{\"dashboards\":[]}")
             .reply("GET", "/api/v1/dashboard/abc-def-ghi", 200, DASHBOARD);
-        var create = importer().dashboardId(null).managingTag(Property.ofValue("team:platform")).dryRun(Property.ofValue(true)).build().run(runContext());
+        var create = importer().dashboardId(null).managingTag(Property.ofValue("team:platform")).plan(Property.ofValue(true)).build().run(runContext());
         assertEquals(Import.Action.CREATED, create.getAction());
         assertNull(create.getDashboardId());
         var body = definition();
         body.put("title", "New title");
-        var update = importer().definition(body).dryRun(Property.ofValue(true)).build().run(runContext());
+        var update = importer().definition(body).plan(Property.ofValue(true)).build().run(runContext());
         assertEquals(Import.Action.UPDATED, update.getAction());
         assertEquals("/title", update.getDiff().getFirst().getPath());
         assertTrue(server.requests.stream().allMatch(request -> request.method().equals("GET")));

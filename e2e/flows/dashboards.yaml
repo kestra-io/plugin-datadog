@@ -45,22 +45,22 @@ tasks:
   type: io.kestra.plugin.core.execution.Assert
   conditions:
   - '{{ outputs.get.dashboard.id == "abc-def-ghi" }}'
-- dryRun: true
+- plan: true
   definition:
     title: Updated
     layout_type: ordered
     widgets: []
   dashboardId: abc-def-ghi
-  id: import_dry
+  id: import_plan
   type: io.kestra.plugin.datadog.dashboards.Import
   apiKey: e2e-api-key
   appKey: e2e-app-key
-  apiUrl: __MOCK_URL__/scenarios/dashboards.Import-dry
-- id: import_dry_assert
+  apiUrl: __MOCK_URL__/scenarios/dashboards.Import-plan
+- id: import_plan_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.import_dry.dryRun == true }}'
-- dryRun: false
+  - '{{ outputs.import_plan.plan == true }}'
+- plan: false
   definition:
     title: Updated
     layout_type: ordered

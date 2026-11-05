@@ -14,7 +14,7 @@ Every task and trigger needs both `apiKey` and `appKey`. Store them as Kestra se
 | `slos.List`, `Get`, `History`, `Check`, `BudgetLow` | `slos_read` |
 | `slos.Create`, `Update`, `Delete` | `slos_write` |
 
-Permissions on an individual dashboard or SLO still apply. A dry-run import makes only read requests.
+Permissions on an individual dashboard or SLO still apply. An import with `plan: true` makes only GET requests.
 
 ## Dashboard tasks
 
@@ -39,7 +39,9 @@ Choose exactly one identity:
 
 Title matching reads each candidate definition because list summaries do not contain team tags. Multiple matches fail before a write. Discovery reads one extra result past `maxResults` and fails if the scan is incomplete. Use an id for a large organization or to rename a managed dashboard.
 
-Import reports `CREATED`, `UPDATED` or `UNCHANGED`, a `dryRun` flag and a field-level `diff`. Each change has a JSON pointer `path`, a `before` value and an `after` value. Null represents an absent or null field. A dry run reports the planned action without writing. It has no dashboard id when planning a create.
+Import reports `CREATED`, `UPDATED` or `UNCHANGED`, a `plan` flag and a field-level `diff`. Each change has a JSON pointer `path`, a `before` value and an `after` value. Null represents an absent or null field. A plan reports the proposed action without writing. It has no dashboard id when planning a create.
+
+Replace the former `dryRun` input and output references with `plan`. Across the plugin `dryRun` means zero HTTP requests and `plan` permits reads only. SLO Create and Update accept mixed small and 64-bit integer monitor IDs. Null, fractional and out-of-range IDs fail before HTTP.
 
 On update, omitted top-level fields retain their current values. Provided nested objects and arrays replace those fields. Use explicit null or an empty array to clear a field where Datadog accepts it. Read-only top-level fields are removed: `id`, `author_handle`, `author_name`, `created_at`, `modified_at`, `url` and `experience_type`.
 
@@ -68,7 +70,7 @@ tasks:
     appKey: "{{ secret('DATADOG_APP_KEY') }}"
     dashboardId: abc-def-ghi
     from: "{{ outputs.export.uri }}"
-    dryRun: true
+    plan: true
 ```
 
 ## SLO tasks

@@ -4,20 +4,20 @@ tasks:
 - service: checkout
   env: production
   identifier: pre-deploy
-  dryRun: true
-  id: creategate_dry
+  evaluationDryRun: true
+  id: creategate_evaluation_dry
   type: io.kestra.plugin.datadog.deployments.CreateGate
   apiKey: e2e-api-key
   appKey: e2e-app-key
-  apiUrl: __MOCK_URL__/scenarios/deployments.CreateGate-dry
-- id: creategate_dry_assert
+  apiUrl: __MOCK_URL__/scenarios/deployments.CreateGate
+- id: creategate_evaluation_dry_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.creategate_dry.gateId == ''00000000-0000-0000-0000-000000000001'' }}'
+  - '{{ outputs.creategate_evaluation_dry.gateId == ''00000000-0000-0000-0000-000000000001'' }}'
 - service: checkout
   env: production
   identifier: pre-deploy
-  dryRun: false
+  evaluationDryRun: false
   id: creategate
   type: io.kestra.plugin.datadog.deployments.CreateGate
   apiKey: e2e-api-key

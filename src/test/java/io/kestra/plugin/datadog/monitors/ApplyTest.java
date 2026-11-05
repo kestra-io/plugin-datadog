@@ -106,22 +106,22 @@ class ApplyTest extends AbstractDatadogTest {
     }
 
     @Test
-    void tagOrderCountsAsAChangeAndDryRunMakesNoPersistedWrites() throws Exception {
+    void tagOrderCountsAsAChangeAndPlanUsesOnlyReads() throws Exception {
         var old = definition();
         old.put("tags", java.util.List.of("env:prod", TAG));
         existing(old);
-        var output = task().dryRun(Property.ofValue(true)).build().run(runContext());
-        assertTrue(output.getDryRun());
+        var output = task().plan(Property.ofValue(true)).build().run(runContext());
+        assertTrue(output.getPlan());
         var result = output.getResults().getFirst();
         assertEquals(Apply.Action.UPDATED, result.getAction());
         assertEquals("/tags", result.getDiff().getFirst().getField());
-        assertTrue(server.requests.stream().noneMatch(r -> r.method().equals("PUT") || (r.method().equals("POST") && !r.path().endsWith("/validate"))));
+        assertEquals(java.util.List.of("GET", "GET"), server.requests.stream().map(r -> r.method()).toList());
     }
 
     @Test
-    void previewsCreationWithoutAnIdAndCanDisableRemoteValidation() throws Exception {
+    void plansCreationWithoutAnIdAndSkipsRemoteValidation() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var result = task().dryRun(Property.ofValue(true)).validateFirst(Property.ofValue(false)).build().run(runContext()).getResults().getFirst();
+        var result = task().plan(Property.ofValue(true)).validateFirst(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.CREATED, result.getAction());
         assertNull(result.getMonitorId());
         assertEquals("GET", server.only().method());
@@ -208,7 +208,7 @@ class ApplyTest extends AbstractDatadogTest {
         JacksonMapper.ofYaml().writeValue(file.toFile(), java.util.List.of(definition()));
         var uri = context.storage().putFile(file.toFile());
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var output = task().definitions(null).from(Property.ofValue(uri.toString())).dryRun(Property.ofValue(true)).store(Property.ofValue(true)).build().run(context);
+        var output = task().definitions(null).from(Property.ofValue(uri.toString())).plan(Property.ofValue(true)).store(Property.ofValue(true)).build().run(context);
         assertNull(output.getResults());
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {
@@ -224,7 +224,7 @@ class ApplyTest extends AbstractDatadogTest {
         desired.put("message", "Notify https://hooks.example.org/private-token");
         desired.put("options", Map.of("password", "private-value"));
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var output = task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(desired))).dryRun(Property.ofValue(true)).build().run(runContext());
+        var output = task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(desired))).plan(Property.ofValue(true)).build().run(runContext());
         String json = JacksonMapper.ofJson().writeValueAsString(output);
         assertFalse(json.contains("private-token"));
         assertFalse(json.contains("private-value"));

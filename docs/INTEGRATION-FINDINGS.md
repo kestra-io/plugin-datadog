@@ -1,31 +1,39 @@
-# Integration findings
+# Integration findings and repairs
 
-These findings have test reproductions. Task behavior was outside this change's scope.
+The strict baseline reproduced 11 failures in SafetyInvariantsTest and ScenarioTest. Their safety and request contracts now run in the default test suite with no environment switch or known-failure bypass.
 
-## dryRun does not always mean zero requests
+## Preview modes
 
-`SafetyInvariantsTest.everyDryRunIsAuditedForZeroRequests` runs every task that declares or inherits `dryRun` with valid inputs.
+Across the plugin a `dryRun` input means zero HTTP requests. A `plan` input permits GET requests to compute a diff and forbids writes.
 
-- `catalog.UpsertServiceDefinition` reads the current definition to compute a diff.
-- `dashboards.Import` reads the current dashboard to compute a diff.
-- `teams.SyncMembers` reads users and memberships to compute changes.
-- `monitors.Apply` reads monitors and calls the remote validation endpoint.
-- `deployments.CreateGate` creates a gate even with `dryRun: true`. The property selects Datadog's persisted gate evaluation mode. The current property description states this behavior.
+| Task | Repair |
+|---|---|
+| `catalog.UpsertServiceDefinition` | Rename preview input and output flag to `plan`. Read the current definition and return its diff. |
+| `dashboards.Import` | Rename preview input and output flag to `plan`. Read dashboard state and return its diff. |
+| `teams.SyncMembers` | Rename preview input and output flag to `plan`. Read users and memberships. Keep the last-admin guard. |
+| `monitors.Apply` | Rename preview input and output flag to `plan`. Keep local validation. Skip remote POST validation in plan mode, including when `validateFirst: true`. |
+| `deployments.CreateGate` | Rename the input to `evaluationDryRun`. Both values create a gate with its persisted `dry_run` flag. The default is false. |
 
-The strict zero-request assertion fails for these tasks. The normal test checks the exact observed method sequence. It also checks that monitor validation uses the validation path. The gate-creation behavior needs a naming decision from the task owner. It must not be presented as a local preview.
+Update flow inputs and output references to the new names. These are clean pre-release renames. `deployments.Evaluate.dryRun` remains an output describing the server's stored mode. It is not a task preview input.
 
-## Small numeric arrays in the plugin test runtime
+## Numeric monitor IDs
 
-`SafetyInvariantsTest.smallNumericIdArrayDeserializationFindings` deserializes `monitorIds: [12345]` through the plugin's JSON mapper. `monitors.CanDelete` and `slos.Update` throw `ClassCastException` before HTTP because the array holds Integer values where the tasks expect Long values. The e2e scenarios separately exercise 64-bit identifiers. This reproduction uses the pinned Kestra core test dependency. It does not establish the behavior of every Kestra server version.
+The plugin test mapper retained Integer elements inside properties declared as lists of Long. CanDelete and SLO definition validation then threw ClassCastException.
 
-## Usage and cost date formats
+NumericIds now converts each element exactly to a 64-bit integer. CanDelete, SLO Create and SLO Update share that conversion. Small and mixed-size arrays are checked through flow deserialization. Null, fractional and overflowing IDs fail before HTTP. Positive-ID checks remain in the tasks. The source audit found no other List<Long> flow properties.
 
-`ScenarioTest` retains strict contract failures for `usage.Hourly`, `usage.Check`, `cost.Estimated` and `cost.Historical`. Their requests use hour or month precision. The pinned OpenAPI parameter schemas declare `date-time`, so the helper rejects them as incomplete timestamps. Resolve the API documentation versus schema format discrepancy before claiming strict format conformance.
+## Usage and cost timestamps
 
-## Areas without typed tasks
+GetHourlyUsage declares date-time schemas for both timestamp bounds. Hourly and Check now send full UTC timestamps with seconds while preserving exact-hour validation.
 
-There is no notebook task in this integrated source tree. Notebook operations remain available through `api.Call`. The e2e inventory does not claim typed notebook coverage.
+GetEstimatedCostByOrg and GetHistoricalCostByOrg declare date-time schemas for their month parameters. Estimated and Historical still accept validated YYYY-MM inputs. Requests expand them to midnight UTC on the first day. For example, `2026-01` becomes `2026-01-01T00:00:00Z`. Request contract checks cover these formats without exceptions.
 
-## Reproduce strict failures
+## Typed coverage boundary
 
-Pass `DD_STRICT_SAFETY=1` into the Gradle test process and run `SafetyInvariantsTest` and `ScenarioTest`. In Docker use `--env DD_STRICT_SAFETY=1`. The normal gate asserts the known findings rather than silently skipping their tests.
+Notebook operations remain available through `api.Call`. There is no typed notebook task in this source tree and the e2e inventory does not claim one. This repair adds no new endpoint.
+
+## Verification
+
+Run `./gradlew test` or `./gradlew check`. SafetyInvariantsTest enforces preview semantics and numeric conversion. ScenarioTest enforces every fixture's pinned request and response contracts. The real Kestra runner rejects requests in dry-run routes and non-GET requests in plan routes.
+
+The mock and pinned schemas do not establish live Datadog acceptance, account permissions or regional behavior. No live organization was used.

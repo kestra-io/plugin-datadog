@@ -222,6 +222,12 @@ def main():
             if execution["state"]["current"] != "SUCCESS":
                 summary["errors"].append(f"Execution failed: {flow['id']}")
         exercise_triggers(client, trigger_flows, mock, evidence, summary)
+        for request in mock.requests:
+            if not request["path"].startswith("/scenarios/"):
+                continue
+            scenario = request["path"].split("/")[2]
+            if scenario.endswith("-dry") or scenario.endswith("-plan") and request["method"] != "GET":
+                summary["errors"].append("Preview safety violation: " + request["method"] + " " + request["path"])
         summary["coveredComponents"] = sorted(covered)
         summary["uncoveredComponents"] = sorted(components(root) - covered)
         if summary["uncoveredComponents"] and not args.allow_partial:

@@ -70,15 +70,15 @@ class CatalogTest extends OrganizationTestSupport {
     }
 
     @Test
-    void dryRunRedactsDiffValuesUnlessExplicitlyIncluded() throws Exception {
+    void planRedactsDiffValuesUnlessExplicitlyIncluded() throws Exception {
         server.reply("GET", PATH, 200, response(definition("payments")));
         Map<String, Object> desired = new LinkedHashMap<>(definition("payments"));
         desired.put("extensions", Map.of("password", VALUE, "nested", List.of(Map.of("token", VALUE))));
         desired.put("links", List.of(Map.of("name", "hook", "type", "other", "url", VALUE)));
-        var builder = connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(desired)).dryRun(Property.ofValue(true));
+        var builder = connection(UpsertServiceDefinition.builder()).definition(Property.ofValue(desired)).plan(Property.ofValue(true));
         var output = builder.build().run(runContext());
         assertEquals(UpsertServiceDefinition.Status.UPDATED, output.getStatus());
-        assertTrue(output.getDryRun());
+        assertTrue(output.getPlan());
         assertFalse(output.getDiff().isEmpty());
         noCredential(output);
         assertEquals("GET", server.only().method());

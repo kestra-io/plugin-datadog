@@ -99,7 +99,9 @@ The synthetic batch status schema lists `passed`, `skipped` and `failed`. Its de
 
 `Evaluate` uses `in_progress`, `pass` and `fail`. It returns each rule's name, status, reason and dry-run flag. A failed gate fails the task unless `failOnFailure` is false. `dryRun` in the output describes Datadog's persisted gate mode: Datadog can return `pass` for a dry-run gate even when rules fail. Inspect that field when the release policy requires an enforced gate.
 
-`CreateMonitorRule` supports the monitor-query rule variant. It defaults both `fail_on_no_data` and `fail_on_no_groups_found` to true. `healthySeconds` and `warmupSeconds` are nonnegative. `CreateGate.dryRun` configures Datadog's stored gate mode; it still creates the object.
+`CreateMonitorRule` supports the monitor-query rule variant. It defaults both `fail_on_no_data` and `fail_on_no_groups_found` to true. `healthySeconds` and `warmupSeconds` are nonnegative. `CreateGate.evaluationDryRun` configures Datadog's stored `dry_run` flag. Both values send a POST request that creates the gate. The default is false.
+
+Replace the former `CreateGate.dryRun` input with `evaluationDryRun`. The `Evaluate.dryRun` output still reports the server's persisted evaluation mode. Across the plugin a `dryRun` input means zero HTTP requests and `plan` permits reads only. CreateGate has neither preview mode.
 
 ## Limits and verification
 

@@ -5,6 +5,7 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.NumericIds;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -37,7 +38,7 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
 
     @Override
     public Output run(RunContext context) throws Exception {
-        var ids = context.render(monitorIds).asList(Long.class);
+        var ids = NumericIds.render(context, monitorIds, "monitorIds");
         if (ids.isEmpty()) {
             throw new IllegalArgumentException("monitorIds must not be empty");
         }

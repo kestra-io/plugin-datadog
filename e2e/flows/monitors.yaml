@@ -1,19 +1,19 @@
 id: datadog_e2e_monitors
 namespace: hq.datadog.e2e
 tasks:
-- dryRun: true
+- plan: true
   definitions: "- name: CPU usage\n  type: query alert\n  query: \"avg(last_5m):avg:system.cpu.user{env:prod} > 80\"\n  tags:\n\
     \    - managed_by:kestra:cpu-prod\n    - env:prod\n  options:\n    thresholds:\n      critical: 80\n"
-  id: apply_dry
+  id: apply_plan
   type: io.kestra.plugin.datadog.monitors.Apply
   apiKey: e2e-api-key
   appKey: e2e-app-key
-  apiUrl: __MOCK_URL__/scenarios/monitors.Apply-dry
-- id: apply_dry_assert
+  apiUrl: __MOCK_URL__/scenarios/monitors.Apply-plan
+- id: apply_plan_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.apply_dry.dryRun == true }}'
-- dryRun: false
+  - '{{ outputs.apply_plan.plan == true }}'
+- plan: false
   definitions: "- name: CPU usage\n  type: query alert\n  query: \"avg(last_5m):avg:system.cpu.user{env:prod} > 80\"\n  tags:\n\
     \    - managed_by:kestra:cpu-prod\n    - env:prod\n  options:\n    thresholds:\n      critical: 80\n"
   id: apply
@@ -26,6 +26,7 @@ tasks:
   conditions:
   - '{{ outputs.apply.results[0].action == "CREATED" }}'
 - monitorIds:
+  - 12345
   - 3000000000
   id: candelete
   type: io.kestra.plugin.datadog.monitors.CanDelete
@@ -35,7 +36,8 @@ tasks:
 - id: candelete_assert
   type: io.kestra.plugin.core.execution.Assert
   conditions:
-  - '{{ outputs.candelete.result.data.ok[0] == 3000000000 }}'
+  - '{{ outputs.candelete.result.data.ok[0] == 12345 }}'
+  - '{{ outputs.candelete.result.data.ok[1] == 3000000000 }}'
 - resource: NOTIFICATION_RULES
   store: false
   id: configuration
