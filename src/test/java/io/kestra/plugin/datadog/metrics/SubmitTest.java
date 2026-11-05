@@ -15,7 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SubmitTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:SubmitMetrics");
+    }
+
     private Submit.SubmitBuilder<?, ?> task() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:SubmitMetrics").assertResponse(202, "{\"errors\":[]}");
         server.reply("POST", "/api/v2/series", 202, "{\"errors\":[]}");
         return Submit.builder()
             .id("metric")

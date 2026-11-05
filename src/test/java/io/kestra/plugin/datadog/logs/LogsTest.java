@@ -17,7 +17,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LogsTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v2:SubmitLog", "v2:ListLogs");
+    }
+
     private Send.SendBuilder<?, ?> send() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:SubmitLog").assertResponse(202, "{}");
         server.reply("POST", "/api/v2/logs", 202, "{}");
         return Send.builder().id("send").type(Send.class.getName())
             .apiKey(Property.ofValue(API_KEY))
@@ -34,7 +40,9 @@ class LogsTest extends AbstractDatadogTest {
         String data = IntStream.range(from, from + count)
             .mapToObj(i -> "{\"id\":\"e" + i + "\",\"type\":\"log\",\"attributes\":{\"message\":\"line " + i + "\",\"service\":\"orders\",\"status\":\"error\",\"attributes\":{\"n\":" + i + "}}}")
             .collect(Collectors.joining(",", "[", "]"));
-        return "{\"data\":" + data + (after == null ? "" : ",\"meta\":{\"page\":{\"after\":\"" + after + "\"}}") + "}";
+        String response = "{\"data\":" + data + (after == null ? "" : ",\"meta\":{\"page\":{\"after\":\"" + after + "\"}}") + "}";
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v2:ListLogs").assertResponse(200, response);
+        return response;
     }
 
     @Test

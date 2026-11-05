@@ -18,6 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CreateTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v1:CreateEvent");
+    }
+
     private Create.CreateBuilder<?, ?> task() {
         return Create.builder()
             .id("event")
@@ -30,6 +35,8 @@ class CreateTest extends AbstractDatadogTest {
 
     @Test
     void postsTheEventWithTheApiKeyOnly() throws Exception {
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:CreateEvent").assertResponse(202,
+            "{\"status\":\"ok\",\"event\":{\"id\":123,\"id_str\":\"123\",\"url\":\"https://app.datadoghq.com/event/event?id=123\"}}");
         server.reply("POST", "/api/v1/events", 202, "{\"status\":\"ok\",\"event\":{\"id\":123,\"id_str\":\"123\",\"url\":\"https://app.datadoghq.com/event/event?id=123\"}}");
 
         Create.Output output = task()

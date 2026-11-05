@@ -1,0 +1,1 @@
+{"v1:CreateEvent":"events.json","v1:ListMonitors":"monitors.json","v1:QueryMetrics":"metrics.json","v2:CancelDowntime":"downtimes.json","v2:CreateDowntime":"downtimes.json","v2:ListLogs":"logs.json","v2:SubmitLog":"logs.json","v2:SubmitMetrics":"metrics.json"}

@@ -20,8 +20,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StateChangeTest extends AbstractDatadogTest {
+    @org.junit.jupiter.api.AfterEach
+    void assertContracts() {
+        io.kestra.plugin.datadog.contract.OpenApiContract.assertRequests(server.requests, "v1:ListMonitors");
+    }
+
     private static String monitor(int id, String state, Instant modified) {
-        return "{\"id\":" + id + ",\"name\":\"m" + id + "\",\"overall_state\":\"" + state + "\",\"overall_state_modified\":\"" + modified + "\"}";
+        String response = "{\"id\":" + id + ",\"name\":\"m" + id + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"" + state + "\",\"overall_state_modified\":\"" + modified + "\"}";
+        io.kestra.plugin.datadog.contract.OpenApiContract.of("v1:ListMonitors").assertResponse(200, "[" + response + "]");
+        return response;
     }
 
     private StateChange.StateChangeBuilder<?, ?> trigger() {
