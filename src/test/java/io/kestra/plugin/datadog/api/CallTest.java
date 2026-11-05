@@ -256,4 +256,13 @@ class CallTest extends AbstractDatadogTest {
         assertTrue(server.only().body().contains("<metadata/>"));
         assertTrue(server.only().body().contains("name=\"idp_file\""));
     }
+
+    @Test
+    void identityContentEncodingIsPassedThroughAsDeclaredByV2Logs() throws Exception {
+        server.reply("POST", "/api/v2/logs", 202, "{}");
+        call("v2:SubmitLog").body("[{\"message\":\"unchanged\"}]")
+            .headers(Property.ofValue(Map.of("Content-Encoding", "identity"))).build().run(runContext());
+        assertEquals("identity", server.only().header("Content-Encoding"));
+        assertEquals("unchanged", ((Map<?, ?>) server.only().jsonList().getFirst()).get("message"));
+    }
 }

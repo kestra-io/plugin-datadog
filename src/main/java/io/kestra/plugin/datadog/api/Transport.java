@@ -63,7 +63,7 @@ final class Transport {
             }
         }
         String encoding = plan.headers().get("content-encoding");
-        if (encoding != null) {
+        if (encoding != null && !encoding.equals("identity")) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             switch (encoding) {
                 case "gzip" -> { try (GZIPOutputStream compressed = new GZIPOutputStream(out)) { compressed.write(bytes); } }
