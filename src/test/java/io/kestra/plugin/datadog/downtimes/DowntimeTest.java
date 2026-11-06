@@ -1,8 +1,8 @@
 package io.kestra.plugin.datadog.downtimes;
 
 import io.kestra.core.models.property.Property;
-import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.core.utils.IdUtils;
+import io.kestra.plugin.datadog.AbstractDatadogTest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

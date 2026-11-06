@@ -101,8 +101,9 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
     @Builder.Default
     @Schema(
         title = "How to return the events",
-        description = "`FETCH` returns all the events in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. " +
-            "Use `STORE` for a large result: the output of a task is kept in the execution and verbose events can reach several MB.",
+        description = """
+            `FETCH` returns all the events in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. \
+            Use `STORE` for a large result: the output of a task is kept in the execution and verbose events can reach several MB.""",
         defaultValue = "FETCH"
     )
     @PluginProperty(group = "processing")

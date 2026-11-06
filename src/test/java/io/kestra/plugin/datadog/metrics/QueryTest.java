@@ -1,9 +1,9 @@
 package io.kestra.plugin.datadog.metrics;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.MockDatadogServer;
-import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;

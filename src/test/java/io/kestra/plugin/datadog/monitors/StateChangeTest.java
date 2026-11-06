@@ -5,9 +5,9 @@ import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.storages.kv.KVStore;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
-import io.kestra.core.utils.IdUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

@@ -4,7 +4,6 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URI;

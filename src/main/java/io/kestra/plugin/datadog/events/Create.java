@@ -29,8 +29,9 @@ import java.util.Map;
 @NoArgsConstructor
 @Schema(
     title = "Post an event to the Datadog event stream",
-    description = "Creates an event, for example to mark a deployment or a pipeline run on the Datadog dashboards. Needs the API key only. " +
-        "Datadog accepts the event for processing and answers right away: it can take a moment before the event shows in the stream."
+    description = """
+        Creates an event, for example to mark a deployment or a pipeline run on the Datadog dashboards. Needs the API key only. \
+        Datadog accepts the event for processing and answers right away: it can take a moment before the event shows in the stream."""
 )
 @Plugin(
     examples = {

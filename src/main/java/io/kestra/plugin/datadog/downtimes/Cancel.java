@@ -27,8 +27,9 @@ import java.nio.charset.StandardCharsets;
 @NoArgsConstructor
 @Schema(
     title = "Cancel a Datadog downtime",
-    description = "Cancels a downtime so that the monitors notify again. Needs the API key and an application key with the `monitors_downtime` scope. " +
-        "Datadog answers 404 for a downtime that is already cancelled or does not exist: that fails the task, unless `ignoreNotFound` is true."
+    description = """
+        Cancels a downtime so that the monitors notify again. Needs the API key and an application key with the `monitors_downtime` scope. \
+        Datadog answers 404 for a downtime that is already cancelled or does not exist: that fails the task, unless `ignoreNotFound` is true."""
 )
 @Plugin(
     examples = {

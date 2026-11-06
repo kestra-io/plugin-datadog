@@ -13,11 +13,9 @@ import io.kestra.core.models.triggers.StatefulTriggerService;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
-import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.storages.kv.KVMetadata;
 import io.kestra.core.storages.kv.KVStore;
-import io.kestra.core.storages.kv.KVValue;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.datadog.ConnectionDocs;
 import io.kestra.plugin.datadog.DatadogClient;
@@ -31,7 +29,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import org.slf4j.Logger;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -139,8 +136,9 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
     private Property<List<State>> states;
 
     @Builder.Default
-    @Schema(title = "Maximum number of monitors per poll", description = "Reads at most this many monitors from Datadog at each poll, between 1 and 10000. " +
-        "Narrow the filters when the organization has more monitors than this.", defaultValue = "1000")
+    @Schema(title = "Maximum number of monitors per poll", description = """
+        Reads at most this many monitors from Datadog at each poll, between 1 and 10000. \
+        Narrow the filters when the organization has more monitors than this.""", defaultValue = "1000")
     @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxMonitors = Property.ofValue(1000);
 

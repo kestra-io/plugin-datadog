@@ -92,8 +92,9 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @Builder.Default
     @Schema(
         title = "How to return the monitors",
-        description = "`FETCH` returns all the monitors in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. " +
-            "Use `STORE` for a large result: the output of a task is kept in the execution.",
+        description = """
+            `FETCH` returns all the monitors in the output, `FETCH_ONE` the first one only, `STORE` writes them to internal storage as an Ion file and returns its `uri`, `NONE` returns only `size`. \
+            Use `STORE` for a large result: the output of a task is kept in the execution.""",
         defaultValue = "FETCH"
     )
     @PluginProperty(group = "processing")

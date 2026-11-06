@@ -1,13 +1,12 @@
 package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.property.Property;
-import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.core.utils.IdUtils;
+import io.kestra.plugin.datadog.AbstractDatadogTest;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 

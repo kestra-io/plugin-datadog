@@ -121,8 +121,9 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
 
     @Schema(
         title = "Series",
-        description = "A list of series in the shape of the Datadog `POST /api/v2/series` body (`metric`, `type`, `points`, `tags`, `resources`, `unit`, `interval`). " +
-            "`type` is a number there: 1 count, 2 rate, 3 gauge. A point `timestamp` is a number of seconds or an ISO-8601 instant. Use instead of `metric` and `value`: `metricType`, `tags`, `host`, `unit`, `interval` and `timestamp` then go on each entry."
+        description = """
+            A list of series in the shape of the Datadog `POST /api/v2/series` body (`metric`, `type`, `points`, `tags`, `resources`, `unit`, `interval`). \
+            `type` is a number there: 1 count, 2 rate, 3 gauge. A point `timestamp` is a number of seconds or an ISO-8601 instant. Use instead of `metric` and `value`: `metricType`, `tags`, `host`, `unit`, `interval` and `timestamp` then go on each entry."""
     )
     @PluginProperty(group = "main")
     private Property<List<Map<String, Object>>> series;
