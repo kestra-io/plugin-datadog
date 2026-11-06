@@ -154,7 +154,7 @@ public class Create extends AbstractDatadogTask implements RunnableTask<Create.O
 
         var body = Map.of("data", Map.of("type", "downtime", "attributes", attributes));
         Map<String, Object> answer;
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             answer = client.post("/api/v2/downtime", body).map();
         }
 

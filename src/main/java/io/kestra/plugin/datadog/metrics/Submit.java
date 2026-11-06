@@ -198,7 +198,7 @@ public class Submit extends AbstractDatadogTask implements RunnableTask<Submit.O
             points = 1;
         }
 
-        try (DatadogClient client = client(runContext, false)) {
+        try (var client = client(runContext, false)) {
             client.post("/api/v2/series", Map.of("series", payload));
         }
 

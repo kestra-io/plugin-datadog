@@ -114,7 +114,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         Monitors.join(runContext.render(this.groupStates).asList(String.class)).ifPresent(value -> params.put("group_states", value));
 
         java.util.List<Map<String, Object>> monitors;
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             monitors = Monitors.collect(client, params, limit);
         }
 

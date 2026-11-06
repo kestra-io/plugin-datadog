@@ -127,7 +127,7 @@ public class Search extends AbstractDatadogTask implements RunnableTask<Search.O
         var rSort = runContext.render(this.sort).as(Sort.class).orElse(null);
 
         var logs = new ArrayList<Map<String, Object>>();
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             String cursor = null;
             do {
                 var page = new LinkedHashMap<String, Object>();

@@ -166,7 +166,7 @@ public class Send extends AbstractDatadogTask implements RunnableTask<Send.Outpu
             throw new IllegalArgumentException("Datadog accepts at most " + MAX_ENTRIES + " log entries per request but " + entries.size() + " were given: split them over several tasks");
         }
 
-        try (DatadogClient client = client(runContext, false)) {
+        try (var client = client(runContext, false)) {
             var base = client.logsIntakeBase(runContext.render(this.intakeUrl).as(String.class).orElse(""));
             client.exchange("POST", base, "/api/v2/logs", Map.of(), entries, true);
         }

@@ -165,7 +165,7 @@ public class StateChange extends AbstractTrigger implements PollingTriggerInterf
 
         List<Map<String, Object>> all;
         Instant serverTime;
-        try (DatadogClient client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
+        try (var client = DatadogClient.create(runContext, apiKey, appKey, site, apiUrl, true)) {
             all = Monitors.collect(client, params, limit);
             serverTime = client.serverTime().orElse(null);
         } catch (DatadogClient.DatadogException e) {

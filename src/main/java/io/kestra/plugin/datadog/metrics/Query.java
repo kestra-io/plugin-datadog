@@ -101,7 +101,7 @@ public class Query extends AbstractDatadogTask implements RunnableTask<Query.Out
         params.put("query", rQuery);
 
         Map<String, Object> answer;
-        try (DatadogClient client = client(runContext, true)) {
+        try (var client = client(runContext, true)) {
             answer = client.get("/api/v1/query", params).map();
         }
 

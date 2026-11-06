@@ -115,7 +115,7 @@ public final class DatadogClient implements AutoCloseable {
     public Response exchange(String method, String base, String path, Map<String, ?> query, Object body, boolean failOnError) throws Exception {
         var uri = URI.create(trimSlash(base) + path + queryString(query));
 
-        HttpRequest.HttpRequestBuilder request = HttpRequest.builder()
+        var request = HttpRequest.builder()
             .uri(uri)
             .method(method)
             .addHeader("DD-API-KEY", apiKey)
@@ -183,7 +183,7 @@ public final class DatadogClient implements AutoCloseable {
     }
 
     private String describe(String method, URI uri, int status, String raw, String retryAfter) {
-        StringBuilder message = new StringBuilder("Datadog answered ").append(method).append(' ').append(uri.getPath())
+        var message = new StringBuilder("Datadog answered ").append(method).append(' ').append(uri.getPath())
             .append(" with HTTP ").append(status);
         var detail = errors(raw);
         if (!detail.isEmpty()) {
