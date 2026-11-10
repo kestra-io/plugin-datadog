@@ -1,0 +1,17 @@
+{
+  "v1:CheckCanDeleteMonitor": "monitors.json",
+  "v1:CreateMonitor": "monitors.json",
+  "v1:DeleteMonitor": "monitors.json",
+  "v1:GetMonitor": "monitors.json",
+  "v1:ListMonitors": "monitors.json",
+  "v1:SearchMonitors": "monitors.json",
+  "v1:UpdateMonitor": "monitors.json",
+  "v1:ValidateExistingMonitor": "monitors.json",
+  "v1:ValidateMonitor": "monitors.json",
+  "v2:GetMonitorConfigPolicy": "monitors.json",
+  "v2:GetMonitorNotificationRule": "monitors.json",
+  "v2:GetMonitorNotificationRules": "monitors.json",
+  "v2:GetMonitorUserTemplate": "monitors.json",
+  "v2:ListMonitorConfigPolicies": "monitors.json",
+  "v2:ListMonitorUserTemplates": "monitors.json"
+}
