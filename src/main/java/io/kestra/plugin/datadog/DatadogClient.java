@@ -111,6 +111,19 @@ public final class DatadogClient implements AutoCloseable {
         return exchange("DELETE", apiBase(), path, Map.of(), null, true);
     }
 
+    public Response put(String path, Object body) throws Exception {
+        return exchange("PUT", apiBase(), path, Map.of(), body, true);
+    }
+
+    public Response patch(String path, Object body) throws Exception {
+        return exchange("PATCH", apiBase(), path, Map.of(), body, true);
+    }
+
+    /** Any method on the API base, with a query and an optional JSON body. Throws on a non-2xx answer. */
+    public Response request(String method, String path, Map<String, ?> query, Object body) throws Exception {
+        return exchange(method, apiBase(), path, query, body, true);
+    }
+
     // failOnError false returns any status, so that a caller such as a trigger can skip a rate limit; a network failure still throws
     public Response exchange(String method, String base, String path, Map<String, ?> query, Object body, boolean failOnError) throws Exception {
         var uri = URI.create(trimSlash(base) + path + queryString(query));
@@ -258,6 +271,19 @@ public final class DatadogClient implements AutoCloseable {
             } catch (JsonProcessingException e) {
                 throw new IllegalStateException("Datadog returned an answer that is not valid JSON: " + e.getOriginalMessage(), e);
             }
+        }
+
+        /** The body as a JSON array. */
+        @SuppressWarnings("unchecked")
+        public List<Object> list() {
+            Object json = json();
+            if (json == null) {
+                return List.of();
+            }
+            if (json instanceof List<?> list) {
+                return (List<Object>) list;
+            }
+            throw new IllegalStateException("Datadog returned a " + json.getClass().getSimpleName() + " where a JSON array was expected");
         }
 
         /** The body as a JSON object. */
