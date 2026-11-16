@@ -51,6 +51,10 @@
   - `metrics.Submit` sends custom gauge, count and rate points.
   - `metrics.Query` queries timeseries.
   - `monitors.List` lists monitors.
+  - `monitors.Create`, `monitors.Update`, `monitors.Get` and `monitors.Delete` manage one monitor.
+  - `monitors.Apply` reconciles tagged monitor definitions and reports field changes.
+  - `monitors.Validate` and `monitors.CanDelete` check definitions and deletion dependencies without saving changes.
+  - `monitors.Search`, `monitors.Export` and `monitors.Configuration` search monitors, export their definitions and read notification rules, policies or templates.
   - `downtimes.Create` and `downtimes.Cancel` mute monitors for a limited time and unmute them.
   - `logs.Send` sends log entries.
   - `logs.Search` searches the logs.
@@ -63,10 +67,19 @@
 Provide the keys through Kestra secrets, for example `{{ secret('DATADOG_API_KEY') }}`.
 
 - `apiKey` is needed by every task.
-- `appKey` is needed by the calls that read data or manage monitors and downtimes: `metrics.Query`, `monitors.List`, `monitors.StateChange`, `downtimes.Create`, `downtimes.Cancel` and `logs.Search`.
+- `appKey` is needed by all monitor tasks and the `monitors.StateChange` trigger, `metrics.Query`, `downtimes.Create`, `downtimes.Cancel` and `logs.Search`.
+- Monitor reads need `monitors_read`. `monitors.Create`, `monitors.Update` and `monitors.Delete` need `monitors_write`. `monitors.Apply` needs both scopes. A `dryRun` uses read and validation endpoints that need `monitors_read` without saving changes.
 - `site` selects the Datadog site of the organization (`datadoghq.com` by default, `datadoghq.eu`, `us3.datadoghq.com` and so on). A key only works on the site that created it.
 
 See [the plugin documentation](src/main/resources/doc/io.kestra.plugin.datadog.md) for the scopes each call needs and for the behavior of each task and of the trigger.
+
+## Managing monitors
+
+`Create`, `Update`, `Delete` and `Apply` accept `dryRun: true`. `Create` and `Update` ask Datadog to validate the proposed definition. `Delete` checks existence and dependencies. `Apply` computes its proposed changes with GET requests only. Each output reports whether it was a dry run.
+
+`Apply.from` accepts an inline map, a list of maps, a JSON string or an ION file URI through Kestra's `Data` input. Give each monitor exactly one `managed_by:kestra:<key>` tag. Only supplied fields are managed, so a second run reports `UNCHANGED` if nothing needs updating. Datadog validates definitions before any batch write. A batch is not transactional and writes for each management key must run serially.
+
+`Export` defaults to ION, which can feed `Apply.from` directly. `format: YAML` produces a document for editing or version control. Exports retain monitor messages, URLs and notification templates while removing known server-only fields. Existing `List` and `StateChange` flows also retain their monitor data unchanged.
 
 ## Example
 

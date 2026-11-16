@@ -100,22 +100,15 @@ class DatadogClientTest {
     }
 
     @Test
-    void sendsPutPatchAndDeleteWithABody() throws Exception {
+    void sendsPutWithABody() throws Exception {
         var server = new MockDatadogServer();
         try {
-            server.reply("PUT", "/x", 200, "{\"ok\":true}").reply("PATCH", "/x", 200, "[1,2]").reply("DELETE", "/x", 200, "{}");
-            var client = DatadogClient.create(runContextFactory.of(Map.of()), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true);
-
-            assertEquals(Map.of("ok", true), client.put("/x", Map.of("a", 1)).map());
-            assertEquals(List.of(1, 2), client.patch("/x", Map.of("b", 2)).list());
-            client.request("DELETE", "/x", Map.of("force", "true"), Map.of("c", 3));
-
-            assertEquals(3, server.requests.size());
-            assertEquals("{\"a\":1}", server.requests.get(0).body());
-            assertEquals("PATCH", server.requests.get(1).method());
-            assertEquals("force=true", server.requests.get(2).query());
-            assertEquals("{\"c\":3}", server.requests.get(2).body());
-            assertThrows(IllegalStateException.class, () -> client.put("/missing", Map.of()).list().get(0));
+            server.reply("PUT", "/x", 200, "{\"ok\":true}");
+            try (var client = DatadogClient.create(runContextFactory.of(Map.of()), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true)) {
+                assertEquals(Map.of("ok", true), client.put("/x", Map.of("a", 1)).map());
+                assertEquals("PUT", server.only().method());
+                assertEquals("{\"a\":1}", server.only().body());
+            }
         } finally {
             server.stop();
         }

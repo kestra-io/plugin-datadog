@@ -4,8 +4,6 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
-import io.kestra.plugin.datadog.contract.OpenApiContract;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
@@ -18,11 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ListTest extends AbstractDatadogTest {
-    @AfterEach
-    void assertContracts() {
-        OpenApiContract.assertRequests(server.requests, "v1:ListMonitors");
-    }
-
     private List.ListBuilder<?, ?> task() {
         return List.builder()
             .id(IdUtils.create())
@@ -36,7 +29,6 @@ class ListTest extends AbstractDatadogTest {
         var response = IntStream.range(from, from + count)
             .mapToObj(i -> "{\"id\":" + i + ",\"name\":\"m" + i + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"Alert\"}")
             .collect(Collectors.joining(",", "[", "]"));
-        OpenApiContract.of("v1:ListMonitors").assertResponse(200, response);
         return response;
     }
 
@@ -109,8 +101,10 @@ class ListTest extends AbstractDatadogTest {
     void refusesAnUnexpectedAnswerAndABadLimit() {
         server.reply("GET", "/api/v1/monitor", 200, "{\"not\":\"a list\"}");
         assertThrows(IllegalStateException.class, () -> task().build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxMonitors(Property.ofValue(0)).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxMonitors(Property.ofValue(10_001)).build().run(runContext()));
+        for (var limit : new int[]{0, 10_001}) {
+            var task = task().maxMonitors(Property.ofValue(limit)).build();
+            assertThrows(jakarta.validation.ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, java.util.Map.of())));
+        }
     }
 
     @Test

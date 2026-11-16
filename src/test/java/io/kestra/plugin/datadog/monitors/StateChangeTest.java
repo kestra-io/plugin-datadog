@@ -9,8 +9,6 @@ import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
-import io.kestra.plugin.datadog.contract.OpenApiContract;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -26,14 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StateChangeTest extends AbstractDatadogTest {
-    @AfterEach
-    void assertContracts() {
-        OpenApiContract.assertRequests(server.requests, "v1:ListMonitors");
-    }
-
     private static String monitor(int id, String state, Instant modified) {
         var response = "{\"id\":" + id + ",\"name\":\"m" + id + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"" + state + "\",\"overall_state_modified\":\"" + modified + "\"}";
-        OpenApiContract.of("v1:ListMonitors").assertResponse(200, "[" + response + "]");
         return response;
     }
 

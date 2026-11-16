@@ -7,15 +7,17 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
-import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
@@ -23,11 +25,12 @@ import java.util.List;
 import java.util.Map;
 
 /** Datadog operationId: ListMonitors. */
-@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor
-@Schema(title = "Export Datadog monitor definitions", description = "Writes writable monitor fields to YAML or ION in internal storage. Needs monitors_read. Fails if maxMonitors would truncate the export. YAML is accepted by Apply after adding a unique management tag to each unmanaged monitor. Sensitive values are filtered by default and must be restored before applying.")
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
+@Schema(title = "Export Datadog monitor definitions", description = "Writes monitor definition fields unchanged to ION or YAML in internal storage, removing known server-only fields. Needs monitors_read. Fails if maxMonitors would truncate the export. ION is accepted by Apply after adding a unique management tag to each unmanaged monitor. YAML is for editing or version control. Monitor messages and URLs are preserved.")
 @Plugin(examples = @Example(title = "Export production monitors to YAML", full = true, code = """
     id: export_monitors
     namespace: company.observability
@@ -39,14 +42,14 @@ import java.util.Map;
         monitorTags: [env:prod]
         format: YAML
     """))
-public class Export extends AbstractMonitorTask implements RunnableTask<Export.Output> {
+public class Export extends AbstractDatadogTask implements RunnableTask<Export.Output> {
     @Schema(title = "Monitor tags filter")
     @PluginProperty(group = "processing")
     private Property<List<String>> monitorTags;
     @Schema(title = "Maximum monitors", description = "Between 1 and 10000. Defaults to 1000.")
     @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxMonitors;
-    @Schema(title = "File format", description = "YAML by default. ION has one monitor per row.")
+    @Schema(title = "File format", description = "ION by default, with one monitor per row for Apply. YAML exports a document for editing.")
     @PluginProperty(group = "processing")
     private Property<Format> format;
 
@@ -57,9 +60,8 @@ public class Export extends AbstractMonitorTask implements RunnableTask<Export.O
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            var rLimit = MonitorIO.limit(context.render(maxMonitors).as(Integer.class).orElse(null));
-            var rFormat = context.render(format).as(Format.class).orElse(Format.YAML);
-            var include = includeSecrets(context);
+            var rLimit = context.render(maxMonitors).as(Integer.class).orElse(1000);
+            var rFormat = context.render(format).as(Format.class).orElse(Format.ION);
             var rFetchType = context.render(fetchType).as(FetchType.class).orElse(FetchType.STORE);
             if (rFetchType != FetchType.STORE && format != null) {
                 throw new IllegalArgumentException("`format` is only used with fetchType STORE");
@@ -70,7 +72,7 @@ public class Export extends AbstractMonitorTask implements RunnableTask<Export.O
             if (monitors.size() > rLimit) {
                 throw new IllegalStateException("Export exceeds maxMonitors; narrow monitorTags or raise the limit");
             }
-            var rows = monitors.stream().map(MonitorDefinitions::writable).map(row -> MonitorIO.redactMap(row, include)).toList();
+            var rows = monitors.stream().map(MonitorDefinitions::writable).toList();
             var yaml = rFetchType == FetchType.STORE && rFormat == Format.YAML;
             var result = DatadogFetch.apply(context, yaml ? FetchType.NONE : rFetchType, rows);
             return Output.builder().definitions(result.rows()).row(result.row())

@@ -15,7 +15,6 @@ import java.util.Set;
 /** Writable projection and field diff for CreateMonitor, UpdateMonitor and ListMonitors. */
 public final class MonitorDefinitions {
     static final String KEY_PREFIX = "managed_by:kestra:";
-    private static final Set<String> WRITABLE = Set.of("name", "type", "query", "message", "tags", "options", "priority", "restricted_roles", "draft_status", "assets");
     private static final Set<String> SERVER = Set.of("id", "created", "modified", "deleted", "creator", "multi", "overall_state", "overall_state_modified", "state", "matching_downtimes");
 
     private MonitorDefinitions() {
@@ -24,7 +23,7 @@ public final class MonitorDefinitions {
     static Map<String, Object> writable(Map<String, Object> source) {
         var result = new LinkedHashMap<String, Object>();
         source.forEach((key, value) -> {
-            if (WRITABLE.contains(key)) {
+            if (!SERVER.contains(key)) {
                 result.put(key, value);
             }
         });
@@ -37,75 +36,15 @@ public final class MonitorDefinitions {
         return result;
     }
 
-    static Map<String, Object> validate(Map<String, Object> source, boolean complete) {
+    static Map<String, Object> validate(Map<String, Object> source) {
         if (source == null || source.isEmpty()) {
             throw new IllegalArgumentException("A non-empty monitor `definition` is required");
-        }
-        for (var field : source.keySet()) {
-            if (!WRITABLE.contains(field) && !SERVER.contains(field)) {
-                throw new IllegalArgumentException("Unknown monitor definition field: " + field);
-            }
         }
         var result = writable(source);
         if (result.isEmpty()) {
             throw new IllegalArgumentException("The monitor definition must contain writable fields");
         }
-        for (var field : List.of("query", "type")) {
-            if (complete || result.containsKey(field)) {
-                if (!(result.get(field) instanceof String text) || text.isBlank()) {
-                    throw new IllegalArgumentException("The monitor definition `" + field + "` must not be blank");
-                }
-            }
-        }
-        if (result.containsKey("type")) {
-            result.put("type", MonitorType.fromValue(result.get("type")).value());
-        }
-        for (var field : List.of("name", "message", "draft_status")) {
-            if (result.containsKey(field) && !(result.get(field) instanceof String)) {
-                throw new IllegalArgumentException("The monitor definition `" + field + "` must be a string");
-            }
-        }
-        if (result.containsKey("draft_status")) {
-            result.put("draft_status", DraftStatus.fromValue(result.get("draft_status")).value);
-        }
-        for (var field : List.of("tags", "restricted_roles")) {
-            var value = result.get(field);
-            if (value == null && field.equals("restricted_roles")) {
-                continue;
-            }
-            if (result.containsKey(field) && (!(value instanceof List<?> list) || list.stream().anyMatch(item -> !(item instanceof String)))) {
-                throw new IllegalArgumentException("The monitor definition `" + field + "` must be an array of strings");
-            }
-        }
-        if (result.containsKey("options") && !(result.get("options") instanceof Map<?, ?>)) {
-            throw new IllegalArgumentException("The monitor `options` must be an object");
-        }
-        if (result.get("priority") != null) {
-            var value = result.get("priority");
-            if (!(value instanceof Number number) || number.doubleValue() != number.intValue() || number.intValue() < 1 || number.intValue() > 5) {
-                throw new IllegalArgumentException("The monitor `priority` must be an integer between 1 and 5");
-            }
-        }
-        if (result.containsKey("assets") && result.get("assets") != null && !(result.get("assets") instanceof List<?>)) {
-            throw new IllegalArgumentException("The monitor `assets` must be an array");
-        }
         return result;
-    }
-
-    private enum DraftStatus {
-        DRAFT("draft"), PUBLISHED("published");
-        private final String value;
-        DraftStatus(String value) {
-            this.value = value;
-        }
-        static DraftStatus fromValue(Object value) {
-            for (var status : values()) {
-                if (status.value.equals(value)) {
-                    return status;
-                }
-            }
-            throw new IllegalArgumentException("The monitor `draft_status` must be draft or published");
-        }
     }
 
     static String key(Map<String, Object> definition) {

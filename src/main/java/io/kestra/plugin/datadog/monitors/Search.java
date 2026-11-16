@@ -9,13 +9,14 @@ import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
-import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
@@ -24,10 +25,11 @@ import java.util.List;
 import java.util.Map;
 
 /** Datadog operationId: SearchMonitors. */
-@ValidDatadogLimits
 @SuperBuilder
 @Getter
 @NoArgsConstructor
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
 @Schema(title = "Search Datadog monitors with facets", description = "Searches the monitor search endpoint and returns facet counts from the first page. Reads pages up to maxResults. Needs monitors_read. Search rows are summaries; use Get for full definitions.")
 @Plugin(examples = @Example(title = "Find alerting production monitors", full = true, code = """
     id: search_monitors
@@ -50,6 +52,7 @@ public class Search extends AbstractMonitorTask implements RunnableTask<Search.O
     @Schema(title = "Maximum results", description = "Between 1 and 10000. Defaults to 1000.")
     @PluginProperty(group = "processing")
     private Property<@Min(1) @Max(10000) Integer> maxResults;
+    @Builder.Default
     @Schema(title = "Fetch type", description = "FETCH returns rows, FETCH_ONE returns row, STORE returns an ION uri and NONE returns only the count.", defaultValue = "FETCH")
     @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
@@ -57,7 +60,7 @@ public class Search extends AbstractMonitorTask implements RunnableTask<Search.O
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            var rLimit = MonitorIO.limit(context.render(maxResults).as(Integer.class).orElse(null));
+            var rLimit = context.render(maxResults).as(Integer.class).orElse(1000);
             var include = includeSecrets(context);
             var params = DatadogClient.query();
             context.render(query).as(String.class).ifPresent(value -> params.put("query", value));

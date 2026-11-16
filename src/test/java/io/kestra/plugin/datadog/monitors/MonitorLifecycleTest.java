@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -85,7 +85,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
-    void listStoresFilteredRowsAndRejectsMalformedRows() throws Exception {
+    void listPreservesMessagesInStoredRowsAndRejectsMalformedRows() throws Exception {
         var context = runContext();
         server.reply("GET", "/api/v1/monitor", 200, "[{\"id\":123,\"message\":\"https://hooks.example.org/value\"}]");
         var task = io.kestra.plugin.datadog.monitors.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.monitors.List.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
@@ -93,7 +93,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         var output = task.run(context);
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
-            assertEquals("[REDACTED_URL]", JacksonMapper.ofIon().readValue(input, Map.class).get("message"));
+            assertEquals("https://hooks.example.org/value", JacksonMapper.ofIon().readValue(input, Map.class).get("message"));
         }
         server.reply("GET", "/api/v1/monitor", 200, "[42]");
         assertThrows(IllegalStateException.class, () -> task.run(context));
@@ -136,6 +136,57 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
+    void deletionConflictReturnsDependencyErrors() throws Exception {
+        var response = Map.of("data", Map.of("ok", List.of(123)), "errors", Map.of("124", List.of("Referenced in composite monitor 125")));
+        server.reply("GET", "/api/v1/monitor/can_delete", 409, JacksonMapper.ofJson().writeValueAsString(response));
+        assertEquals(response, canDelete().build().run(runContext()).getResult());
+        assertEquals("GET", server.only().method());
+    }
+
+    @Test
+    void dryRunsValidateWithoutPersistingChanges() throws Exception {
+        var created = create().dryRun(Property.ofValue(true)).build().run(runContext());
+        assertTrue(created.getDryRun());
+        assertNull(created.getMonitorId());
+        server.reply("GET", "/api/v1/monitor/123", 200, "{\"id\":123,\"type\":\"query alert\",\"query\":\"test\",\"message\":\"Old\"}");
+        var updated = update().dryRun(Property.ofValue(true)).build().run(runContext());
+        assertTrue(updated.getDryRun());
+        assertFalse(updated.getUpdated());
+        server.reply("GET", "/api/v1/monitor/123", 200, "{\"id\":123}");
+        server.reply("GET", "/api/v1/monitor/can_delete", 200, "{\"data\":{\"ok\":[123]}}");
+        var deleted = delete().dryRun(Property.ofValue(true)).build().run(runContext());
+        assertTrue(deleted.getDryRun());
+        assertFalse(deleted.getDeleted());
+        assertEquals(List.of("/api/v1/monitor/validate", "/api/v1/monitor/123", "/api/v1/monitor/123/validate", "/api/v1/monitor/123", "/api/v1/monitor/can_delete"), server.requests.stream().map(r -> r.path()).toList());
+        assertEquals(ApplyTest.definition(), server.requests.getFirst().json());
+        assertEquals(Map.of("type", "query alert", "query", "test", "message", "Updated"), server.requests.get(2).json());
+        assertTrue(server.requests.stream().noneMatch(r -> r.method().equals("PUT") || r.method().equals("DELETE") || r.method().equals("POST") && r.path().equals("/api/v1/monitor")));
+    }
+
+    @Test
+    void dryRunsStillFailValidationAndDependencyErrors() {
+        server.reply("POST", "/api/v1/monitor/validate", 400, "{\"errors\":[\"Invalid query\"]}");
+        assertThrows(DatadogClient.DatadogException.class, () -> create().dryRun(Property.ofValue(true)).build().run(runContext()));
+        server.reply("POST", "/api/v1/monitor/123/validate", 400, "{\"errors\":[\"Invalid query\"]}");
+        assertThrows(DatadogClient.DatadogException.class, () -> update().dryRun(Property.ofValue(true)).build().run(runContext()));
+        server.reply("GET", "/api/v1/monitor/123", 200, "{\"id\":123}");
+        server.reply("GET", "/api/v1/monitor/can_delete", 409, "{\"data\":{\"ok\":[]},\"errors\":{\"123\":[\"Referenced\"]}}");
+        assertEquals(409, assertThrows(DatadogClient.DatadogException.class, () -> delete().dryRun(Property.ofValue(true)).build().run(runContext())).getStatus());
+        assertTrue(server.requests.stream().noneMatch(r -> r.method().equals("DELETE")));
+    }
+
+    @Test
+    void dryRunOnlyIgnores404WhenRequested() throws Exception {
+        server.reply("GET", "/api/v1/monitor/123", 404, "{\"errors\":[\"Monitor not found\"]}");
+        assertFalse(delete().dryRun(Property.ofValue(true)).ignoreNotFound(Property.ofValue(true)).build().run(runContext()).getDeleted());
+        server.reply("GET", "/api/v1/monitor/123", 403, "{\"errors\":[\"Forbidden\"]}");
+        assertThrows(DatadogClient.DatadogException.class, () -> delete().dryRun(Property.ofValue(true)).ignoreNotFound(Property.ofValue(true)).build().run(runContext()));
+        server.reply("GET", "/api/v1/monitor/123", 200, "{\"id\":123,\"type\":\"query alert\",\"query\":\"test\"}");
+        server.reply("POST", "/api/v1/monitor/123/validate", 404, "{\"errors\":[\"Monitor not found\"]}");
+        assertFalse(update().dryRun(Property.ofValue(true)).ignoreNotFound(Property.ofValue(true)).build().run(runContext()).getUpdated());
+    }
+
+    @Test
     void searchPagesAndFacetsAreNotSummed() throws Exception {
         var rows = IntStream.range(0, 100).mapToObj(i -> Map.of("id", i, "name", "CPU " + i, "type", "query alert", "status", "Alert")).toList();
         var facets = Map.of("status", List.of(Map.of("name", "Alert", "count", 101)));
@@ -163,21 +214,30 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
-    void exportStripsServerFieldsAndYamlRoundTrips() throws Exception {
+    void exportPreservesMessagesAndNewFieldsAndIonRoundTrips() throws Exception {
         var context = runContext();
         var response = ApplyTest.definition();
+        response.put("message", "Runbook https://example.org/runbook @team-platform {{#is_alert}}Check CPU{{/is_alert}}");
+        response.put("future_option", Map.of("enabled", true));
+        var desired = new LinkedHashMap<>(response);
         response.put("id", 123);
         response.put("overall_state", "Alert");
         server.reply("GET", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(List.of(response)));
         var output = export().build().run(context);
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {
-            assertEquals(List.of(ApplyTest.definition()), JacksonMapper.ofYaml().readValue(input, List.class));
+            assertEquals(desired, JacksonMapper.ofIon().readValue(input, Map.class));
         }
         server.reply("GET", "/api/v1/monitor/123", 200, JacksonMapper.ofJson().writeValueAsString(response));
         var applied = Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
-            .apiUrl(Property.ofValue(server.url())).from(Property.ofValue(output.getUri().toString())).plan(Property.ofValue(true)).build().run(context);
+            .apiUrl(Property.ofValue(server.url())).from(output.getUri().toString()).dryRun(Property.ofValue(true)).build().run(context);
         assertEquals(Apply.Action.UNCHANGED, applied.getResults().getFirst().getAction());
+        assertTrue(server.requests.stream().allMatch(r -> r.method().equals("GET")));
+
+        var yaml = export().format(Property.ofValue(Export.Format.YAML)).build().run(context);
+        try (var input = context.storage().getFile(yaml.getUri())) {
+            assertEquals(List.of(desired), JacksonMapper.ofYaml().readValue(input, List.class));
+        }
     }
 
     @Test
@@ -196,24 +256,45 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> create().definition(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> update().definition(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> validate().definition(null).build().run(runContext()));
-        for (var id : Arrays.asList(null, 0L, -1L)) {
-            assertThrows(IllegalArgumentException.class, () -> get().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
-            assertThrows(IllegalArgumentException.class, () -> update().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
-            assertThrows(IllegalArgumentException.class, () -> delete().monitorId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
-        }
-        assertThrows(IllegalArgumentException.class, () -> validate().monitorId(Property.ofValue(0L)).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> get().monitorId(null).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> update().monitorId(null).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> delete().monitorId(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(List.of())).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> canDelete().monitorIds(Property.ofValue(List.of(-1L))).build().run(runContext()));
-        for (var limit : new int[]{0, 10001}) {
-            assertThrows(IllegalArgumentException.class, () -> search().maxResults(Property.ofValue(limit)).build().run(runContext()));
-            assertThrows(IllegalArgumentException.class, () -> export().maxMonitors(Property.ofValue(limit)).build().run(runContext()));
+        for (var id : new long[]{0, -1}) {
+            var tasks = List.of(
+                get().monitorId(Property.ofValue(id)).build(),
+                update().monitorId(Property.ofValue(id)).build(),
+                delete().monitorId(Property.ofValue(id)).build(),
+                validate().monitorId(Property.ofValue(id)).build(),
+                canDelete().monitorIds(Property.ofValue(List.of(id))).build());
+            for (var task : tasks) {
+                assertThrows(jakarta.validation.ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
+            }
         }
-        for (var field : Map.<String, Object>of("options", "bad", "tags", List.of(1), "restricted_roles", "bad", "priority", 1.5, "name", 42, "message", false, "draft_status", "other", "assets", "bad", "unknown", "bad").entrySet()) {
-            var invalid = ApplyTest.definition();
-            invalid.put(field.getKey(), field.getValue());
-            assertThrows(IllegalArgumentException.class, () -> create().definition(Property.ofValue(invalid)).build().run(runContext()), field.getKey());
+        for (var limit : new int[]{0, 10001}) {
+            var tasks = List.of(search().maxResults(Property.ofValue(limit)).build(), export().maxMonitors(Property.ofValue(limit)).build());
+            for (var task : tasks) {
+                assertThrows(jakarta.validation.ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
+            }
         }
         assertTrue(server.requests.isEmpty());
+    }
+
+    @Test
+    void tasksWithDifferentDefinitionsAreDistinctAndInputsStayOutOfStringOutput() {
+        var first = Apply.builder().id("apply").type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
+            .from(Map.of("message", "private-definition-one")).build();
+        var second = Apply.builder().id("apply").type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
+            .from(Map.of("message", "private-definition-two")).build();
+        assertNotEquals(first, second);
+        var builder = create();
+        var create = builder.definition(Property.ofValue(Map.of("message", "private-definition-one"))).build();
+        assertNotEquals(create, builder.definition(Property.ofValue(Map.of("message", "private-definition-two"))).build());
+        for (var task : List.of(first, create)) {
+            assertFalse(task.toString().contains(API_KEY));
+            assertFalse(task.toString().contains(APP_KEY));
+            assertFalse(task.toString().contains("private-definition-one"));
+        }
     }
 
     @Test
@@ -231,7 +312,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
                 new Case("GET", "/api/v1/monitor/can_delete", canDelete().build()),
                 new Case("GET", "/api/v1/monitor", export().build()),
                 new Case("GET", "/api/v1/monitor", Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
-                    .apiUrl(Property.ofValue(server.url())).definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(ApplyTest.definition()))).build())
+                    .apiUrl(Property.ofValue(server.url())).from(ApplyTest.definition()).build())
             );
             for (var c : cases) {
                 server.reply(c.method(), c.path(), status, "{\"errors\":[\"Request failed\"]}");

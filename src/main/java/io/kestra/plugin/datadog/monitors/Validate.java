@@ -7,15 +7,20 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 /** Datadog operationIds: ValidateMonitor and ValidateExistingMonitor. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
 @Schema(title = "Validate a Datadog monitor definition", description = "Asks Datadog to validate a complete definition without saving it. Set monitorId to validate an existing monitor. Needs monitors_read. Invalid definitions fail the task.")
 @Plugin(examples = @Example(title = "Validate before deployment", full = true, code = """
     id: validate_monitor
@@ -32,16 +37,13 @@ import lombok.experimental.SuperBuilder;
 public class Validate extends AbstractDefinitionTask implements RunnableTask<Validate.Output> {
     @Schema(title = "Existing monitor id", description = "Optional positive id for ValidateExistingMonitor.")
     @PluginProperty(group = "main")
-    private Property<Long> monitorId;
+    private Property<@Min(1) Long> monitorId;
 
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
             var rId = context.render(monitorId).as(Long.class).orElse(null);
-            if (rId != null) {
-                MonitorIO.positiveId(rId);
-            }
-            var body = definition(context, true);
+            var body = definition(context);
             client.post(rId == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + rId + "/validate", body);
             return Output.builder().valid(true).build();
         }

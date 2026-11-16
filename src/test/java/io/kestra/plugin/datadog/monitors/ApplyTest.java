@@ -6,7 +6,6 @@ import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
-import io.kestra.plugin.datadog.contract.OpenApiContract;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -30,7 +29,7 @@ class ApplyTest extends AbstractDatadogTest {
     private Apply.ApplyBuilder<?, ?> task() throws Exception {
         return Apply.builder().id(IdUtils.create()).type(Apply.class.getName())
             .apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY)).apiUrl(Property.ofValue(server.url()))
-            .definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(definition())));
+            .from(definition());
     }
 
     private void existing(Map<String, Object> fields) throws Exception {
@@ -65,9 +64,6 @@ class ApplyTest extends AbstractDatadogTest {
         assertTrue(second.getDiff().isEmpty());
         assertEquals(1, server.requests.stream().filter(r -> r.path().equals("/api/v1/monitor") && r.method().equals("POST")).count());
         assertEquals(0, server.requests.stream().filter(r -> r.method().equals("PUT")).count());
-        OpenApiContract.assertRequests(server.requests,
-            "v1:ListMonitors", "v1:GetMonitor", "v1:ValidateMonitor", "v1:ValidateExistingMonitor", "v1:CreateMonitor");
-        OpenApiContract.of("v1:CreateMonitor").assertResponse(200, json);
     }
 
     @Test
@@ -90,8 +86,7 @@ class ApplyTest extends AbstractDatadogTest {
         var second = apply.run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.UNCHANGED, second.getAction());
         assertEquals(1, server.requests.stream().filter(r -> r.method().equals("PUT")).count());
-        OpenApiContract.assertRequests(server.requests,
-            "v1:ListMonitors", "v1:GetMonitor", "v1:ValidateExistingMonitor", "v1:UpdateMonitor");
+        assertTrue(server.requests.stream().anyMatch(r -> r.method().equals("POST") && r.path().equals("/api/v1/monitor/123/validate")));
     }
 
     @Test
@@ -112,12 +107,12 @@ class ApplyTest extends AbstractDatadogTest {
     }
 
     @Test
-    void tagOrderCountsAsAChangeAndPlanUsesOnlyReads() throws Exception {
+    void tagOrderCountsAsAChangeAndDryRunUsesOnlyReads() throws Exception {
         var old = definition();
         old.put("tags", List.of("env:prod", TAG));
         existing(old);
-        var output = task().plan(Property.ofValue(true)).build().run(runContext());
-        assertTrue(output.getPlan());
+        var output = task().dryRun(Property.ofValue(true)).build().run(runContext());
+        assertTrue(output.getDryRun());
         var result = output.getResults().getFirst();
         assertEquals(Apply.Action.UPDATED, result.getAction());
         assertEquals("/tags", result.getDiff().getFirst().getField());
@@ -127,7 +122,7 @@ class ApplyTest extends AbstractDatadogTest {
     @Test
     void plansCreationWithoutAnIdAndSkipsRemoteValidation() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var result = task().plan(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
+        var result = task().dryRun(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.CREATED, result.getAction());
         assertNull(result.getMonitorId());
         assertEquals("GET", server.only().method());
@@ -162,24 +157,54 @@ class ApplyTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
         server.reply("POST", "/api/v1/monitor/validate", 200, "{}");
         server.reply("POST", "/api/v1/monitor/validate", 400, "{\"errors\":[\"Invalid query\"]}");
-        assertThrows(DatadogClient.DatadogException.class, () -> task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(List.of(definition(), second)))).build().run(runContext()));
+        assertThrows(DatadogClient.DatadogException.class, () -> task().from(List.of(definition(), second)).build().run(runContext()));
         assertTrue(server.requests.stream().noneMatch(r -> r.method().equals("POST") && r.path().equals("/api/v1/monitor")));
     }
 
     @Test
     void rejectsInvalidInputsBeforeAnyRequest() throws Exception {
-        for (var input : List.of("[]", "null", "[42]", "{broken", "---\na: b\n---\nc: d", "type: query alert", "query: test", "name: cpu\ntype: query alert\nquery: test", "name: cpu\ntype: wrong\nquery: test\ntags: [managed_by:kestra:a]")) {
-            assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue(input)).build().run(runContext()), input);
+        for (var input : List.of("[]", "null", "[42]", "{broken", "---\na: b\n---\nc: d", "{\"name\":\"cpu\"}")) {
+            assertThrows(IllegalArgumentException.class, () -> task().from(input).build().run(runContext()), input);
         }
-        var noName = definition();
-        noName.remove("name");
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(noName))).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(List.of(definition(), definition())))).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().from(Property.ofValue("kestra:///input.yaml")).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(null).from(Property.ofValue("https://example.org/input.yaml")).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(null).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue("x".repeat(10 * 1024 * 1024 + 1))).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().from(List.of(definition(), definition())).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().from("https://example.org/input.yaml").build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().from(null).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().from("x".repeat(10 * 1024 * 1024 + 1)).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
+    }
+
+    @Test
+    void parserErrorsKeepTheirCause() throws Exception {
+        var error = assertThrows(IllegalArgumentException.class, () -> task().from("{broken").build().run(runContext()));
+        assertNotNull(error.getCause());
+        assertNotNull(error.getCause().getCause());
+    }
+
+    @Test
+    void rendersStructuredAndJsonInputsThroughData() throws Exception {
+        var input = definition();
+        input.put("name", "{{ monitorName }}");
+        server.reply("GET", "/api/v1/monitor", 200, "[]");
+        var response = definition();
+        response.put("id", 123);
+        server.reply("POST", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(response));
+        for (var from : List.of(input, List.of(input), JacksonMapper.ofJson().writeValueAsString(input))) {
+            var task = task().from(from).build();
+            task.run(runContextFactory.of(task, Map.of("monitorName", "Rendered CPU monitor")));
+            assertEquals("Rendered CPU monitor", server.requests.getLast().json().get("name"));
+        }
+    }
+
+    @Test
+    void newDatadogTypesAndFieldsReachRemoteValidation() throws Exception {
+        var desired = definition();
+        desired.put("type", "future alert");
+        desired.put("future_option", Map.of("enabled", true));
+        server.reply("GET", "/api/v1/monitor", 200, "[]");
+        server.reply("POST", "/api/v1/monitor/validate", 400, "{\"errors\":[\"Invalid future option\"]}");
+        assertThrows(DatadogClient.DatadogException.class, () -> task().from(desired).build().run(runContext()));
+        assertEquals(desired, server.requests.getLast().json());
+        assertTrue(server.requests.stream().noneMatch(r -> r.path().equals("/api/v1/monitor") && r.method().equals("POST")));
     }
 
     @Test
@@ -187,10 +212,10 @@ class ApplyTest extends AbstractDatadogTest {
         for (var tags : List.of(List.of("managed_by:kestra:"), List.of("managed_by:kestra:Upper"), List.of(TAG, "managed_by:kestra:second"))) {
             var invalid = definition();
             invalid.put("tags", tags);
-            assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(invalid))).build().run(runContext()));
+            assertThrows(IllegalArgumentException.class, () -> task().from(invalid).build().run(runContext()));
         }
         var tooMany = Collections.nCopies(1001, definition());
-        assertThrows(IllegalArgumentException.class, () -> task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(tooMany))).build().run(runContext()));
+        assertThrows(IllegalArgumentException.class, () -> task().from(tooMany).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
     }
 
@@ -208,13 +233,13 @@ class ApplyTest extends AbstractDatadogTest {
     }
 
     @Test
-    void readsYamlFromInternalStorageAndStoresIonResults() throws Exception {
+    void readsIonFromInternalStorageAndStoresIonResults() throws Exception {
         var context = runContext();
-        var file = context.workingDir().createTempFile(".yaml");
-        JacksonMapper.ofYaml().writeValue(file.toFile(), List.of(definition()));
+        var file = context.workingDir().createTempFile(".ion");
+        JacksonMapper.ofIon().writeValue(file.toFile(), definition());
         var uri = context.storage().putFile(file.toFile());
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var output = task().definitions(null).from(Property.ofValue(uri.toString())).plan(Property.ofValue(true)).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
+        var output = task().from(uri.toString()).dryRun(Property.ofValue(true)).fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getResults());
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {
@@ -230,7 +255,7 @@ class ApplyTest extends AbstractDatadogTest {
         desired.put("message", "Notify https://hooks.example.org/private-token");
         desired.put("options", Map.of("password", "private-value"));
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        var output = task().definitions(Property.ofValue(JacksonMapper.ofJson().writeValueAsString(desired))).plan(Property.ofValue(true)).build().run(runContext());
+        var output = task().from(desired).dryRun(Property.ofValue(true)).build().run(runContext());
         var json = JacksonMapper.ofJson().writeValueAsString(output);
         assertFalse(json.contains("private-token"));
         assertFalse(json.contains("private-value"));

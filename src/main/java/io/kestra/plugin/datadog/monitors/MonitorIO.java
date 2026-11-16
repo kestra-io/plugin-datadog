@@ -37,18 +37,4 @@ public final class MonitorIO {
         return (Map<String, Object>) redact(value, includeSecrets);
     }
 
-    public static long positiveId(Long id) {
-        if (id == null || id < 1) {
-            throw new IllegalArgumentException("The Datadog `monitorId` must be a positive integer");
-        }
-        return id;
-    }
-
-    public static int limit(Integer value) {
-        var limit = value == null ? 1000 : value;
-        if (limit < 1 || limit > 10000) {
-            throw new IllegalArgumentException("The result limit must be between 1 and 10000");
-        }
-        return limit;
-    }
 }

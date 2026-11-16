@@ -63,8 +63,10 @@ class ConfigurationTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> task().resource(null).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue(" ")).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue("..")).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxResults(Property.ofValue(0)).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxResults(Property.ofValue(10001)).build().run(runContext()));
+        for (var limit : new int[]{0, 10001}) {
+            var task = task().maxResults(Property.ofValue(limit)).build();
+            assertThrows(jakarta.validation.ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
+        }
         assertTrue(server.requests.isEmpty());
         server.reply("GET", "/api/v2/monitor/policy", 200, "{\"data\":[{\"id\":\"one\"},{\"id\":\"two\"}]}");
         assertThrows(IllegalStateException.class, () -> task().resource(Property.ofValue(Configuration.Resource.POLICIES)).maxResults(Property.ofValue(1)).build().run(runContext()));

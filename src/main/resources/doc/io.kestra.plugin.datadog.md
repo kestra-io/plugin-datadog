@@ -1,6 +1,6 @@
 # How to use the Datadog plugin
 
-This plugin provides Kestra tasks to send events, custom metrics and logs to Datadog, to query metrics and logs, to list monitors and to mute them with a downtime and a polling trigger that starts a flow when monitors go into alert. Each task and the trigger have their own documentation page with full examples.
+This plugin sends events, custom metrics and logs to Datadog and queries telemetry from flows. Monitor tasks create, update, reconcile, search and export definitions or check them before a change. Downtime tasks mute monitors during maintenance. A polling trigger starts a flow when monitors go into alert. Each task and the trigger have their own documentation page with full examples.
 
 ## Authentication
 
@@ -13,7 +13,9 @@ Datadog uses two keys and what a call needs depends on whether it sends or reads
 |---|---|---|
 | `events.Create`, `metrics.Submit`, `logs.Send` | `apiKey` | none |
 | `metrics.Query` | `apiKey`, `appKey` | `timeseries_query` |
-| `monitors.List`, `monitors.StateChange` | `apiKey`, `appKey` | `monitors_read` |
+| `monitors.List`, `monitors.Get`, `monitors.Search`, `monitors.Export`, `monitors.Configuration`, `monitors.Validate`, `monitors.CanDelete`, `monitors.StateChange` | `apiKey`, `appKey` | `monitors_read` |
+| `monitors.Create`, `monitors.Update`, `monitors.Delete` | `apiKey`, `appKey` | `monitors_write` for writes; `monitors_read` for dry runs |
+| `monitors.Apply` | `apiKey`, `appKey` | `monitors_read` and `monitors_write` for writes; `monitors_read` for dry runs |
 | `downtimes.Create`, `downtimes.Cancel` | `apiKey`, `appKey` | `monitors_downtime` |
 | `logs.Search` | `apiKey`, `appKey` | `logs_read_data` |
 
@@ -40,6 +42,69 @@ Runs a metrics query over a window and returns the series, with `seriesCount` an
 ### monitors.List
 
 Lists monitors by name, tags, monitor tags or group state, page by page up to `maxMonitors` (1000 by default). `fetchType` returns them in the output (`FETCH`), as the first one (`FETCH_ONE`), in internal storage (`STORE`) or only as a count (`NONE`). `groupStates` is applied by Datadog and selects monitors that have a group in that state, which is not always the monitor's `overall_state`.
+
+Monitor data is returned unchanged, including runbook URLs and notification messages.
+
+### monitors.Create, monitors.Update and monitors.Get
+
+`Create` sends one `definition` object using Datadog's API field names. `Update` sends only the supplied fields to one positive `monitorId`; nested options follow Datadog's update semantics. `Get` reads one monitor and can include assets or matching downtimes. Returned monitor ids can feed subsequent tasks. `Update.ignoreNotFound: true` makes only HTTP 404 a no-op.
+
+`Create.dryRun: true` validates the definition without creating it and returns no monitor id. `Update.dryRun: true` reads the existing definition, applies the supplied fields and validates that proposal without sending PUT. Its `updated` output stays false. Dry runs need `monitors_read`. Normal writes need `monitors_write`.
+
+Definitions are passed to Datadog without a local list of accepted monitor types or fields. Known server-only fields are removed. Datadog checks the rest, so a new API field does not require a plugin release.
+
+### monitors.Delete and monitors.CanDelete
+
+`Delete` removes a single positive `monitorId` without forcing deletion of referenced monitors. Only HTTP 404 can be ignored with `ignoreNotFound: true`. `dryRun: true` reads that monitor and checks dependencies without deleting it; `deleted` stays false. A dependency conflict still fails the Delete dry run.
+
+`CanDelete` accepts a non-empty `monitorIds` list and returns the dependency-check result on HTTP 200 or 409. `result.data.ok` contains deletable ids and `result.errors` maps referenced ids to dependency messages. Other HTTP errors fail the task.
+
+### monitors.Validate
+
+Asks Datadog to validate a definition without saving it. Set `monitorId` to validate a proposal for an existing monitor. Invalid definitions fail with Datadog's error. Log monitor validation also needs the log access Datadog requires for that monitor type.
+
+### monitors.Apply
+
+Reconciles monitors by exactly one `managed_by:kestra:<key>` tag per definition. A key uses 1 to 128 lowercase letters, digits, dots, underscores or hyphens. Duplicate input keys and multiple existing monitors with the same key fail before any write.
+
+`from` is Kestra's `Data` input: a map, a list of maps, a JSON string or an ION file URI. Inline values are rendered through Kestra; file contents are data and are not rendered as expressions. The input is limited to 1000 definitions and 10 MiB of decoded JSON data, with a 30-second read timeout.
+
+`dryRun: true` uses GET requests only and returns proposed `CREATED`, `UPDATED` or `UNCHANGED` actions with field diffs. A proposed creation has no id yet. Normal runs validate every definition with Datadog before the first persisted write. Only supplied definition fields are managed and unowned nested option fields are retained. Numeric representations such as 80 and 80.0 compare equal. Tag order is significant.
+
+Run serially for each key because Datadog has no atomic upsert. A missing monitor during an update fails without recreation. A batch is not transactional. `fetchType` selects full results, the first result, an ION result file or a count.
+
+```yaml
+id: preview_datadog_monitors
+namespace: company.observability
+tasks:
+  - id: apply
+    type: io.kestra.plugin.datadog.monitors.Apply
+    apiKey: "{{ secret('DATADOG_API_KEY') }}"
+    appKey: "{{ secret('DATADOG_APP_KEY') }}"
+    dryRun: true
+    from:
+      - name: CPU usage
+        type: query alert
+        query: "avg(last_5m):avg:system.cpu.user{env:prod} > 80"
+        tags: [managed_by:kestra:cpu-prod, env:prod]
+        options:
+          thresholds:
+            critical: 80
+```
+
+### monitors.Export
+
+Exports definition fields while removing known server-only fields. Messages, URLs and Datadog notification templates are preserved. The default `format: ION` has one definition per row and can feed `Apply.from`. Set `format: YAML` for an editable document; load edited definitions as structured `from` data or convert them to ION before applying. Each monitor needs a management tag before Apply can reconcile it.
+
+`fetchType` defaults to `STORE`. `FETCH`, `FETCH_ONE` and `NONE` return definitions, one definition or a count instead. `format` applies only to `STORE`. Exceeding `maxMonitors` fails rather than silently producing a partial export.
+
+### monitors.Search and monitors.Configuration
+
+`Search` accepts Datadog's monitor search `query` and `sort`, follows pages up to `maxResults` and returns facet counts and metadata from the first page. Rows are summaries; use `Get` for a full definition.
+
+`Configuration` reads `NOTIFICATION_RULES`, `POLICIES` or `TEMPLATES` from the v2 API. Set `resourceId` to read one object or omit it to list that resource. Notification rules are paged. Policy and template lists have no paging parameters. Exceeding `maxResults` fails instead of truncating the result. Both tasks support `fetchType`.
+
+New read tasks and Apply diffs filter credential-like fields and HTTP URLs by default; `includeSecrets: true` preserves those values in execution output. This does not apply to Export, List or StateChange, which preserve monitor definitions and messages.
 
 ### downtimes.Create and downtimes.Cancel
 

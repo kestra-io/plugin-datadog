@@ -10,7 +10,6 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
-import io.kestra.plugin.datadog.ValidDatadogLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -24,7 +23,6 @@ import lombok.experimental.SuperBuilder;
 import java.net.URI;
 import java.util.Map;
 
-@ValidDatadogLimits
 @SuperBuilder
 @ToString
 @EqualsAndHashCode
@@ -102,16 +100,9 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
     @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
-    @Schema(title = "Include sensitive values", description = "Return credential fields and URLs in monitor messages. False by default.")
-    @PluginProperty(group = "advanced")
-    private Property<Boolean> includeSecrets;
-
     @Override
     public Output run(RunContext runContext) throws Exception {
         var rLimit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
-        if (rLimit < 1 || rLimit > 10_000) {
-            throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + rLimit);
-        }
 
         var params = DatadogClient.query();
         runContext.render(this.name).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> params.put("name", value));
@@ -125,9 +116,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
         }
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());
-        var rIncludeSecrets = runContext.render(includeSecrets).as(Boolean.class).orElse(false);
-        var safe = monitors.stream().map(monitor -> MonitorIO.redactMap(monitor, rIncludeSecrets)).toList();
-        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), safe);
+        var result = DatadogFetch.apply(runContext, runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH), monitors);
         return Output.builder().monitors(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).build();
     }
 
