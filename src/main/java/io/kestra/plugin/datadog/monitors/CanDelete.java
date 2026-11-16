@@ -6,8 +6,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.datadog.DatadogClient;
-import io.kestra.plugin.datadog.NumericIds;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
@@ -17,6 +16,8 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,7 +28,13 @@ import java.util.stream.Collectors;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Check whether Datadog monitors can be deleted", description = "Checks dependencies without deleting monitors. Needs monitors_read. Returns Datadog data and dependency errors on HTTP 200 or 409. Other HTTP errors fail the task.")
+@Schema(
+    title = "Check whether Datadog monitors can be deleted",
+    description = """
+        Checks dependencies without deleting monitors. Needs monitors_read.
+        Returns Datadog data and dependency errors on HTTP 200 or 409. Other HTTP errors fail the task.
+        """
+)
 @Plugin(examples = @Example(title = "Check monitor dependencies", full = true, code = """
     id: can_delete_monitor
     namespace: company.observability
@@ -38,7 +45,7 @@ import java.util.stream.Collectors;
         appKey: "{{ secret('DATADOG_APP_KEY') }}"
         monitorIds: [123]
     """))
-public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDelete.Output> {
+public class CanDelete extends AbstractDatadogTask implements RunnableTask<CanDelete.Output> {
     @NotNull
     @Schema(title = "Monitor ids", description = "A non-empty list of positive monitor ids.")
     @PluginProperty(group = "main")
@@ -47,7 +54,7 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
     @Override
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
-            var rIds = NumericIds.render(context, monitorIds, "monitorIds");
+            var rIds = renderIds(context);
             if (rIds.isEmpty()) {
                 throw new IllegalArgumentException("monitorIds must not be empty");
             }
@@ -55,12 +62,27 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
                 throw new IllegalArgumentException("monitorIds must contain positive integers");
             }
             var query = rIds.stream().map(String::valueOf).collect(Collectors.joining(","));
-            var response = client.exchange("GET", client.apiBase(), "/api/v1/monitor/can_delete", Map.of("monitor_ids", query), null, false);
-            if (!response.ok() && response.status() != 409) {
-                throw new DatadogClient.DatadogException(response.status(), "Datadog deletion check failed with HTTP " + response.status());
-            }
-            return Output.builder().result(MonitorIO.redactMap(response.map(), includeSecrets(context))).build();
+            return Output.builder().result(client.get("/api/v1/monitor/can_delete", Map.of("monitor_ids", query), 409).map()).build();
         }
+    }
+
+    private List<Long> renderIds(RunContext context) throws Exception {
+        var result = new ArrayList<Long>();
+        // Property.asList can retain Integer elements even when its requested element type is Long.
+        for (var value : (List<?>) context.render(monitorIds).asList(Object.class)) {
+            try {
+                if (value instanceof Number number) {
+                    result.add(new BigDecimal(number.toString()).longValueExact());
+                } else if (value instanceof String text) {
+                    result.add(Long.parseLong(text));
+                } else {
+                    throw new IllegalArgumentException("monitorIds must contain non-null 64-bit integers");
+                }
+            } catch (ArithmeticException | NumberFormatException e) {
+                throw new IllegalArgumentException("monitorIds must contain non-null 64-bit integers", e);
+            }
+        }
+        return result;
     }
 
     @Builder

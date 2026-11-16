@@ -19,7 +19,13 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Create a Datadog monitor", description = "Creates one monitor from a definition. Needs an API key and an application key with monitors_write. Use Apply for idempotent reconciliation.")
+@Schema(
+    title = "Create a Datadog monitor",
+    description = """
+        Creates one monitor from a definition. Needs an API key and an application key with monitors_write.
+        Use Apply for idempotent reconciliation.
+        """
+)
 @Plugin(examples = @Example(title = "Create a CPU monitor", full = true, code = """
     id: create_monitor
     namespace: company.observability
@@ -44,9 +50,9 @@ public class Create extends AbstractDefinitionTask implements RunnableTask<Monit
             var body = definition(context);
             if (context.render(dryRun).as(Boolean.class).orElse(false)) {
                 client.post("/api/v1/monitor/validate", body);
-                return MonitorOutput.builder().monitor(MonitorIO.redactMap(body, includeSecrets(context))).dryRun(true).build();
+                return MonitorOutput.builder().monitor(body).dryRun(true).build();
             }
-            return MonitorOutput.of(client.post("/api/v1/monitor", body).map(), includeSecrets(context));
+            return MonitorOutput.of(client.post("/api/v1/monitor", body).map());
         }
     }
 }

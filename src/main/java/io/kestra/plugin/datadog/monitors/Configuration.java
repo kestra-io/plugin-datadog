@@ -7,6 +7,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -33,7 +34,14 @@ import java.util.Map;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Read Datadog monitor configuration", description = "Reads notification rules, configuration policies or user templates from the v2 API. Set resourceId to read one object. Needs monitors_read. Notification rules are paged; policy and template lists have no paging parameters in the API. Fails if the result exceeds maxResults.")
+@Schema(
+    title = "Read Datadog monitor configuration",
+    description = """
+        Reads notification rules, configuration policies or user templates from the v2 API.
+        Set resourceId to read one object. Needs monitors_read. Notification rules are paged;
+        policy and template lists have no paging parameters in the API. Fails if the result exceeds maxResults.
+        """
+)
 @Plugin(examples = @Example(title = "Audit monitor notification rules", full = true, code = """
     id: monitor_configuration
     namespace: company.observability
@@ -45,7 +53,7 @@ import java.util.Map;
         resource: NOTIFICATION_RULES
         fetchType: STORE
     """))
-public class Configuration extends AbstractMonitorTask implements RunnableTask<Configuration.Output> {
+public class Configuration extends AbstractDatadogTask implements RunnableTask<Configuration.Output> {
     @NotNull
     @Schema(title = "Configuration resource")
     @PluginProperty(group = "main")
@@ -73,10 +81,9 @@ public class Configuration extends AbstractMonitorTask implements RunnableTask<C
                 throw new IllegalArgumentException("resourceId must identify one object");
             }
             var rLimit = context.render(maxResults).as(Integer.class).orElse(1000);
-            var include = includeSecrets(context);
-            var path = "/api/v2/monitor/" + rSelected.path + (rId == null ? "" : "/" + URLEncoder.encode(rId, StandardCharsets.UTF_8));
+            var path = "/api/v2/monitor/%s%s".formatted(rSelected.path, rId == null ? "" : "/%s".formatted(URLEncoder.encode(rId, StandardCharsets.UTF_8)));
             var params = DatadogClient.query();
-            List<Map<String, Object>> rows = new ArrayList<>();
+            var rows = new ArrayList<Map<String, Object>>();
             for (var page = 0; ; page++) {
                 if (rId == null && rSelected == Resource.NOTIFICATION_RULES) {
                     params.put("page", page);
@@ -87,7 +94,7 @@ public class Configuration extends AbstractMonitorTask implements RunnableTask<C
                     if (!(data instanceof Map<?, ?> map)) {
                         throw new IllegalStateException("Datadog configuration response must contain a data object");
                     }
-                    rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
+                    rows.add(MonitorDefinitions.object(map));
                     break;
                 }
                 if (!(data instanceof List<?> list)) {
@@ -97,7 +104,7 @@ public class Configuration extends AbstractMonitorTask implements RunnableTask<C
                     if (!(row instanceof Map<?, ?> map)) {
                         throw new IllegalStateException("Datadog configuration data must contain objects");
                     }
-                    rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
+                    rows.add(MonitorDefinitions.object(map));
                     if (rows.size() > rLimit) {
                         throw new IllegalStateException("Configuration exceeds maxResults");
                     }

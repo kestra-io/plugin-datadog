@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 // The keys are sent as headers and never reach a log or an error message
@@ -103,6 +104,10 @@ public final class DatadogClient implements AutoCloseable {
         return exchange("GET", apiBase(), path, query, null, true);
     }
 
+    public Response get(String path, Map<String, ?> query, int acceptedStatus) throws Exception {
+        return exchange("GET", apiBase(), path, query, null, true, Set.of(acceptedStatus));
+    }
+
     public Response post(String path, Object body) throws Exception {
         return exchange("POST", apiBase(), path, Map.of(), body, true);
     }
@@ -117,6 +122,10 @@ public final class DatadogClient implements AutoCloseable {
 
     // failOnError false returns any status, so that a caller such as a trigger can skip a rate limit; a network failure still throws
     public Response exchange(String method, String base, String path, Map<String, ?> query, Object body, boolean failOnError) throws Exception {
+        return exchange(method, base, path, query, body, failOnError, Set.of());
+    }
+
+    private Response exchange(String method, String base, String path, Map<String, ?> query, Object body, boolean failOnError, Set<Integer> acceptedStatuses) throws Exception {
         var uri = URI.create(trimSlash(base) + path + queryString(query));
 
         var request = HttpRequest.builder()
@@ -147,7 +156,7 @@ public final class DatadogClient implements AutoCloseable {
             serverTime = date;
         }
 
-        if (failOnError && (status < 200 || status >= 300)) {
+        if (failOnError && (status < 200 || status >= 300) && !acceptedStatuses.contains(status)) {
             throw new DatadogException(status, describe(method, uri, status, raw, retryAfter));
         }
 

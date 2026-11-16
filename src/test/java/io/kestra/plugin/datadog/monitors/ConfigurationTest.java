@@ -30,7 +30,7 @@ class ConfigurationTest extends AbstractDatadogTest {
                 case POLICIES -> "monitor-config-policy";
                 case TEMPLATES -> "monitor-user-template";
             };
-            var row = Map.of("id", "example", "type", type, "attributes", Map.of());
+            var row = Map.of("id", "example", "type", type, "attributes", Map.of("url", "https://example.org/runbook", "token", "response-value"));
             var path = "/api/v2/monitor/" + resource.getValue();
             server.reply("GET", path, 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(row))));
             server.reply("GET", path + "/example", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", row)));

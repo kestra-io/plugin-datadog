@@ -75,11 +75,13 @@ See [the plugin documentation](src/main/resources/doc/io.kestra.plugin.datadog.m
 
 ## Managing monitors
 
-`Create`, `Update`, `Delete` and `Apply` accept `dryRun: true`. `Create` and `Update` ask Datadog to validate the proposed definition. `Delete` checks existence and dependencies. `Apply` computes its proposed changes with GET requests only. Each output reports whether it was a dry run.
+`Create`, `Update`, `Delete` and `Apply` accept `dryRun: true`. `Create`, `Update` and `Apply` ask Datadog to validate proposed definitions without saving changes. `Delete` checks existence and dependencies. Each output reports whether it was a dry run.
 
 `Apply.from` accepts an inline map, a list of maps, a JSON string or an ION file URI through Kestra's `Data` input. Give each monitor exactly one `managed_by:kestra:<key>` tag. Only supplied fields are managed, so a second run reports `UNCHANGED` if nothing needs updating. Datadog validates definitions before any batch write. A batch is not transactional and writes for each management key must run serially.
 
 `Export` defaults to ION, which can feed `Apply.from` directly. `format: YAML` produces a document for editing or version control. Exports retain monitor messages, URLs and notification templates while removing known server-only fields. Existing `List` and `StateChange` flows also retain their monitor data unchanged.
+
+Monitor tasks return Datadog data and Apply diffs unchanged. Authentication keys are sent in request headers and excluded from task string output.
 
 ## Example
 

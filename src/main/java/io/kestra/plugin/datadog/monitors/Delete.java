@@ -26,7 +26,13 @@ import java.util.Map;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Delete one Datadog monitor", description = "Permanently deletes the monitor identified by monitorId. Needs monitors_write. Does not force deletion of referenced monitors. ignoreNotFound treats only HTTP 404 as a no-op.")
+@Schema(
+    title = "Delete one Datadog monitor",
+    description = """
+        Permanently deletes the monitor identified by monitorId. Needs monitors_write.
+        Does not force deletion of referenced monitors. ignoreNotFound treats only HTTP 404 as a no-op.
+        """
+)
 @Plugin(examples = @Example(title = "Remove a retired monitor", full = true, code = """
     id: delete_monitor
     namespace: company.observability
@@ -58,11 +64,11 @@ public class Delete extends AbstractDatadogTask implements RunnableTask<Delete.O
             var rDryRun = context.render(dryRun).as(Boolean.class).orElse(false);
             try {
                 if (rDryRun) {
-                    client.get("/api/v1/monitor/" + rId, Map.of());
+                    client.get("/api/v1/monitor/%s".formatted(rId), Map.of());
                     client.get("/api/v1/monitor/can_delete", Map.of("monitor_ids", rId));
                     return Output.builder().monitorId(rId).deleted(false).dryRun(true).build();
                 }
-                client.delete("/api/v1/monitor/" + rId);
+                client.delete("/api/v1/monitor/%s".formatted(rId));
                 return Output.builder().monitorId(rId).deleted(true).dryRun(false).build();
             } catch (DatadogClient.DatadogException e) {
                 if (e.getStatus() == 404 && rIgnore) {

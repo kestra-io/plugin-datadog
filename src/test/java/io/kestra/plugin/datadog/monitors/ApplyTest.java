@@ -107,7 +107,7 @@ class ApplyTest extends AbstractDatadogTest {
     }
 
     @Test
-    void tagOrderCountsAsAChangeAndDryRunUsesOnlyReads() throws Exception {
+    void tagOrderCountsAsAChangeAndDryRunValidatesWithoutSaving() throws Exception {
         var old = definition();
         old.put("tags", List.of("env:prod", TAG));
         existing(old);
@@ -116,16 +116,36 @@ class ApplyTest extends AbstractDatadogTest {
         var result = output.getResults().getFirst();
         assertEquals(Apply.Action.UPDATED, result.getAction());
         assertEquals("/tags", result.getDiff().getFirst().getField());
-        assertEquals(List.of("GET", "GET"), server.requests.stream().map(r -> r.method()).toList());
+        assertEquals(List.of("GET", "GET", "POST"), server.requests.stream().map(r -> r.method()).toList());
+        assertEquals("/api/v1/monitor/123/validate", server.requests.getLast().path());
+        assertEquals(definition(), server.requests.getLast().json());
     }
 
     @Test
-    void plansCreationWithoutAnIdAndSkipsRemoteValidation() throws Exception {
+    void validatesPlannedCreationWithoutAssigningAnId() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
         var result = task().dryRun(Property.ofValue(true)).build().run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.CREATED, result.getAction());
         assertNull(result.getMonitorId());
-        assertEquals("GET", server.only().method());
+        assertEquals(List.of("GET", "POST"), server.requests.stream().map(r -> r.method()).toList());
+        assertEquals("/api/v1/monitor/validate", server.requests.getLast().path());
+        assertEquals(definition(), server.requests.getLast().json());
+    }
+
+    @Test
+    void dryRunRejectsInvalidNewAndExistingDefinitions() throws Exception {
+        server.reply("GET", "/api/v1/monitor", 200, "[]");
+        server.reply("POST", "/api/v1/monitor/validate", 400, "{\"errors\":[\"Invalid query\"]}");
+        var error = assertThrows(DatadogClient.DatadogException.class, () -> task().dryRun(Property.ofValue(true)).build().run(runContext()));
+        assertEquals(400, error.getStatus());
+        assertTrue(error.getMessage().contains("Invalid query"));
+
+        existing(definition());
+        server.reply("POST", "/api/v1/monitor/123/validate", 400, "{\"errors\":[\"Invalid existing query\"]}");
+        error = assertThrows(DatadogClient.DatadogException.class, () -> task().dryRun(Property.ofValue(true)).build().run(runContext()));
+        assertEquals(400, error.getStatus());
+        assertTrue(error.getMessage().contains("Invalid existing query"));
+        assertTrue(server.requests.stream().allMatch(r -> r.method().equals("GET") || r.method().equals("POST") && r.path().endsWith("/validate")));
     }
 
     @Test
@@ -169,7 +189,6 @@ class ApplyTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> task().from(List.of(definition(), definition())).build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> task().from("https://example.org/input.yaml").build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> task().from(null).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().from("x".repeat(10 * 1024 * 1024 + 1)).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
     }
 
@@ -250,16 +269,16 @@ class ApplyTest extends AbstractDatadogTest {
     }
 
     @Test
-    void diffFiltersUrlsAndCredentialFields() throws Exception {
+    void diffPreservesUrlsAndDefinitionFields() throws Exception {
         var desired = definition();
         desired.put("message", "Notify https://hooks.example.org/private-token");
         desired.put("options", Map.of("password", "private-value"));
         server.reply("GET", "/api/v1/monitor", 200, "[]");
         var output = task().from(desired).dryRun(Property.ofValue(true)).build().run(runContext());
         var json = JacksonMapper.ofJson().writeValueAsString(output);
-        assertFalse(json.contains("private-token"));
-        assertFalse(json.contains("private-value"));
-        assertTrue(json.contains("REDACTED"));
+        assertTrue(json.contains("https://hooks.example.org/private-token"));
+        assertTrue(json.contains("private-value"));
+        assertFalse(json.contains("REDACTED"));
     }
 
     @Test

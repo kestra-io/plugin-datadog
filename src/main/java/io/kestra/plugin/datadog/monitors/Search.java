@@ -7,6 +7,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,7 +31,13 @@ import java.util.Map;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Search Datadog monitors with facets", description = "Searches the monitor search endpoint and returns facet counts from the first page. Reads pages up to maxResults. Needs monitors_read. Search rows are summaries; use Get for full definitions.")
+@Schema(
+    title = "Search Datadog monitors with facets",
+    description = """
+        Searches the monitor search endpoint and returns facet counts from the first page.
+        Reads pages up to maxResults. Needs monitors_read. Search rows are summaries; use Get for full definitions.
+        """
+)
 @Plugin(examples = @Example(title = "Find alerting production monitors", full = true, code = """
     id: search_monitors
     namespace: company.observability
@@ -42,7 +49,7 @@ import java.util.Map;
         query: "tag:env:prod status:alert"
         fetchType: STORE
     """))
-public class Search extends AbstractMonitorTask implements RunnableTask<Search.Output> {
+public class Search extends AbstractDatadogTask implements RunnableTask<Search.Output> {
     @Schema(title = "Monitor search query")
     @PluginProperty(group = "main")
     private Property<String> query;
@@ -61,20 +68,19 @@ public class Search extends AbstractMonitorTask implements RunnableTask<Search.O
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
             var rLimit = context.render(maxResults).as(Integer.class).orElse(1000);
-            var include = includeSecrets(context);
             var params = DatadogClient.query();
             context.render(query).as(String.class).ifPresent(value -> params.put("query", value));
             context.render(sort).as(String.class).ifPresent(value -> params.put("sort", value));
             var pageSize = Math.min(100, rLimit);
             params.put("per_page", pageSize);
-            List<Map<String, Object>> rows = new ArrayList<>();
+            var rows = new ArrayList<Map<String, Object>>();
             var counts = Map.<String, Object>of();
             var metadata = Map.<String, Object>of();
             for (var page = 0; rows.size() < rLimit; page++) {
                 params.put("page", page);
                 var answer = client.get("/api/v1/monitor/search", params).map();
                 if (page == 0) {
-                    counts = answer.get("counts") instanceof Map<?, ?> map ? MonitorIO.redactMap(MonitorDefinitions.object(map), include) : Map.of();
+                    counts = answer.get("counts") instanceof Map<?, ?> map ? MonitorDefinitions.object(map) : Map.of();
                     metadata = answer.get("metadata") instanceof Map<?, ?> map ? MonitorDefinitions.object(map) : Map.of();
                 }
                 if (!(answer.get("monitors") instanceof List<?> monitors)) {
@@ -85,7 +91,7 @@ public class Search extends AbstractMonitorTask implements RunnableTask<Search.O
                         throw new IllegalStateException("Datadog search returned a non-object monitor");
                     }
                     if (rows.size() < rLimit) {
-                        rows.add(MonitorIO.redactMap(MonitorDefinitions.object(map), include));
+                        rows.add(MonitorDefinitions.object(map));
                     }
                 }
                 if (monitors.size() < pageSize || (metadata.get("page_count") instanceof Number pages && page + 1 >= pages.intValue())) {

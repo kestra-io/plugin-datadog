@@ -7,6 +7,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
@@ -20,7 +21,9 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +33,15 @@ import java.util.Map;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Export Datadog monitor definitions", description = "Writes monitor definition fields unchanged to ION or YAML in internal storage, removing known server-only fields. Needs monitors_read. Fails if maxMonitors would truncate the export. ION is accepted by Apply after adding a unique management tag to each unmanaged monitor. YAML is for editing or version control. Monitor messages and URLs are preserved.")
+@Schema(
+    title = "Export Datadog monitor definitions",
+    description = """
+        Writes monitor definition fields unchanged to ION or YAML in internal storage, removing known
+        server-only fields. Needs monitors_read. Fails if maxMonitors would truncate the export.
+        ION is accepted by Apply after adding a unique management tag to each unmanaged monitor.
+        YAML is for editing or version control. Monitor messages and URLs are preserved.
+        """
+)
 @Plugin(examples = @Example(title = "Export production monitors to YAML", full = true, code = """
     id: export_monitors
     namespace: company.observability
@@ -76,7 +87,17 @@ public class Export extends AbstractDatadogTask implements RunnableTask<Export.O
             var yaml = rFetchType == FetchType.STORE && rFormat == Format.YAML;
             var result = DatadogFetch.apply(context, yaml ? FetchType.NONE : rFetchType, rows);
             return Output.builder().definitions(result.rows()).row(result.row())
-                .uri(yaml ? DatadogFetch.storeDocument(context, rows, true) : result.uri()).size(result.size()).build();
+                .uri(yaml ? storeYaml(context, rows) : result.uri()).size(result.size()).build();
+        }
+    }
+
+    private URI storeYaml(RunContext context, List<Map<String, Object>> rows) throws IOException {
+        var path = context.workingDir().createTempFile(".yaml");
+        try {
+            JacksonMapper.ofYaml().writeValue(path.toFile(), rows);
+            return context.storage().putFile(path.toFile());
+        } finally {
+            Files.deleteIfExists(path);
         }
     }
 

@@ -17,8 +17,8 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Datadog operationId: UpdateMonitor. */
 @SuperBuilder
@@ -26,7 +26,13 @@ import java.util.LinkedHashMap;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Update one Datadog monitor", description = "Updates the supplied definition fields of one monitor by id. Needs monitors_write. A missing monitor fails unless ignoreNotFound is true. Nested options follow Datadog update semantics.")
+@Schema(
+    title = "Update one Datadog monitor",
+    description = """
+        Updates the supplied definition fields of one monitor by id. Needs monitors_write.
+        A missing monitor fails unless ignoreNotFound is true. Nested options follow Datadog update semantics.
+        """
+)
 @Plugin(examples = @Example(title = "Change a monitor message", full = true, code = """
     id: update_monitor
     namespace: company.observability
@@ -58,16 +64,15 @@ public class Update extends AbstractDefinitionTask implements RunnableTask<Updat
             var rId = context.render(monitorId).as(Long.class).orElseThrow(() -> new IllegalArgumentException("monitorId is required"));
             var body = definition(context);
             var rIgnore = context.render(ignoreNotFound).as(Boolean.class).orElse(false);
-            var include = includeSecrets(context);
             var rDryRun = context.render(dryRun).as(Boolean.class).orElse(false);
             try {
                 if (rDryRun) {
-                    var proposed = new LinkedHashMap<>(MonitorDefinitions.writable(client.get("/api/v1/monitor/" + rId, Map.of("with_assets", true)).map()));
+                    var proposed = new LinkedHashMap<>(MonitorDefinitions.writable(client.get("/api/v1/monitor/%s".formatted(rId), Map.of("with_assets", true)).map()));
                     proposed.putAll(body);
-                    client.post("/api/v1/monitor/" + rId + "/validate", proposed);
-                    return Output.builder().monitorId(rId).monitor(MonitorIO.redactMap(body, include)).updated(false).dryRun(true).build();
+                    client.post("/api/v1/monitor/%s/validate".formatted(rId), proposed);
+                    return Output.builder().monitorId(rId).monitor(body).updated(false).dryRun(true).build();
                 }
-                var monitor = MonitorOutput.of(client.put("/api/v1/monitor/" + rId, body).map(), include);
+                var monitor = MonitorOutput.of(client.put("/api/v1/monitor/%s".formatted(rId), body).map());
                 return Output.builder().monitorId(monitor.getMonitorId()).monitor(monitor.getMonitor()).updated(true).dryRun(false).build();
             } catch (DatadogClient.DatadogException e) {
                 if (e.getStatus() == 404 && rIgnore) {

@@ -21,7 +21,13 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Validate a Datadog monitor definition", description = "Asks Datadog to validate a complete definition without saving it. Set monitorId to validate an existing monitor. Needs monitors_read. Invalid definitions fail the task.")
+@Schema(
+    title = "Validate a Datadog monitor definition",
+    description = """
+        Asks Datadog to validate a complete definition without saving it.
+        Set monitorId to validate an existing monitor. Needs monitors_read. Invalid definitions fail the task.
+        """
+)
 @Plugin(examples = @Example(title = "Validate before deployment", full = true, code = """
     id: validate_monitor
     namespace: company.observability
@@ -44,7 +50,7 @@ public class Validate extends AbstractDefinitionTask implements RunnableTask<Val
         try (var client = client(context, true)) {
             var rId = context.render(monitorId).as(Long.class).orElse(null);
             var body = definition(context);
-            client.post(rId == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + rId + "/validate", body);
+            client.post(rId == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/%s/validate".formatted(rId), body);
             return Output.builder().valid(true).build();
         }
     }

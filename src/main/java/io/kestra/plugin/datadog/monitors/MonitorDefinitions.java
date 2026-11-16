@@ -49,9 +49,9 @@ public final class MonitorDefinitions {
 
     static String key(Map<String, Object> definition) {
         var raw = definition.get("tags");
-        List<String> keys = raw instanceof List<?> tags
+        var keys = raw instanceof List<?> tags
             ? tags.stream().filter(String.class::isInstance).map(String.class::cast).filter(tag -> tag.startsWith(KEY_PREFIX)).toList()
-            : List.of();
+            : List.<String>of();
         if (keys.size() != 1 || !keys.getFirst().substring(KEY_PREFIX.length()).matches("[a-z0-9][a-z0-9_.-]{0,127}")) {
             throw new IllegalArgumentException("Each Apply definition needs exactly one managed_by:kestra:<key> tag; use 1 to 128 lowercase letters, digits, dots, underscores or hyphens");
         }
@@ -70,7 +70,7 @@ public final class MonitorDefinitions {
     }
 
     static List<Change> diff(Map<String, Object> current, Map<String, Object> desired) {
-        List<Change> result = new ArrayList<>();
+        var result = new ArrayList<Change>();
         compare("", writable(current), writable(desired), result);
         return result;
     }
@@ -78,7 +78,7 @@ public final class MonitorDefinitions {
     private static void compare(String path, Map<String, Object> current, Map<String, Object> desired, List<Change> result) {
         desired.forEach((key, after) -> {
             var before = current.get(key);
-            var field = path + "/" + key.replace("~", "~0").replace("/", "~1");
+            var field = "%s/%s".formatted(path, key.replace("~", "~0").replace("/", "~1"));
             if (after instanceof Map<?, ?> map) {
                 compare(field, before instanceof Map<?, ?> old ? object(old) : Map.of(), object(map), result);
             } else if (!equivalent(before, after)) {

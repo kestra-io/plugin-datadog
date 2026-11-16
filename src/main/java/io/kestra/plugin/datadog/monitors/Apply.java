@@ -8,7 +8,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -21,7 +21,6 @@ import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,7 +33,17 @@ import java.util.Map;
 @NoArgsConstructor
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
-@Schema(title = "Apply Datadog monitors from code", description = "Reconciles definitions using one managed_by:kestra:<key> tag per monitor. Reports CREATED, UPDATED or UNCHANGED with a field diff. Only supplied writable fields are managed. Tag order is significant. Duplicate keys fail. Needs monitors_read and monitors_write. Run serially for each key: the API has no atomic upsert. A missing monitor during update fails without recreation. A batch is not transactional.")
+@Schema(
+    title = "Apply Datadog monitors from code",
+    description = """
+        Reconciles definitions using one managed_by:kestra:<key> tag per monitor.
+        Reports CREATED, UPDATED or UNCHANGED with a field diff. Only supplied writable fields are managed.
+        Tag order is significant. Duplicate keys fail. Needs monitors_read and monitors_write for writes.
+        Dry runs need monitors_read and validate definitions without persisting changes.
+        Run serially for each key: the API has no atomic upsert. A missing monitor during update fails
+        without recreation. A batch is not transactional.
+        """
+)
 @Plugin(examples = @Example(title = "Preview a monitor change", full = true, code = """
     id: apply_monitors
     namespace: company.observability
@@ -55,15 +64,20 @@ import java.util.Map;
               thresholds:
                 critical: 80
     """))
-public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Output>, Data.From {
-    private static final int MAX_BYTES = 10 * 1024 * 1024;
-
+public class Apply extends AbstractDatadogTask implements RunnableTask<Apply.Output>, Data.From {
     @NotNull
-    @Schema(title = Data.From.TITLE, description = Data.From.DESCRIPTION + " Each monitor needs one managed_by:kestra:<key> tag. Maximum 1000 definitions and 10 MiB. Use Export with format ION for a file input.", anyOf = {String.class, List.class, Map.class})
+    @Schema(title = Data.From.TITLE, description = Data.From.DESCRIPTION + """
+
+        Each monitor needs one managed_by:kestra:<key> tag. Maximum 1000 definitions.
+        Use Export with format ION for a file input.
+        """, anyOf = {String.class, List.class, Map.class})
     @PluginProperty(dynamic = true, group = "main")
     @ToString.Exclude
     private Object from;
-    @Schema(title = "Dry run", description = "False by default. Uses GET requests to compute a diff without writing or calling remote validation. Actions describe proposed writes.")
+    @Schema(title = "Dry run", description = """
+        False by default. Computes a diff and asks Datadog to validate each definition without creating
+        or updating monitors. Actions describe proposed writes. Invalid definitions fail the dry run.
+        """)
     @PluginProperty(group = "advanced")
     private Property<Boolean> dryRun;
     @Builder.Default
@@ -75,9 +89,8 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
     public Output run(RunContext context) throws Exception {
         try (var client = client(context, true)) {
             var desired = read(context);
-            var rPreview = context.render(dryRun).as(Boolean.class).orElse(false);
-            var include = includeSecrets(context);
-            List<Plan> plans = new ArrayList<>();
+            var rDryRun = context.render(dryRun).as(Boolean.class).orElse(false);
+            var plans = new ArrayList<Plan>();
             // Finish all local validation, discovery and remote validation before any persisted write.
             for (var definition : desired) {
                 var key = MonitorDefinitions.key(definition);
@@ -89,13 +102,13 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
                 }
                 var matches = candidates.stream().filter(row -> row.get("tags") instanceof List<?> tags && tags.contains(key)).toList();
                 if (matches.size() > 1) {
-                    throw new IllegalStateException("More than one monitor has the management key " + key);
+                    throw new IllegalStateException("More than one monitor has the management key %s".formatted(key));
                 }
                 Long id = null;
                 var current = Map.<String, Object>of();
                 if (!matches.isEmpty()) {
-                    id = MonitorOutput.of(matches.getFirst(), true).getMonitorId();
-                    current = client.get("/api/v1/monitor/" + id, Map.of("with_assets", true)).map();
+                    id = MonitorOutput.of(matches.getFirst()).getMonitorId();
+                    current = client.get("/api/v1/monitor/%s".formatted(id), Map.of("with_assets", true)).map();
                     if (!(current.get("tags") instanceof List<?> tags) || !tags.contains(key)) {
                         throw new IllegalStateException("The monitor management key changed during Apply discovery");
                     }
@@ -103,37 +116,29 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
                 var changes = MonitorDefinitions.diff(current, definition);
                 var action = id == null ? Action.CREATED : changes.isEmpty() ? Action.UNCHANGED : Action.UPDATED;
                 var body = MonitorDefinitions.merge(MonitorDefinitions.writable(current), definition);
-                if (!rPreview) {
-                    client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/" + id + "/validate", body);
-                }
+                client.post(id == null ? "/api/v1/monitor/validate" : "/api/v1/monitor/%s/validate".formatted(id), body);
                 plans.add(new Plan(key, id, action, body, changes));
             }
 
-            List<Result> results = new ArrayList<>();
+            var results = new ArrayList<Result>();
             for (var plan : plans) {
                 var id = plan.id();
-                if (!rPreview && plan.action() != Action.UNCHANGED) {
+                if (!rDryRun && plan.action() != Action.UNCHANGED) {
                     var response = id == null
                         ? client.post("/api/v1/monitor", plan.body()).map()
-                        : client.put("/api/v1/monitor/" + id, plan.body()).map();
-                    id = MonitorOutput.of(response, true).getMonitorId();
+                        : client.put("/api/v1/monitor/%s".formatted(id), plan.body()).map();
+                    id = MonitorOutput.of(response).getMonitorId();
                 }
-                var filtered = plan.changes().stream().map(change -> MonitorDefinitions.Change.builder()
-                    .field(change.getField()).before(MonitorIO.redactField(change.getField(), change.getBefore(), include))
-                    .after(MonitorIO.redactField(change.getField(), change.getAfter(), include)).build()).toList();
-                results.add(Result.builder().key(plan.key()).monitorId(id).action(plan.action()).diff(filtered).build());
+                results.add(Result.builder().key(plan.key()).monitorId(id).action(plan.action()).diff(plan.changes()).build());
             }
             var result = DatadogFetch.apply(context, context.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH), results);
-            return Output.builder().results(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).dryRun(rPreview).build();
+            return Output.builder().results(result.rows()).row(result.row()).uri(result.uri()).size(result.size()).dryRun(rDryRun).build();
         }
     }
 
     private List<Map<String, Object>> read(RunContext context) throws Exception {
         if (from == null) {
             throw new IllegalArgumentException("from is required");
-        }
-        if (from instanceof String text && text.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) {
-            throw new IllegalArgumentException("Definitions exceed 10 MiB");
         }
         List<Map<String, Object>> rows;
         try {
@@ -144,14 +149,9 @@ public class Apply extends AbstractMonitorTask implements RunnableTask<Apply.Out
         if (rows.isEmpty() || rows.size() > 1000) {
             throw new IllegalArgumentException("Give between 1 and 1000 monitor definitions");
         }
-        List<Map<String, Object>> result = new ArrayList<>();
+        var result = new ArrayList<Map<String, Object>>();
         var keys = new HashSet<String>();
-        var bytes = 0;
         for (var row : rows) {
-            bytes += JacksonMapper.ofJson().writeValueAsBytes(row).length;
-            if (bytes > MAX_BYTES) {
-                throw new IllegalArgumentException("Definitions exceed 10 MiB");
-            }
             var definition = MonitorDefinitions.validate(row);
             if (!keys.add(MonitorDefinitions.key(definition))) {
                 throw new IllegalArgumentException("Apply definitions contain a duplicate management key");

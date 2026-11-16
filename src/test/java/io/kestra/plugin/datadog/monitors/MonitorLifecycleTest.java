@@ -64,8 +64,11 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     void createsDefinitionAndReturnsId() throws Exception {
         var response = ApplyTest.definition();
         response.put("id", 123);
+        response.put("message", "Runbook https://example.org/runbook");
         server.reply("POST", "/api/v1/monitor", 200, JacksonMapper.ofJson().writeValueAsString(response));
-        assertEquals(123L, create().build().run(runContext()).getMonitorId());
+        var output = create().build().run(runContext());
+        assertEquals(123L, output.getMonitorId());
+        assertEquals(response, output.getMonitor());
         assertEquals(ApplyTest.definition(), server.only().json());
         assertEquals(APP_KEY, server.only().header("DD-APPLICATION-KEY"));
     }
@@ -101,14 +104,13 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
-    void getUsesFlagsAndFiltersSensitiveOutputUnlessOptedIn() throws Exception {
-        server.reply("GET", "/api/v1/monitor/123", 200, "{\"id\":123,\"type\":\"query alert\",\"query\":\"test\",\"message\":\"https://hooks.example.org/value\",\"api_key\":\"private-value\"}");
+    void getUsesFlagsAndPreservesDatadogOutput() throws Exception {
+        var response = Map.of("id", 123, "type", "query alert", "query", "test", "message", "https://hooks.example.org/value", "api_key", "response-value");
+        server.reply("GET", "/api/v1/monitor/123", 200, JacksonMapper.ofJson().writeValueAsString(response));
         var output = get().withAssets(Property.ofValue(true)).withDowntimes(Property.ofValue(true)).build().run(runContext());
-        assertEquals("[REDACTED]", output.getMonitor().get("api_key"));
-        assertEquals("[REDACTED_URL]", output.getMonitor().get("message"));
+        assertEquals(response, output.getMonitor());
         assertTrue(server.only().query().contains("with_assets=true"));
         assertTrue(server.only().query().contains("with_downtimes=true"));
-        assertEquals("private-value", get().includeSecrets(Property.ofValue(true)).build().run(runContext()).getMonitor().get("api_key"));
     }
 
     @Test
@@ -142,6 +144,17 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/monitor/can_delete", 409, JacksonMapper.ofJson().writeValueAsString(response));
         assertEquals(response, canDelete().build().run(runContext()).getResult());
         assertEquals("GET", server.only().method());
+    }
+
+    @Test
+    void deletionCheckPreservesClientErrorDetails() throws Exception {
+        server.reply("GET", "/api/v1/monitor/can_delete", 403, "{\"errors\":[\"Missing monitors_read scope\"]}");
+        var error = assertThrows(DatadogClient.DatadogException.class, () -> canDelete().build().run(runContext()));
+        assertEquals(403, error.getStatus());
+        assertTrue(error.getMessage().contains("Missing monitors_read scope"));
+        assertTrue(error.getMessage().contains("Check the `apiKey` and the `appKey`"));
+        assertFalse(error.getMessage().contains(API_KEY));
+        assertFalse(error.getMessage().contains(APP_KEY));
     }
 
     @Test
@@ -199,7 +212,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     @Test
     void searchPagesAndFacetsAreNotSummed() throws Exception {
         var rows = IntStream.range(0, 100).mapToObj(i -> Map.of("id", i, "name", "CPU " + i, "type", "query alert", "status", "Alert")).toList();
-        var facets = Map.of("status", List.of(Map.of("name", "Alert", "count", 101)));
+        var facets = Map.of("tag", List.of(Map.of("name", "runbook:https://example.org/runbook", "count", 101)));
         server.reply("GET", "/api/v1/monitor/search", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("monitors", rows, "counts", facets, "metadata", Map.of("page_count", 2, "total_count", 101))));
         server.reply("GET", "/api/v1/monitor/search", 200, "{\"monitors\":[{\"id\":100,\"name\":\"CPU 100\"}],\"metadata\":{\"page_count\":2}}");
         var output = search().query(Property.ofValue("status:alert")).sort(Property.ofValue("name,asc")).build().run(runContext());
@@ -213,12 +226,14 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     @Test
     void searchCanStoreRowsAndRejectsUnexpectedAnswers() throws Exception {
         var context = runContext();
-        server.reply("GET", "/api/v1/monitor/search", 200, "{\"monitors\":[{\"id\":123}]}");
+        var row = Map.of("id", 123, "message", "https://example.org/runbook", "token", "response-value");
+        server.reply("GET", "/api/v1/monitor/search", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("monitors", List.of(row))));
         var output = search().fetchType(Property.ofValue(FetchType.STORE)).build().run(context);
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
-            assertEquals(123, JacksonMapper.ofIon().readValue(input, Map.class).get("id"));
+            assertEquals(row, JacksonMapper.ofIon().readValue(input, Map.class));
         }
+        assertEquals(row, search().fetchType(Property.ofValue(FetchType.FETCH_ONE)).build().run(context).getRow());
         server.reply("GET", "/api/v1/monitor/search", 200, "{}");
         assertThrows(IllegalStateException.class, () -> search().build().run(context));
     }
@@ -242,7 +257,8 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         var applied = Apply.builder().id(IdUtils.create()).type(Apply.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
             .apiUrl(Property.ofValue(server.url())).from(output.getUri().toString()).dryRun(Property.ofValue(true)).build().run(context);
         assertEquals(Apply.Action.UNCHANGED, applied.getResults().getFirst().getAction());
-        assertTrue(server.requests.stream().allMatch(r -> r.method().equals("GET")));
+        assertTrue(server.requests.stream().allMatch(r -> r.method().equals("GET") || r.method().equals("POST") && r.path().endsWith("/validate")));
+        assertEquals(desired, server.requests.getLast().json());
 
         var yaml = export().format(Property.ofValue(Export.Format.YAML)).build().run(context);
         try (var input = context.storage().getFile(yaml.getUri())) {

@@ -67,9 +67,9 @@ Asks Datadog to validate a definition without saving it. Set `monitorId` to vali
 
 Reconciles monitors by exactly one `managed_by:kestra:<key>` tag per definition. A key uses 1 to 128 lowercase letters, digits, dots, underscores or hyphens. Duplicate input keys and multiple existing monitors with the same key fail before any write.
 
-`from` is Kestra's `Data` input: a map, a list of maps, a JSON string or an ION file URI. Inline values are rendered through Kestra; file contents are data and are not rendered as expressions. The input is limited to 1000 definitions and 10 MiB of decoded JSON data, with a 30-second read timeout.
+`from` is Kestra's `Data` input: a map, a list of maps, a JSON string or an ION file URI. Inline values are rendered through Kestra; file contents are data and are not rendered as expressions. The input is limited to 1000 definitions with a 30-second read timeout.
 
-`dryRun: true` uses GET requests only and returns proposed `CREATED`, `UPDATED` or `UNCHANGED` actions with field diffs. A proposed creation has no id yet. Normal runs validate every definition with Datadog before the first persisted write. Only supplied definition fields are managed and unowned nested option fields are retained. Numeric representations such as 80 and 80.0 compare equal. Tag order is significant.
+`dryRun: true` reads current monitors and validates every proposed definition with Datadog without creating or updating monitors. Invalid definitions fail the preview. The output reports proposed `CREATED`, `UPDATED` or `UNCHANGED` actions with field diffs. A proposed creation has no id yet. Normal runs also validate every definition before the first persisted write. Only supplied definition fields are managed and unowned nested option fields are retained. Numeric representations such as 80 and 80.0 compare equal. Tag order is significant.
 
 Run serially for each key because Datadog has no atomic upsert. A missing monitor during an update fails without recreation. A batch is not transactional. `fetchType` selects full results, the first result, an ION result file or a count.
 
@@ -104,7 +104,7 @@ Exports definition fields while removing known server-only fields. Messages, URL
 
 `Configuration` reads `NOTIFICATION_RULES`, `POLICIES` or `TEMPLATES` from the v2 API. Set `resourceId` to read one object or omit it to list that resource. Notification rules are paged. Policy and template lists have no paging parameters. Exceeding `maxResults` fails instead of truncating the result. Both tasks support `fetchType`.
 
-New read tasks and Apply diffs filter credential-like fields and HTTP URLs by default; `includeSecrets: true` preserves those values in execution output. This does not apply to Export, List or StateChange, which preserve monitor definitions and messages.
+Monitor tasks return Datadog data and Apply diffs unchanged, including URLs and notification messages. Authentication keys are sent in request headers and excluded from task string output.
 
 ### downtimes.Create and downtimes.Cancel
 
