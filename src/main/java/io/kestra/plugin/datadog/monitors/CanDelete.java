@@ -9,8 +9,6 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.DatadogClient;
 import io.kestra.plugin.datadog.NumericIds;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -44,7 +42,7 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
     @NotNull
     @Schema(title = "Monitor ids", description = "A non-empty list of positive monitor ids.")
     @PluginProperty(group = "main")
-    private Property<@NotEmpty List<@NotNull @Min(1) Long>> monitorIds;
+    private Property<List<Long>> monitorIds;
 
     @Override
     public Output run(RunContext context) throws Exception {
@@ -52,6 +50,9 @@ public class CanDelete extends AbstractMonitorTask implements RunnableTask<CanDe
             var rIds = NumericIds.render(context, monitorIds, "monitorIds");
             if (rIds.isEmpty()) {
                 throw new IllegalArgumentException("monitorIds must not be empty");
+            }
+            if (rIds.stream().anyMatch(id -> id < 1)) {
+                throw new IllegalArgumentException("monitorIds must contain positive integers");
             }
             var query = rIds.stream().map(String::valueOf).collect(Collectors.joining(","));
             var response = client.exchange("GET", client.apiBase(), "/api/v1/monitor/can_delete", Map.of("monitor_ids", query), null, false);

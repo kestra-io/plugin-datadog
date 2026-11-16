@@ -4,6 +4,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
@@ -144,6 +145,15 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
+    void deserializedDeletionCheckAcceptsIntegerIds() throws Exception {
+        var task = YamlParser.parse(JacksonMapper.ofJson().writeValueAsString(canDelete().build()), CanDelete.class);
+        server.reply("GET", "/api/v1/monitor/can_delete", 200, "{\"data\":{\"ok\":[123,124]}}");
+        var output = task.run(runContextFactory.of(task, Map.of()));
+        assertEquals(Map.of("ok", List.of(123, 124)), output.getResult().get("data"));
+        assertEquals("monitor_ids=123,124", URLDecoder.decode(server.only().query(), StandardCharsets.UTF_8));
+    }
+
+    @Test
     void dryRunsValidateWithoutPersistingChanges() throws Exception {
         var created = create().dryRun(Property.ofValue(true)).build().run(runContext());
         assertTrue(created.getDryRun());
@@ -265,11 +275,12 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
                 get().monitorId(Property.ofValue(id)).build(),
                 update().monitorId(Property.ofValue(id)).build(),
                 delete().monitorId(Property.ofValue(id)).build(),
-                validate().monitorId(Property.ofValue(id)).build(),
-                canDelete().monitorIds(Property.ofValue(List.of(id))).build());
+                validate().monitorId(Property.ofValue(id)).build());
             for (var task : tasks) {
                 assertThrows(jakarta.validation.ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
             }
+            var canDelete = canDelete().monitorIds(Property.ofValue(List.of(id))).build();
+            assertThrows(IllegalArgumentException.class, () -> canDelete.run(runContextFactory.of(canDelete, Map.of())));
         }
         for (var limit : new int[]{0, 10001}) {
             var tasks = List.of(search().maxResults(Property.ofValue(limit)).build(), export().maxMonitors(Property.ofValue(limit)).build());
