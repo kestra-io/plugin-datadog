@@ -14,19 +14,19 @@ class DatadogClientServerTest extends AbstractDatadogTest {
     @Test
     void keepsTheTimeDatadogGivesInItsDateHeader() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        try (DatadogClient client = DatadogClient.create(runContext(), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true)) {
+        try (var client = DatadogClient.create(runContext(), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true)) {
             assertTrue(client.serverTime().isEmpty(), "nothing before the first answer");
             client.get("/api/v1/monitor", Map.of());
-            Instant time = client.serverTime().orElseThrow();
-            assertTrue(Duration.between(time, Instant.now()).abs().getSeconds() < 5, "the mock runs on this clock: " + time);
+            var time = client.serverTime().orElseThrow(() -> new AssertionError("Expected a server time after the monitor response"));
+            assertTrue(Duration.between(time, Instant.now()).abs().getSeconds() < 5, "the mock runs on this clock: %s".formatted(time));
         }
     }
 
     @Test
     void oneConnectionPoolServesAllTheRequestsOfAClient() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, "[]");
-        try (DatadogClient client = DatadogClient.create(runContext(), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true)) {
-            for (int i = 0; i < 3; i++) {
+        try (var client = DatadogClient.create(runContext(), Property.ofValue("k"), Property.ofValue("a"), null, Property.ofValue(server.url()), true)) {
+            for (var i = 0; i < 3; i++) {
                 client.get("/api/v1/monitor", Map.of("page", i));
             }
         }

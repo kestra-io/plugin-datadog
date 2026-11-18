@@ -1,0 +1,64 @@
+package io.kestra.plugin.datadog.monitors;
+
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.datadog.AbstractDatadogTask;
+import io.kestra.plugin.datadog.DatadogClient;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
+
+@SuperBuilder
+@Getter
+@NoArgsConstructor
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true)
+@Schema(
+    title = "Get one Datadog monitor",
+    description = """
+        Reads a monitor definition and state by id. Needs monitors_read. A missing monitor fails the task.
+        """
+)
+@Plugin(examples = @Example(title = "Read a monitor", full = true, code = """
+    id: get_monitor
+    namespace: company.observability
+    tasks:
+      - id: get
+        type: io.kestra.plugin.datadog.monitors.Get
+        apiKey: "{{ secret('DATADOG_API_KEY') }}"
+        appKey: "{{ secret('DATADOG_APP_KEY') }}"
+        monitorId: 123
+        withDowntimes: true
+    """))
+public class Get extends AbstractDatadogTask implements RunnableTask<MonitorOutput> {
+    @NotNull
+    @Schema(title = "Monitor id")
+    @PluginProperty(group = "main")
+    private Property<@Min(1) Long> monitorId;
+    @Schema(title = "Include matching downtimes")
+    @PluginProperty(group = "main")
+    private Property<Boolean> withDowntimes;
+    @Schema(title = "Include monitor assets")
+    @PluginProperty(group = "main")
+    private Property<Boolean> withAssets;
+
+    @Override
+    public MonitorOutput run(RunContext context) throws Exception {
+        try (var client = client(context, true)) {
+            var rId = context.render(monitorId).as(Long.class).orElseThrow(() -> new IllegalArgumentException("monitorId is required"));
+            var params = DatadogClient.query();
+            context.render(withDowntimes).as(Boolean.class).ifPresent(value -> params.put("with_downtimes", value));
+            context.render(withAssets).as(Boolean.class).ifPresent(value -> params.put("with_assets", value));
+            return MonitorOutput.of(client.get("/api/v1/monitor/%s".formatted(rId), params).map());
+        }
+    }
+}

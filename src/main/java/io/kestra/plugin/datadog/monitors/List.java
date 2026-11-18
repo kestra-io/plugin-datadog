@@ -8,8 +8,8 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.datadog.AbstractDatadogTask;
-import io.kestra.plugin.datadog.DatadogFetch;
 import io.kestra.plugin.datadog.DatadogClient;
+import io.kestra.plugin.datadog.DatadogFetch;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -102,10 +102,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var limit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
-        if (limit < 1 || limit > 10_000) {
-            throw new IllegalArgumentException("The Datadog `maxMonitors` must be between 1 and 10000 but was " + limit);
-        }
+        var rLimit = runContext.render(this.maxMonitors).as(Integer.class).orElse(DEFAULT_MAX);
 
         var params = DatadogClient.query();
         runContext.render(this.name).as(String.class).filter(value -> !value.isBlank()).ifPresent(value -> params.put("name", value));
@@ -115,7 +112,7 @@ public class List extends AbstractDatadogTask implements RunnableTask<List.Outpu
 
         java.util.List<Map<String, Object>> monitors;
         try (var client = client(runContext, true)) {
-            monitors = Monitors.collect(client, params, limit);
+            monitors = Monitors.collect(client, params, rLimit);
         }
 
         runContext.logger().info("Datadog returned {} monitor(s)", monitors.size());

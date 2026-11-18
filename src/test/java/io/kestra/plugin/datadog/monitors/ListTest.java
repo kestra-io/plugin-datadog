@@ -1,12 +1,15 @@
 package io.kestra.plugin.datadog.monitors;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -25,16 +28,17 @@ class ListTest extends AbstractDatadogTest {
     }
 
     private static String monitors(int from, int count) {
-        return IntStream.range(from, from + count)
-            .mapToObj(i -> "{\"id\":" + i + ",\"name\":\"m" + i + "\",\"overall_state\":\"Alert\"}")
+        var response = IntStream.range(from, from + count)
+            .mapToObj(i -> "{\"id\":%s,\"name\":\"m%s\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"Alert\"}".formatted(i, i))
             .collect(Collectors.joining(",", "[", "]"));
+        return response;
     }
 
     @Test
     void sendsTheFiltersAndReturnsTheMonitors() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, monitors(1, 2));
 
-        List.Output output = task()
+        var output = task()
             .name(Property.ofValue("orders"))
             .tags(Property.ofValue(java.util.List.of("service:orders", "team:data")))
             .monitorTags(Property.ofValue(java.util.List.of("env:prod")))
@@ -44,7 +48,7 @@ class ListTest extends AbstractDatadogTest {
         var request = server.only();
         assertEquals(API_KEY, request.header("DD-API-KEY"));
         assertEquals(APP_KEY, request.header("DD-APPLICATION-KEY"));
-        String query = URLDecoder.decode(request.query(), StandardCharsets.UTF_8);
+        var query = URLDecoder.decode(request.query(), StandardCharsets.UTF_8);
         assertTrue(query.contains("name=orders"), query);
         assertTrue(query.contains("tags=service:orders,team:data"), query);
         assertTrue(query.contains("monitor_tags=env:prod"), query);
@@ -60,7 +64,7 @@ class ListTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/monitor", 200, monitors(0, 200));
         server.reply("GET", "/api/v1/monitor", 200, monitors(200, 50));
 
-        List.Output output = task().build().run(runContext());
+        var output = task().build().run(runContext());
 
         assertEquals(250, output.getSize());
         assertEquals(2, server.requests.size());
@@ -68,10 +72,21 @@ class ListTest extends AbstractDatadogTest {
     }
 
     @Test
+    void skipsNonObjectRowsWithoutEndingPaginationEarly() throws Exception {
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(IntStream.range(0, 200).mapToObj(i -> "42").collect(Collectors.joining(","))));
+        server.reply("GET", "/api/v1/monitor", 200, "[null,false,\"unexpected\",[],{\"id\":123,\"message\":\"Runbook https://example.org/runbook\"}]");
+        var output = task().build().run(runContext());
+        assertEquals(1, output.getSize());
+        assertEquals(Map.of("id", 123, "message", "Runbook https://example.org/runbook"), output.getMonitors().getFirst());
+        assertEquals(2, server.requests.size());
+        assertTrue(server.requests.getLast().query().contains("page=1"));
+    }
+
+    @Test
     void stopsAtMaxMonitors() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, monitors(0, 200));
 
-        List.Output output = task().maxMonitors(Property.ofValue(120)).build().run(runContext());
+        var output = task().maxMonitors(Property.ofValue(120)).build().run(runContext());
 
         assertEquals(120, output.getSize());
         assertEquals(1, server.requests.size(), "the first page already holds the limit");
@@ -82,7 +97,7 @@ class ListTest extends AbstractDatadogTest {
     void fetchTypeStoreWritesTheMonitorsToInternalStorage() throws Exception {
         server.reply("GET", "/api/v1/monitor", 200, monitors(1, 3));
 
-        List.Output stored = task().fetchType(Property.ofValue(io.kestra.core.models.tasks.common.FetchType.STORE)).build().run(runContext());
+        var stored = task().fetchType(Property.ofValue(FetchType.STORE)).build().run(runContext());
 
         assertEquals(null, stored.getMonitors());
         assertTrue(stored.getUri() != null && stored.getUri().toString().startsWith("kestra://"), String.valueOf(stored.getUri()));
@@ -99,8 +114,10 @@ class ListTest extends AbstractDatadogTest {
     void refusesAnUnexpectedAnswerAndABadLimit() {
         server.reply("GET", "/api/v1/monitor", 200, "{\"not\":\"a list\"}");
         assertThrows(IllegalStateException.class, () -> task().build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxMonitors(Property.ofValue(0)).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().maxMonitors(Property.ofValue(10_001)).build().run(runContext()));
+        for (var limit : new int[]{0, 10_001}) {
+            var task = task().maxMonitors(Property.ofValue(limit)).build();
+            assertThrows(ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
+        }
     }
 
     @Test

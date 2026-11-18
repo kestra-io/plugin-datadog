@@ -1,6 +1,6 @@
 @PluginSubGroup(
     title = "Datadog monitors",
-    description = "A task to list monitors and a trigger that starts a flow when monitors change state.",
+    description = "Validate, apply, export and audit monitors. Read notification rules, policies and templates or trigger flows when monitors change state.",
     categories = {
         PluginSubGroup.PluginCategory.DATA,
         PluginSubGroup.PluginCategory.INFRASTRUCTURE
