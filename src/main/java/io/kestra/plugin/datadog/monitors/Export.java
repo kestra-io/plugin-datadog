@@ -27,7 +27,6 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operationId: ListMonitors. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor
@@ -36,7 +35,7 @@ import java.util.Map;
 @Schema(
     title = "Export Datadog monitor definitions",
     description = """
-        Writes monitor definition fields unchanged to ION or YAML in internal storage, removing known
+        Writes monitor definition fields to ION or YAML in internal storage, removing known
         server-only fields. Needs monitors_read. Fails if maxMonitors would truncate the export.
         ION is accepted by Apply after adding a unique management tag to each unmanaged monitor.
         YAML is for editing or version control. Monitor messages and URLs are preserved.
@@ -81,7 +80,7 @@ public class Export extends AbstractDatadogTask implements RunnableTask<Export.O
             Monitors.join(context.render(monitorTags).asList(String.class)).ifPresent(value -> params.put("monitor_tags", value));
             var monitors = Monitors.collect(client, params, rLimit + 1);
             if (monitors.size() > rLimit) {
-                throw new IllegalStateException("Export exceeds maxMonitors; narrow monitorTags or raise the limit");
+                throw new IllegalStateException("Export exceeds maxMonitors. Narrow monitorTags or raise the limit");
             }
             var rows = monitors.stream().map(MonitorDefinitions::writable).toList();
             var yaml = rFetchType == FetchType.STORE && rFormat == Format.YAML;

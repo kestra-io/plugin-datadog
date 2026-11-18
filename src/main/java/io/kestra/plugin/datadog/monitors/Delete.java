@@ -20,7 +20,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.Map;
 
-/** Datadog operationId: DeleteMonitor. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

@@ -6,6 +6,7 @@ import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -63,18 +64,18 @@ class ConfigurationTest extends AbstractDatadogTest {
         assertThrows(IllegalArgumentException.class, () -> task().resource(null).build().run(runContext()));
         for (var id : List.of(" ", ".", "..")) {
             var error = assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue(id)).build().run(runContext()));
-            assertTrue(error.getMessage().contains("supply a non-blank id"));
+            assertTrue(error.getMessage().contains("Supply a non-blank id"));
             assertTrue(error.getMessage().contains("omit it to list the resource"));
         }
         for (var limit : new int[]{0, 10001}) {
             var task = task().maxResults(Property.ofValue(limit)).build();
-            assertThrows(jakarta.validation.ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
+            assertThrows(ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
         }
         assertTrue(server.requests.isEmpty());
         server.reply("GET", "/api/v2/monitor/policy", 200, "{\"data\":[{\"id\":\"one\"},{\"id\":\"two\"}]}");
         var error = assertThrows(IllegalStateException.class, () -> task().resource(Property.ofValue(Configuration.Resource.POLICIES)).maxResults(Property.ofValue(1)).build().run(runContext()));
         assertTrue(error.getMessage().contains("maxResults (1)"));
-        assertTrue(error.getMessage().contains("select one object with `resourceId` or raise `maxResults`"));
+        assertTrue(error.getMessage().contains("Select one object with `resourceId` or raise `maxResults`"));
     }
 
     @Test

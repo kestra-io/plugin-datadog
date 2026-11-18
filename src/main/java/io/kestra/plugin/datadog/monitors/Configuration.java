@@ -28,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operationIds: GetMonitorNotificationRules, GetMonitorNotificationRule, ListMonitorConfigPolicies, GetMonitorConfigPolicy, ListMonitorUserTemplates and GetMonitorUserTemplate. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor
@@ -78,7 +77,7 @@ public class Configuration extends AbstractDatadogTask implements RunnableTask<C
                 throw new IllegalArgumentException("`maxResults` cannot be used with `resourceId`");
             }
             if (rId != null && (rId.isBlank() || rId.equals(".") || rId.equals(".."))) {
-                throw new IllegalArgumentException("`resourceId` must identify one object; supply a non-blank id other than '.' or '..'. You can also omit it to list the resource");
+                throw new IllegalArgumentException("`resourceId` must identify one object. Supply a non-blank id other than '.' or '..'. You can also omit it to list the resource");
             }
             var rLimit = context.render(maxResults).as(Integer.class).orElse(1000);
             var path = "/api/v2/monitor/%s%s".formatted(rSelected.path, rId == null ? "" : "/%s".formatted(URLEncoder.encode(rId, StandardCharsets.UTF_8)));
@@ -106,7 +105,7 @@ public class Configuration extends AbstractDatadogTask implements RunnableTask<C
                     }
                     rows.add(MonitorDefinitions.object(map));
                     if (rows.size() > rLimit) {
-                        throw new IllegalStateException("Configuration exceeds maxResults (%s); select one object with `resourceId` or raise `maxResults` (maximum 10000)".formatted(rLimit));
+                        throw new IllegalStateException("Configuration exceeds maxResults (%s). Select one object with `resourceId` or raise `maxResults` (maximum 10000)".formatted(rLimit));
                     }
                 }
                 if (rSelected != Resource.NOTIFICATION_RULES || list.size() < (int) params.get("per_page")) {

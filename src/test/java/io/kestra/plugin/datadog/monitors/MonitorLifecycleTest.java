@@ -8,6 +8,7 @@ import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
 import io.kestra.plugin.datadog.DatadogClient;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
@@ -298,7 +299,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
                 delete().monitorId(Property.ofValue(id)).build(),
                 validate().monitorId(Property.ofValue(id)).build());
             for (var task : tasks) {
-                assertThrows(jakarta.validation.ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
+                assertThrows(ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
             }
             var canDelete = canDelete().monitorIds(Property.ofValue(List.of(id))).build();
             assertThrows(IllegalArgumentException.class, () -> canDelete.run(runContextFactory.of(canDelete, Map.of())));
@@ -306,7 +307,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
         for (var limit : new int[]{0, 10001}) {
             var tasks = List.of(search().maxResults(Property.ofValue(limit)).build(), export().maxMonitors(Property.ofValue(limit)).build());
             for (var task : tasks) {
-                assertThrows(jakarta.validation.ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
+                assertThrows(ConstraintViolationException.class, () -> ((RunnableTask<?>) task).run(runContextFactory.of(task, Map.of())), task.getClass().getSimpleName());
             }
         }
         assertTrue(server.requests.isEmpty());

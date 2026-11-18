@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Writable projection and field diff for CreateMonitor, UpdateMonitor and ListMonitors. */
 public final class MonitorDefinitions {
     static final String KEY_PREFIX = "managed_by:kestra:";
     private static final Set<String> SERVER = Set.of("id", "created", "modified", "deleted", "creator", "multi", "overall_state", "overall_state_modified", "state", "matching_downtimes");
@@ -53,7 +52,7 @@ public final class MonitorDefinitions {
             ? tags.stream().filter(String.class::isInstance).map(String.class::cast).filter(tag -> tag.startsWith(KEY_PREFIX)).toList()
             : List.<String>of();
         if (keys.size() != 1 || !keys.getFirst().substring(KEY_PREFIX.length()).matches("[a-z0-9][a-z0-9_.-]{0,127}")) {
-            throw new IllegalArgumentException("Each Apply definition needs exactly one managed_by:kestra:<key> tag; use 1 to 128 lowercase letters, digits, dots, underscores or hyphens");
+            throw new IllegalArgumentException("Each Apply definition needs exactly one managed_by:kestra:<key> tag. Use 1 to 128 lowercase letters, digits, dots, underscores or hyphens");
         }
         return keys.getFirst();
     }
@@ -94,7 +93,7 @@ public final class MonitorDefinitions {
         return Objects.equals(before, after);
     }
 
-    /** Merge managed nested fields so an update does not discard unowned option values. */
+    // Merge managed nested fields so an update does not discard unowned option values.
     static Map<String, Object> merge(Map<String, Object> current, Map<String, Object> desired) {
         var result = new LinkedHashMap<String, Object>(current);
         desired.forEach((key, value) -> {

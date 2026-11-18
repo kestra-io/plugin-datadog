@@ -20,7 +20,6 @@ import lombok.experimental.SuperBuilder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Datadog operationId: UpdateMonitor. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

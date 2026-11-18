@@ -27,7 +27,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
-/** Datadog operationIds: ListMonitors, GetMonitor, ValidateMonitor, ValidateExistingMonitor, CreateMonitor and UpdateMonitor. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor
@@ -98,7 +97,7 @@ public class Apply extends AbstractDatadogTask implements RunnableTask<Apply.Out
                 params.put("monitor_tags", key);
                 var candidates = Monitors.collect(client, params, 10001);
                 if (candidates.size() > 10000) {
-                    throw new IllegalStateException("Apply lookup exceeded 10000 monitors; narrow the management key");
+                    throw new IllegalStateException("Apply lookup exceeded 10000 monitors. Narrow the management key");
                 }
                 var matches = candidates.stream().filter(row -> row.get("tags") instanceof List<?> tags && tags.contains(key)).toList();
                 if (matches.size() > 1) {
@@ -141,7 +140,7 @@ public class Apply extends AbstractDatadogTask implements RunnableTask<Apply.Out
         try {
             rows = Data.from(from).read(context).take(1001).collectList().block(Duration.ofSeconds(30));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot read monitor definitions from `from`; supply a map, a list of maps, valid JSON or an accessible ION file URI", e);
+            throw new IllegalArgumentException("Cannot read monitor definitions from `from`. Supply a map, a list of maps, valid JSON or an accessible ION file URI", e);
         }
         if (rows.isEmpty() || rows.size() > 1000) {
             throw new IllegalArgumentException("Give between 1 and 1000 monitor definitions");
@@ -150,8 +149,9 @@ public class Apply extends AbstractDatadogTask implements RunnableTask<Apply.Out
         var keys = new HashSet<String>();
         for (var row : rows) {
             var definition = MonitorDefinitions.validate(row);
-            if (!keys.add(MonitorDefinitions.key(definition))) {
-                throw new IllegalArgumentException("Apply definitions contain a duplicate management key");
+            var key = MonitorDefinitions.key(definition);
+            if (!keys.add(key)) {
+                throw new IllegalArgumentException("Two Apply definitions use the management key %s. Give each monitor a unique managed_by:kestra:<key> tag.".formatted(key));
             }
             result.add(definition);
         }

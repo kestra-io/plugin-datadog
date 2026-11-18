@@ -187,7 +187,8 @@ class ApplyTest extends AbstractDatadogTest {
         for (var input : List.of("[]", "null", "[42]", "{broken", "---\na: b\n---\nc: d", "{\"name\":\"cpu\"}")) {
             assertThrows(IllegalArgumentException.class, () -> task().from(input).build().run(runContext()), input);
         }
-        assertThrows(IllegalArgumentException.class, () -> task().from(List.of(definition(), definition())).build().run(runContext()));
+        var duplicate = assertThrows(IllegalArgumentException.class, () -> task().from(List.of(definition(), definition())).build().run(runContext()));
+        assertTrue(duplicate.getMessage().contains(TAG), duplicate.getMessage());
         assertThrows(IllegalArgumentException.class, () -> task().from("https://example.org/input.yaml").build().run(runContext()));
         assertThrows(IllegalArgumentException.class, () -> task().from(null).build().run(runContext()));
         assertTrue(server.requests.isEmpty());
@@ -198,7 +199,7 @@ class ApplyTest extends AbstractDatadogTest {
         var error = assertThrows(IllegalArgumentException.class, () -> task().from("{broken").build().run(runContext()));
         assertNotNull(error.getCause());
         assertNotNull(error.getCause().getCause());
-        assertTrue(error.getMessage().contains("supply a map, a list of maps, valid JSON or an accessible ION file URI"));
+        assertTrue(error.getMessage().contains("Supply a map, a list of maps, valid JSON or an accessible ION file URI"));
     }
 
     @Test
@@ -264,7 +265,7 @@ class ApplyTest extends AbstractDatadogTest {
         assertNull(output.getResults());
         assertEquals(1, output.getSize());
         try (var input = context.storage().getFile(output.getUri())) {
-            Map<?, ?> row = JacksonMapper.ofIon().readValue(input, Map.class);
+            var row = JacksonMapper.ofIon().readValue(input, Map.class);
             assertEquals("CREATED", row.get("action"));
             assertEquals(TAG, row.get("key"));
         }

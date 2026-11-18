@@ -17,7 +17,6 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-/** Datadog operationId: GetMonitor. */
 @SuperBuilder
 @Getter
 @NoArgsConstructor

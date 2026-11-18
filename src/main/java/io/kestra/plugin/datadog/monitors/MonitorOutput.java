@@ -12,7 +12,7 @@ import java.util.Map;
 public class MonitorOutput implements Output {
     @Schema(title = "Monitor id")
     private final Long monitorId;
-    @Schema(title = "Monitor", description = "Datadog monitor response returned unchanged.")
+    @Schema(title = "Monitor", description = "Datadog monitor response.")
     private final Map<String, Object> monitor;
     @Schema(title = "Dry run", description = "True when Create validated a definition without saving it. No monitor id is assigned then.")
     private final Boolean dryRun;

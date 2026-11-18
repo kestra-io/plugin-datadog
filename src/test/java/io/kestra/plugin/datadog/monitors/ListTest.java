@@ -4,10 +4,12 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.datadog.AbstractDatadogTest;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -75,7 +77,7 @@ class ListTest extends AbstractDatadogTest {
         server.reply("GET", "/api/v1/monitor", 200, "[null,false,\"unexpected\",[],{\"id\":123,\"message\":\"Runbook https://example.org/runbook\"}]");
         var output = task().build().run(runContext());
         assertEquals(1, output.getSize());
-        assertEquals(java.util.Map.of("id", 123, "message", "Runbook https://example.org/runbook"), output.getMonitors().getFirst());
+        assertEquals(Map.of("id", 123, "message", "Runbook https://example.org/runbook"), output.getMonitors().getFirst());
         assertEquals(2, server.requests.size());
         assertTrue(server.requests.getLast().query().contains("page=1"));
     }
@@ -114,7 +116,7 @@ class ListTest extends AbstractDatadogTest {
         assertThrows(IllegalStateException.class, () -> task().build().run(runContext()));
         for (var limit : new int[]{0, 10_001}) {
             var task = task().maxMonitors(Property.ofValue(limit)).build();
-            assertThrows(jakarta.validation.ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, java.util.Map.of())));
+            assertThrows(ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
         }
     }
 

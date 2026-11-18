@@ -102,7 +102,7 @@ Exports definition fields while removing known server-only fields. The default `
 
 `Configuration` reads `NOTIFICATION_RULES`, `POLICIES` or `TEMPLATES` from the v2 API. Set `resourceId` to read one object or omit it to list that resource. Notification rules are paged. Policy and template lists have no paging parameters. Exceeding `maxResults` fails instead of truncating the result. Both tasks support `fetchType`.
 
-Monitor tasks return Datadog data and Apply diffs unchanged, including URLs and notification messages. Authentication keys are sent in request headers and excluded from task string output.
+Authentication keys are sent in request headers and excluded from task string output.
 
 ### downtimes.Create and downtimes.Cancel
 

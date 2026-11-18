@@ -81,7 +81,7 @@ See [the plugin documentation](src/main/resources/doc/io.kestra.plugin.datadog.m
 
 `Export` defaults to ION, which can feed `Apply.from` directly. `format: YAML` produces a document for editing or version control. Exports remove known server-only fields.
 
-Monitor tasks return Datadog data and Apply diffs unchanged. Authentication keys are sent in request headers and excluded from task string output.
+Authentication keys are sent in request headers and excluded from task string output.
 
 ## Example
 
