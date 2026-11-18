@@ -43,8 +43,6 @@ Runs a metrics query over a window and returns the series, with `seriesCount` an
 
 Lists monitors by name, tags, monitor tags or group state, page by page up to `maxMonitors` (1000 by default). `fetchType` returns them in the output (`FETCH`), as the first one (`FETCH_ONE`), in internal storage (`STORE`) or only as a count (`NONE`). `groupStates` is applied by Datadog and selects monitors that have a group in that state, which is not always the monitor's `overall_state`.
 
-Monitor data is returned unchanged, including runbook URLs and notification messages.
-
 ### monitors.Create, monitors.Update and monitors.Get
 
 `Create` sends one `definition` object using Datadog's API field names. `Update` sends only the supplied fields to one positive `monitorId`; nested options follow Datadog's update semantics. `Get` reads one monitor and can include assets or matching downtimes. Returned monitor ids can feed subsequent tasks. `Update.ignoreNotFound: true` makes only HTTP 404 a no-op.
@@ -61,7 +59,7 @@ Definitions are passed to Datadog without a local list of accepted monitor types
 
 ### monitors.Validate
 
-Asks Datadog to validate a definition without saving it. Set `monitorId` to validate a proposal for an existing monitor. Invalid definitions fail with Datadog's error. Log monitor validation also needs the log access Datadog requires for that monitor type.
+Asks Datadog to validate a definition without saving it. Set `monitorId` to validate a proposal for an existing monitor. Success has no output; invalid definitions fail with Datadog's error. Log monitor validation also needs the log access Datadog requires for that monitor type.
 
 ### monitors.Apply
 
@@ -94,7 +92,7 @@ tasks:
 
 ### monitors.Export
 
-Exports definition fields while removing known server-only fields. Messages, URLs and Datadog notification templates are preserved. The default `format: ION` has one definition per row and can feed `Apply.from`. Set `format: YAML` for an editable document; load edited definitions as structured `from` data or convert them to ION before applying. Each monitor needs a management tag before Apply can reconcile it.
+Exports definition fields while removing known server-only fields. The default `format: ION` has one definition per row and can feed `Apply.from`. Set `format: YAML` for an editable document; load edited definitions as structured `from` data or convert them to ION before applying. Each monitor needs a management tag before Apply can reconcile it.
 
 `fetchType` defaults to `STORE`. `FETCH`, `FETCH_ONE` and `NONE` return definitions, one definition or a count instead. `format` applies only to `STORE`. Exceeding `maxMonitors` fails rather than silently producing a partial export.
 

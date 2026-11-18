@@ -31,9 +31,9 @@ class ConfigurationTest extends AbstractDatadogTest {
                 case TEMPLATES -> "monitor-user-template";
             };
             var row = Map.of("id", "example", "type", type, "attributes", Map.of("url", "https://example.org/runbook", "token", "response-value"));
-            var path = "/api/v2/monitor/" + resource.getValue();
+            var path = "/api/v2/monitor/%s".formatted(resource.getValue());
             server.reply("GET", path, 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", List.of(row))));
-            server.reply("GET", path + "/example", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", row)));
+            server.reply("GET", "%s/example".formatted(path), 200, JacksonMapper.ofJson().writeValueAsString(Map.of("data", row)));
             assertEquals(List.of(row), task().resource(Property.ofValue(resource.getKey())).build().run(runContext()).getData());
             assertEquals(List.of(row), task().resource(Property.ofValue(resource.getKey())).resourceId(Property.ofValue("example")).build().run(runContext()).getData());
             if (resource.getKey() != Configuration.Resource.NOTIFICATION_RULES) {
@@ -61,15 +61,20 @@ class ConfigurationTest extends AbstractDatadogTest {
     @Test
     void rejectsTruncationAndInvalidArguments() {
         assertThrows(IllegalArgumentException.class, () -> task().resource(null).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue(" ")).build().run(runContext()));
-        assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue("..")).build().run(runContext()));
+        for (var id : List.of(" ", ".", "..")) {
+            var error = assertThrows(IllegalArgumentException.class, () -> task().resourceId(Property.ofValue(id)).build().run(runContext()));
+            assertTrue(error.getMessage().contains("supply a non-blank id"));
+            assertTrue(error.getMessage().contains("omit it to list the resource"));
+        }
         for (var limit : new int[]{0, 10001}) {
             var task = task().maxResults(Property.ofValue(limit)).build();
             assertThrows(jakarta.validation.ConstraintViolationException.class, () -> task.run(runContextFactory.of(task, Map.of())));
         }
         assertTrue(server.requests.isEmpty());
         server.reply("GET", "/api/v2/monitor/policy", 200, "{\"data\":[{\"id\":\"one\"},{\"id\":\"two\"}]}");
-        assertThrows(IllegalStateException.class, () -> task().resource(Property.ofValue(Configuration.Resource.POLICIES)).maxResults(Property.ofValue(1)).build().run(runContext()));
+        var error = assertThrows(IllegalStateException.class, () -> task().resource(Property.ofValue(Configuration.Resource.POLICIES)).maxResults(Property.ofValue(1)).build().run(runContext()));
+        assertTrue(error.getMessage().contains("maxResults (1)"));
+        assertTrue(error.getMessage().contains("select one object with `resourceId` or raise `maxResults`"));
     }
 
     @Test
@@ -78,7 +83,7 @@ class ConfigurationTest extends AbstractDatadogTest {
         for (var status : new int[]{400, 403, 404, 429, 500}) {
             for (var resource : resources.entrySet()) {
                 for (var id : Arrays.asList(null, "example")) {
-                    var path = "/api/v2/monitor/" + resource.getValue() + (id == null ? "" : "/" + id);
+                    var path = "/api/v2/monitor/%s%s".formatted(resource.getValue(), id == null ? "" : "/%s".formatted(id));
                     server.reply("GET", path, status, "{\"errors\":[\"Request failed\"]}");
                     var error = assertThrows(DatadogClient.DatadogException.class, () -> task().resource(Property.ofValue(resource.getKey())).resourceId(id == null ? null : Property.ofValue(id)).build().run(runContext()));
                     assertEquals(status, error.getStatus());

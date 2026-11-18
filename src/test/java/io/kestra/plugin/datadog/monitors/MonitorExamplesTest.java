@@ -23,7 +23,7 @@ class MonitorExamplesTest {
                 var flow = YamlParser.parse(String.join("\n", example.code()), Flow.class);
                 assertNotNull(flow.getId(), task.getName());
                 assertFalse(flow.getTasks().isEmpty(), task.getName());
-                assertTrue(validator.validate(flow).isEmpty(), () -> task.getName() + ": " + validator.validate(flow));
+                assertTrue(validator.validate(flow).isEmpty(), () -> "%s: %s".formatted(task.getName(), validator.validate(flow)));
             }
         }
     }

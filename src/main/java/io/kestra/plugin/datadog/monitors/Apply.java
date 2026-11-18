@@ -137,14 +137,11 @@ public class Apply extends AbstractDatadogTask implements RunnableTask<Apply.Out
     }
 
     private List<Map<String, Object>> read(RunContext context) throws Exception {
-        if (from == null) {
-            throw new IllegalArgumentException("from is required");
-        }
         List<Map<String, Object>> rows;
         try {
             rows = Data.from(from).read(context).take(1001).collectList().block(Duration.ofSeconds(30));
         } catch (Exception e) {
-            throw new IllegalArgumentException("Cannot read monitor definitions from `from`", e);
+            throw new IllegalArgumentException("Cannot read monitor definitions from `from`; supply a map, a list of maps, valid JSON or an accessible ION file URI", e);
         }
         if (rows.isEmpty() || rows.size() > 1000) {
             throw new IllegalArgumentException("Give between 1 and 1000 monitor definitions");

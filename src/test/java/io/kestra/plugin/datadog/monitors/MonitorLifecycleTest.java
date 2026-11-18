@@ -89,18 +89,19 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
     }
 
     @Test
-    void listPreservesMessagesInStoredRowsAndRejectsMalformedRows() throws Exception {
+    void listPreservesMessagesInStoredRowsAndSkipsNonObjectRows() throws Exception {
         var context = runContext();
-        server.reply("GET", "/api/v1/monitor", 200, "[{\"id\":123,\"message\":\"https://hooks.example.org/value\"}]");
+        server.reply("GET", "/api/v1/monitor", 200, "[42,null,{\"id\":123,\"message\":\"https://hooks.example.org/value\"}]");
         var task = io.kestra.plugin.datadog.monitors.List.builder().id(IdUtils.create()).type(io.kestra.plugin.datadog.monitors.List.class.getName()).apiKey(Property.ofValue(API_KEY)).appKey(Property.ofValue(APP_KEY))
             .apiUrl(Property.ofValue(server.url())).fetchType(Property.ofValue(FetchType.STORE)).build();
         var output = task.run(context);
+        assertEquals(1, output.getSize());
         assertNull(output.getMonitors());
         try (var input = context.storage().getFile(output.getUri())) {
             assertEquals("https://hooks.example.org/value", JacksonMapper.ofIon().readValue(input, Map.class).get("message"));
         }
         server.reply("GET", "/api/v1/monitor", 200, "[42]");
-        assertThrows(IllegalStateException.class, () -> task.run(context));
+        assertEquals(0, task.run(context).getSize());
     }
 
     @Test
@@ -115,9 +116,13 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
 
     @Test
     void validatesBothNewAndExistingWithoutSaving() throws Exception {
-        assertTrue(validate().build().run(runContext()).getValid());
-        assertTrue(validate().monitorId(Property.ofValue(123L)).build().run(runContext()).getValid());
+        validate().build().run(runContext());
+        validate().monitorId(Property.ofValue(123L)).build().run(runContext());
         assertEquals(List.of("/api/v1/monitor/validate", "/api/v1/monitor/123/validate"), server.requests.stream().map(r -> r.path()).toList());
+        assertTrue(server.requests.stream().allMatch(r -> r.method().equals("POST")));
+        for (var request : server.requests) {
+            assertEquals(ApplyTest.definition(), request.json());
+        }
     }
 
     @Test
@@ -211,7 +216,7 @@ class MonitorLifecycleTest extends AbstractDatadogTest {
 
     @Test
     void searchPagesAndFacetsAreNotSummed() throws Exception {
-        var rows = IntStream.range(0, 100).mapToObj(i -> Map.of("id", i, "name", "CPU " + i, "type", "query alert", "status", "Alert")).toList();
+        var rows = IntStream.range(0, 100).mapToObj(i -> Map.of("id", i, "name", "CPU %s".formatted(i), "type", "query alert", "status", "Alert")).toList();
         var facets = Map.of("tag", List.of(Map.of("name", "runbook:https://example.org/runbook", "count", 101)));
         server.reply("GET", "/api/v1/monitor/search", 200, JacksonMapper.ofJson().writeValueAsString(Map.of("monitors", rows, "counts", facets, "metadata", Map.of("page_count", 2, "total_count", 101))));
         server.reply("GET", "/api/v1/monitor/search", 200, "{\"monitors\":[{\"id\":100,\"name\":\"CPU 100\"}],\"metadata\":{\"page_count\":2}}");

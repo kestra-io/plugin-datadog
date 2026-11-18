@@ -25,8 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StateChangeTest extends AbstractDatadogTest {
     private static String monitor(int id, String state, Instant modified) {
-        var response = "{\"id\":" + id + ",\"name\":\"m" + id + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"" + state + "\",\"overall_state_modified\":\"" + modified + "\"}";
-        return response;
+        return "{\"id\":%s,\"name\":\"m%s\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"%s\",\"overall_state_modified\":\"%s\"}".formatted(id, id, state, modified);
     }
 
     private StateChange.StateChangeBuilder<?, ?> trigger() {
@@ -61,7 +60,7 @@ class StateChangeTest extends AbstractDatadogTest {
 
     @Test
     void theFirstPollOnlyRecordsTheDatadogTimeAndReplaysNothing() throws Exception {
-        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", Instant.now()) + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(monitor(1, "Alert", Instant.now())));
         var poll = poll(trigger().build());
 
         assertTrue(poll.run().isEmpty(), "monitors that already alert are not replayed");
@@ -78,13 +77,13 @@ class StateChangeTest extends AbstractDatadogTest {
         var poll = poll(trigger().build());
         firstPoll(poll);
         var second = Instant.now().plusSeconds(30).truncatedTo(ChronoUnit.SECONDS);
-        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", second) + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(monitor(1, "Alert", second)));
 
-        assertEquals(List.of(1), ids(poll.run().orElseThrow()));
+        assertEquals(List.of(1), ids(poll.run().orElseThrow(() -> new AssertionError("Expected an execution for the first changed monitor"))));
 
         // monitor 2 changed in the same second but is only listed now
-        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", second) + "," + monitor(2, "Alert", second) + "]");
-        assertEquals(List.of(2), ids(poll.run().orElseThrow()), "only the monitor that was not returned yet");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s,%s]".formatted(monitor(1, "Alert", second), monitor(2, "Alert", second)));
+        assertEquals(List.of(2), ids(poll.run().orElseThrow(() -> new AssertionError("Expected an execution for the later-listed monitor"))), "only the monitor that was not returned yet");
 
         assertTrue(poll.run().isEmpty(), "and nothing is returned twice");
     }
@@ -92,6 +91,17 @@ class StateChangeTest extends AbstractDatadogTest {
     @SuppressWarnings("unchecked")
     private static List<Integer> ids(Execution execution) {
         return ((List<Map<String, Object>>) execution.getTrigger().getVariables().get("monitors")).stream().map(m -> ((Number) m.get("id")).intValue()).toList();
+    }
+
+    @Test
+    void skipsNonObjectRowsAndStillReturnsChangedMonitors() throws Exception {
+        var poll = poll(trigger().build());
+        firstPoll(poll);
+        server.reply("GET", "/api/v1/monitor", 200, "[42,null,false,\"unexpected\",[],%s]".formatted(monitor(1, "Alert", Instant.now().plusSeconds(30))));
+        var execution = poll.run().orElseThrow(() -> new AssertionError("Expected an execution for the changed monitor despite non-object rows"));
+        assertEquals(List.of(1), ids(execution));
+        assertEquals(1, execution.getTrigger().getVariables().get("count"));
+        assertTrue(poll.run().isEmpty(), "the monitor is not returned twice");
     }
 
     @Test
@@ -108,13 +118,12 @@ class StateChangeTest extends AbstractDatadogTest {
         var poll = poll(trigger().build());
         firstPoll(poll);
         var now = Instant.now();
-        server.reply("GET", "/api/v1/monitor", 200, "[" +
-            monitor(1, "Alert", now.plusSeconds(10)) + "," +      // new alert
-            monitor(2, "Alert", now.minusSeconds(3600)) + "," +   // alerting since before the cursor
-            monitor(3, "OK", now.plusSeconds(20)) + "," +         // changed, but not a watched state
-            monitor(4, "Warn", now.plusSeconds(30)) + "," +       // warn is not watched by default
-            monitor(5, "Alert", now.plusSeconds(5)) +             // second new alert, older than 1
-            "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s,%s,%s,%s,%s]".formatted(
+            monitor(1, "Alert", now.plusSeconds(10)),
+            monitor(2, "Alert", now.minusSeconds(3600)),
+            monitor(3, "OK", now.plusSeconds(20)),
+            monitor(4, "Warn", now.plusSeconds(30)),
+            monitor(5, "Alert", now.plusSeconds(5))));
 
         var execution = poll.run();
 
@@ -132,7 +141,7 @@ class StateChangeTest extends AbstractDatadogTest {
         var poll = poll(trigger().build());
         firstPoll(poll);
         var changed = Instant.now().plusSeconds(10);
-        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", changed) + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(monitor(1, "Alert", changed)));
 
         assertTrue(poll.run().isPresent());
         assertTrue(poll.run().isEmpty(), "the same alert is not returned again by the next poll");
@@ -143,10 +152,10 @@ class StateChangeTest extends AbstractDatadogTest {
         var poll = poll(trigger().states(Property.ofValue(List.of(StateChange.State.WARN, StateChange.State.NO_DATA))).build());
         firstPoll(poll);
         var now = Instant.now();
-        server.reply("GET", "/api/v1/monitor", 200, "[" +
-            monitor(1, "Alert", now.plusSeconds(10)) + "," +
-            monitor(2, "Warn", now.plusSeconds(11)) + "," +
-            monitor(3, "No Data", now.plusSeconds(12)) + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s,%s,%s]".formatted(
+            monitor(1, "Alert", now.plusSeconds(10)),
+            monitor(2, "Warn", now.plusSeconds(11)),
+            monitor(3, "No Data", now.plusSeconds(12))));
 
         var execution = poll.run();
 
@@ -173,7 +182,7 @@ class StateChangeTest extends AbstractDatadogTest {
         assertTrue(poll.run().isEmpty(), "the poll is skipped, not failed");
 
         // Datadog answers again: the alert that came during the outage is returned
-        server.reply("GET", "/api/v1/monitor", 200, "[" + monitor(1, "Alert", changed) + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(monitor(1, "Alert", changed)));
         assertTrue(poll.run().isPresent(), "the alert missed during the outage is returned once Datadog answers again");
     }
 

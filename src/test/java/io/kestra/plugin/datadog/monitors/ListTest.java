@@ -27,7 +27,7 @@ class ListTest extends AbstractDatadogTest {
 
     private static String monitors(int from, int count) {
         var response = IntStream.range(from, from + count)
-            .mapToObj(i -> "{\"id\":" + i + ",\"name\":\"m" + i + "\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"Alert\"}")
+            .mapToObj(i -> "{\"id\":%s,\"name\":\"m%s\",\"query\":\"avg(last_5m):avg:system.cpu.user{*} > 90\",\"type\":\"query alert\",\"overall_state\":\"Alert\"}".formatted(i, i))
             .collect(Collectors.joining(",", "[", "]"));
         return response;
     }
@@ -67,6 +67,17 @@ class ListTest extends AbstractDatadogTest {
         assertEquals(250, output.getSize());
         assertEquals(2, server.requests.size());
         assertTrue(server.requests.get(1).query().contains("page=1"));
+    }
+
+    @Test
+    void skipsNonObjectRowsWithoutEndingPaginationEarly() throws Exception {
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(IntStream.range(0, 200).mapToObj(i -> "42").collect(Collectors.joining(","))));
+        server.reply("GET", "/api/v1/monitor", 200, "[null,false,\"unexpected\",[],{\"id\":123,\"message\":\"Runbook https://example.org/runbook\"}]");
+        var output = task().build().run(runContext());
+        assertEquals(1, output.getSize());
+        assertEquals(java.util.Map.of("id", 123, "message", "Runbook https://example.org/runbook"), output.getMonitors().getFirst());
+        assertEquals(2, server.requests.size());
+        assertTrue(server.requests.getLast().query().contains("page=1"));
     }
 
     @Test

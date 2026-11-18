@@ -36,7 +36,7 @@ class ApplyTest extends AbstractDatadogTest {
         var response = new LinkedHashMap<String, Object>(fields);
         response.put("id", 123);
         var json = JacksonMapper.ofJson().writeValueAsString(response);
-        server.reply("GET", "/api/v1/monitor", 200, "[" + json + "]");
+        server.reply("GET", "/api/v1/monitor", 200, "[%s]".formatted(json));
         server.reply("GET", "/api/v1/monitor/123", 200, json);
     }
 
@@ -79,7 +79,8 @@ class ApplyTest extends AbstractDatadogTest {
         var first = apply.run(runContext()).getResults().getFirst();
         assertEquals(Apply.Action.UPDATED, first.getAction());
         assertEquals(Set.of("/query", "/options/thresholds/critical"), first.getDiff().stream().map(MonitorDefinitions.Change::getField).collect(Collectors.toSet()));
-        var body = server.requests.stream().filter(r -> r.method().equals("PUT")).findFirst().orElseThrow().json();
+        var body = server.requests.stream().filter(r -> r.method().equals("PUT")).findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a PUT request for the changed monitor")).json();
         assertEquals(Map.of("thresholds", Map.of("critical", 80, "warning", 70), "include_tags", true), body.get("options"));
         assertFalse(body.containsKey("id"));
         existing(body);
@@ -197,6 +198,7 @@ class ApplyTest extends AbstractDatadogTest {
         var error = assertThrows(IllegalArgumentException.class, () -> task().from("{broken").build().run(runContext()));
         assertNotNull(error.getCause());
         assertNotNull(error.getCause().getCause());
+        assertTrue(error.getMessage().contains("supply a map, a list of maps, valid JSON or an accessible ION file URI"));
     }
 
     @Test
